@@ -1,0 +1,17 @@
+{
+  "stage": "post-OCR reporting orchestration",
+  "application_ocr_failed": false,
+  "error": "KeyError: 'locator' in the pilot helper; report items use the 'slide' field",
+  "first_ocr_counts": {
+    "created": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "resume_ocr_counts": {
+    "created": 0,
+    "failed": 0,
+    "skipped": 6
+  },
+  "evaluation_or_integrity_completed": false,
+  "disposition": "Reports preserved; a fresh bounded run repeated OCR, resume, evaluation and integrity verification."
+}

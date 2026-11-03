@@ -1,0 +1,4 @@
+# Optional pins from the 2026-11-03 public surrogate live-ingest run.
+# Install the project with [media,slides] first; Tesseract is a system dependency.
+yt-dlp==2026.10.26
+gallery-dl==1.32.19

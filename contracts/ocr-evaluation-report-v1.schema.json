@@ -1,0 +1,648 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "user",
+        "agent",
+        "tool",
+        "import"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "EvidenceLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "end_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Char"
+        },
+        "end_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Seconds"
+        },
+        "kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "start_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Char"
+        },
+        "start_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Seconds"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "EvidenceLocator",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LocatorKind": {
+      "enum": [
+        "slide",
+        "timestamp",
+        "text_span"
+      ],
+      "title": "LocatorKind",
+      "type": "string"
+    },
+    "OcrEvaluationCase": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_characters": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Characters"
+        },
+        "actual_excerpt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Excerpt"
+        },
+        "actual_words": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Words"
+        },
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "available_records": {
+          "minimum": 0,
+          "title": "Available Records",
+          "type": "integer"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "cer": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cer"
+        },
+        "character_errors": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Character Errors"
+        },
+        "empty_actual": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Empty Actual"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "expected_characters": {
+          "minimum": 0,
+          "title": "Expected Characters",
+          "type": "integer"
+        },
+        "expected_excerpt": {
+          "title": "Expected Excerpt",
+          "type": "string"
+        },
+        "expected_words": {
+          "minimum": 0,
+          "title": "Expected Words",
+          "type": "integer"
+        },
+        "extraction_id": {
+          "anyOf": [
+            {
+              "pattern": "^ext_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extraction Id"
+        },
+        "extraction_limitations": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Extraction Limitations",
+          "type": "array"
+        },
+        "extractor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extractor_config": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Extractor Config",
+          "type": "object"
+        },
+        "locator": {
+          "$ref": "#/$defs/EvidenceLocator"
+        },
+        "normalized_actual_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Actual Sha256"
+        },
+        "normalized_exact": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Exact"
+        },
+        "normalized_expected_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Normalized Expected Sha256",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "pattern": "^exq_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "sample_id": {
+          "minLength": 1,
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "evaluated",
+            "failed",
+            "missing",
+            "oversized"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "wer": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wer"
+        },
+        "word_errors": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Word Errors"
+        }
+      },
+      "required": [
+        "sample_id",
+        "status",
+        "capture_id",
+        "artifact_id",
+        "locator",
+        "available_records",
+        "normalized_expected_sha256",
+        "expected_excerpt",
+        "expected_characters",
+        "expected_words"
+      ],
+      "title": "OcrEvaluationCase",
+      "type": "object"
+    },
+    "OcrEvaluationSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "empty_actual": {
+          "minimum": 0,
+          "title": "Empty Actual",
+          "type": "integer"
+        },
+        "empty_actual_rate": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Empty Actual Rate",
+          "type": "number"
+        },
+        "evaluated": {
+          "minimum": 0,
+          "title": "Evaluated",
+          "type": "integer"
+        },
+        "exact_match_rate": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Exact Match Rate",
+          "type": "number"
+        },
+        "exact_matches": {
+          "minimum": 0,
+          "title": "Exact Matches",
+          "type": "integer"
+        },
+        "failed": {
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "failed_rate": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Failed Rate",
+          "type": "number"
+        },
+        "mean_cer": {
+          "minimum": 0,
+          "title": "Mean Cer",
+          "type": "number"
+        },
+        "mean_wer": {
+          "minimum": 0,
+          "title": "Mean Wer",
+          "type": "number"
+        },
+        "missing": {
+          "minimum": 0,
+          "title": "Missing",
+          "type": "integer"
+        },
+        "missing_rate": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Missing Rate",
+          "type": "number"
+        },
+        "multiple_record_samples": {
+          "minimum": 0,
+          "title": "Multiple Record Samples",
+          "type": "integer"
+        },
+        "oversized": {
+          "minimum": 0,
+          "title": "Oversized",
+          "type": "integer"
+        },
+        "sample_count": {
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sample_count",
+        "evaluated",
+        "failed",
+        "missing",
+        "oversized",
+        "empty_actual",
+        "exact_matches",
+        "multiple_record_samples",
+        "exact_match_rate",
+        "empty_actual_rate",
+        "failed_rate",
+        "missing_rate",
+        "mean_cer",
+        "mean_wer"
+      ],
+      "title": "OcrEvaluationSummary",
+      "type": "object"
+    },
+    "OcrExtractorEvaluationSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "empty_actual": {
+          "minimum": 0,
+          "title": "Empty Actual",
+          "type": "integer"
+        },
+        "evaluated": {
+          "minimum": 1,
+          "title": "Evaluated",
+          "type": "integer"
+        },
+        "exact_match_rate": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Exact Match Rate",
+          "type": "number"
+        },
+        "extractor": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "extractor_config": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Extractor Config",
+          "type": "object"
+        },
+        "mean_cer": {
+          "minimum": 0,
+          "title": "Mean Cer",
+          "type": "number"
+        },
+        "mean_wer": {
+          "minimum": 0,
+          "title": "Mean Wer",
+          "type": "number"
+        }
+      },
+      "required": [
+        "extractor",
+        "evaluated",
+        "empty_actual",
+        "exact_match_rate",
+        "mean_cer",
+        "mean_wer"
+      ],
+      "title": "OcrExtractorEvaluationSummary",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How a record was produced; not a claim that its content is true.",
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "actor_kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "actor_kind",
+        "actor_id",
+        "method"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "batch_report_sha256": {
+      "default": [],
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Batch Report Sha256",
+      "type": "array"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/OcrEvaluationCase"
+      },
+      "title": "Cases",
+      "type": "array"
+    },
+    "extractors": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/OcrExtractorEvaluationSummary"
+      },
+      "title": "Extractors",
+      "type": "array"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "max_text_chars": {
+      "minimum": 1,
+      "title": "Max Text Chars",
+      "type": "integer"
+    },
+    "normalization": {
+      "const": "nfkc-casefold-whitespace/v1",
+      "default": "nfkc-casefold-whitespace/v1",
+      "title": "Normalization",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "ocr-evaluation-report/v1",
+      "default": "ocr-evaluation-report/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/OcrEvaluationSummary"
+    }
+  },
+  "required": [
+    "generated_at",
+    "max_text_chars",
+    "summary",
+    "cases",
+    "limitations"
+  ],
+  "title": "OcrEvaluationReport",
+  "type": "object"
+}

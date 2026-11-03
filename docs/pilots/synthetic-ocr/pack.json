@@ -1,0 +1,208 @@
+{
+  "schema_version": "evidence-pack/v1",
+  "pack_type": "retrieval_only",
+  "query": "Evidence Vault",
+  "generated_at": "2026-11-03T02:36:22.014753Z",
+  "filters": {
+    "collection": null,
+    "kind": null,
+    "status": null,
+    "limit": 10,
+    "excerpt_limit": 3,
+    "max_text_artifact_bytes": 1048576
+  },
+  "result_count": 1,
+  "limitations": [
+    "This is a retrieval pack, not an answer or a claim-verification result.",
+    "Search scores are lexical relevance only; they do not measure truth or source quality.",
+    "Derived excerpts may contain OCR or ASR recognition errors and must be checked against the linked artifact.",
+    "Artifact links are local URIs and require access to the archive that produced this pack.",
+    "3 additional derived excerpts were omitted by the per-source excerpt limit."
+  ],
+  "sources": [
+    {
+      "rank": 1,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "external_id": "ocr-golden-v1",
+      "title": "Synthetic OCR golden slides",
+      "canonical_url": null,
+      "kind": "slideshow",
+      "status": "complete",
+      "collections": [
+        "Synthetic OCR"
+      ],
+      "captured_at": "2026-11-03T12:00:00Z",
+      "relevance_score": 2,
+      "snippet": "…ewed real-user OCR corpus.\",\"synthetic\":true} ocr_text slide:6 ocr_text slide:1 Evidence Vault Synthetic OCR sample 001 ocr_text slide:5 Small gray text for error analysis ocr_text slide:2 Архив доказательств Проверка распознавания текста o…",
+      "collector": {
+        "actor_kind": "tool",
+        "actor_id": "synthetic-ocr-golden",
+        "method": "generated-image-import",
+        "version": "1",
+        "model_id": null
+      },
+      "capture_limitations": [],
+      "artifacts": [
+        {
+          "artifact_id": "art_8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+          "role": "original_image",
+          "media_type": "image/png",
+          "size_bytes": 18657,
+          "sha256": "8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+          "original_filename": "slide-01.png",
+          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8b/8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d"
+        },
+        {
+          "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+          "role": "original_image",
+          "media_type": "image/png",
+          "size_bytes": 17541,
+          "sha256": "e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+          "original_filename": "slide-02.png",
+          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/e1/e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af"
+        },
+        {
+          "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+          "role": "original_image",
+          "media_type": "image/png",
+          "size_bytes": 16819,
+          "sha256": "89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+          "original_filename": "slide-03.png",
+          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/89/89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b"
+        },
+        {
+          "artifact_id": "art_b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
+          "role": "original_image",
+          "media_type": "image/png",
+          "size_bytes": 18385,
+          "sha256": "b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
+          "original_filename": "slide-04.png",
+          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/b8/b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2"
+        },
+        {
+          "artifact_id": "art_8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
+          "role": "original_image",
+          "media_type": "image/png",
+          "size_bytes": 10535,
+          "sha256": "8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
+          "original_filename": "slide-05.png",
+          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8d/8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f"
+        },
+        {
+          "artifact_id": "art_8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
+          "role": "original_image",
+          "media_type": "image/png",
+          "size_bytes": 3629,
+          "sha256": "8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
+          "original_filename": "slide-06.png",
+          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8d/8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd"
+        }
+      ],
+      "excerpts": [
+        {
+          "extraction_id": "ext_483bb90188ceef66277ac1292c05603f492d0adda3da54fe2bf266b1d74da4a5",
+          "request_id": "exq_1b0e42c3885e4f748d6818d2045996f02033e8210d7a986abbcc6133c23519f9",
+          "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+          "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+          "kind": "ocr_text",
+          "created_at": "2026-11-03T02:36:20.537984Z",
+          "artifact_id": "art_8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+          "artifact_uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8b/8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+          "locator": {
+            "kind": "slide",
+            "slide": 1,
+            "start_seconds": null,
+            "end_seconds": null,
+            "start_char": null,
+            "end_char": null,
+            "canonical": "slide:1"
+          },
+          "matched_query": true,
+          "excerpt": "Evidence Vault Synthetic OCR sample 001",
+          "extractor": {
+            "actor_kind": "tool",
+            "actor_id": "tesseract",
+            "method": "subprocess-ocr",
+            "version": "tesseract 5.5.0",
+            "model_id": null
+          },
+          "config": {
+            "language": "eng+rus",
+            "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+            "page_segmentation_mode": 6
+          },
+          "limitations": []
+        },
+        {
+          "extraction_id": "ext_856765d5da55c4ded29c713684cfd7b9636b63272351b183fa100a90fe9f55ac",
+          "request_id": "exq_ffd0030d56aac7cf523a361955732fb8426763b476acae0d38a7319065d50689",
+          "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+          "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+          "kind": "ocr_text",
+          "created_at": "2026-11-03T02:36:20.585258Z",
+          "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+          "artifact_uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/e1/e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+          "locator": {
+            "kind": "slide",
+            "slide": 2,
+            "start_seconds": null,
+            "end_seconds": null,
+            "start_char": null,
+            "end_char": null,
+            "canonical": "slide:2"
+          },
+          "matched_query": false,
+          "excerpt": "Архив доказательств Проверка распознавания текста",
+          "extractor": {
+            "actor_kind": "tool",
+            "actor_id": "tesseract",
+            "method": "subprocess-ocr",
+            "version": "tesseract 5.5.0",
+            "model_id": null
+          },
+          "config": {
+            "language": "eng+rus",
+            "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+            "page_segmentation_mode": 6
+          },
+          "limitations": []
+        },
+        {
+          "extraction_id": "ext_da371316c195607c4affdbfc31ddd92c9bbc3590a3faa63120b221d2b175394c",
+          "request_id": "exq_0ae8352b2c4cdd3db2f12fe950c939ecb6162690d367209e3bac07ebae5c04df",
+          "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+          "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+          "kind": "ocr_text",
+          "created_at": "2026-11-03T02:36:20.758005Z",
+          "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+          "artifact_uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/89/89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+          "locator": {
+            "kind": "slide",
+            "slide": 3,
+            "start_seconds": null,
+            "end_seconds": null,
+            "start_char": null,
+            "end_char": null,
+            "canonical": "slide:3"
+          },
+          "matched_query": false,
+          "excerpt": "Version 2.5 CER and WER metrics",
+          "extractor": {
+            "actor_kind": "tool",
+            "actor_id": "tesseract",
+            "method": "subprocess-ocr",
+            "version": "tesseract 5.5.0",
+            "model_id": null
+          },
+          "config": {
+            "language": "eng+rus",
+            "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+            "page_segmentation_mode": 6
+          },
+          "limitations": []
+        }
+      ]
+    }
+  ]
+}

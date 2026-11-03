@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "EvidenceLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "end_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Char"
+        },
+        "end_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Seconds"
+        },
+        "kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "start_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Char"
+        },
+        "start_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Seconds"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "EvidenceLocator",
+      "type": "object"
+    },
+    "LocatorKind": {
+      "enum": [
+        "slide",
+        "timestamp",
+        "text_span"
+      ],
+      "title": "LocatorKind",
+      "type": "string"
+    },
+    "OcrEvaluationSample": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "expected_text": {
+          "title": "Expected Text",
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/EvidenceLocator"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "pattern": "^exq_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "sample_id": {
+          "minLength": 1,
+          "title": "Sample Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sample_id",
+        "capture_id",
+        "artifact_id",
+        "locator",
+        "expected_text"
+      ],
+      "title": "OcrEvaluationSample",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/OcrEvaluationSample"
+      },
+      "minItems": 1,
+      "title": "Samples",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "ocr-evaluation/v1",
+      "default": "ocr-evaluation/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "samples"
+  ],
+  "title": "OcrEvaluationSet",
+  "type": "object"
+}

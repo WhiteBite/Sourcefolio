@@ -1,0 +1,19 @@
+{
+  "schema_version": "search-evaluation/v1",
+  "queries": [
+    {
+      "query": "Нейронки",
+      "k": 3,
+      "collection": "Нейронки",
+      "relevant_external_ids": ["7300000000000000001"],
+      "notes": "Synthetic example only; replace with judged real-user questions for the baseline gate."
+    },
+    {
+      "query": "Фильмы",
+      "k": 3,
+      "collection": "Фильмы",
+      "relevant_external_ids": ["7300000000000000002"],
+      "notes": "Synthetic slideshow metadata query."
+    }
+  ]
+}

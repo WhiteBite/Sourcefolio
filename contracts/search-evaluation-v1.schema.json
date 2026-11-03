@@ -1,0 +1,144 @@
+{
+  "$defs": {
+    "CaptureStatus": {
+      "enum": [
+        "complete",
+        "partial"
+      ],
+      "title": "CaptureStatus",
+      "type": "string"
+    },
+    "SearchEvaluationQuery": {
+      "additionalProperties": false,
+      "description": "One judged query; labels are assumed exhaustive for the evaluated corpus.",
+      "properties": {
+        "collection": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection"
+        },
+        "k": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "K",
+          "type": "integer"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "query": {
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "relevant_capture_ids": {
+          "default": [],
+          "items": {
+            "pattern": "^cap_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Relevant Capture Ids",
+          "type": "array"
+        },
+        "relevant_external_ids": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Relevant External Ids",
+          "type": "array"
+        },
+        "relevant_source_ids": {
+          "default": [],
+          "items": {
+            "pattern": "^src_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Relevant Source Ids",
+          "type": "array"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SearchEvaluationQuery",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "video",
+        "slideshow",
+        "web_page",
+        "repository",
+        "document",
+        "text",
+        "other"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "queries": {
+      "items": {
+        "$ref": "#/$defs/SearchEvaluationQuery"
+      },
+      "minItems": 1,
+      "title": "Queries",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "search-evaluation/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "queries"
+  ],
+  "title": "SearchEvaluationSet",
+  "type": "object"
+}

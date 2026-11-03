@@ -1,0 +1,315 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "user",
+        "agent",
+        "tool",
+        "import"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "original_filename": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Filename"
+        },
+        "role": {
+          "$ref": "#/$defs/ArtifactRole"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "exclusiveMinimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "role",
+        "media_type",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "ArtifactRole": {
+      "description": "Raw capture roles only; OCR, ASR, and embeddings are derived records.",
+      "enum": [
+        "original_video",
+        "original_audio",
+        "original_image",
+        "caption_text",
+        "page_snapshot",
+        "author_metadata",
+        "attachment",
+        "other"
+      ],
+      "title": "ArtifactRole",
+      "type": "string"
+    },
+    "CaptureStatus": {
+      "enum": [
+        "complete",
+        "partial"
+      ],
+      "title": "CaptureStatus",
+      "type": "string"
+    },
+    "CollectionMembership": {
+      "additionalProperties": false,
+      "properties": {
+        "external_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CollectionMembership",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How a record was produced; not a claim that its content is true.",
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "actor_kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "actor_kind",
+        "actor_id",
+        "method"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "SourceIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_url": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Url"
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "platform": {
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "title": "Platform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "kind"
+      ],
+      "title": "SourceIdentity",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "video",
+        "slideshow",
+        "web_page",
+        "repository",
+        "document",
+        "text",
+        "other"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "minItems": 1,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "capture_id": {
+      "pattern": "^cap_[0-9a-f]{64}$",
+      "title": "Capture Id",
+      "type": "string"
+    },
+    "captured_at": {
+      "format": "date-time",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "collections": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CollectionMembership"
+      },
+      "title": "Collections",
+      "type": "array"
+    },
+    "collector": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "source-packet/v1",
+      "default": "source-packet/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceIdentity"
+    },
+    "source_id": {
+      "pattern": "^src_[0-9a-f]{64}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/CaptureStatus",
+      "default": "complete"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    }
+  },
+  "required": [
+    "source",
+    "captured_at",
+    "collector",
+    "artifacts",
+    "source_id",
+    "capture_id"
+  ],
+  "title": "SourcePacket",
+  "type": "object"
+}

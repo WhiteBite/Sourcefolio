@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evidence-vault"
+version = "0.1.0"
+description = "Local-first evidence, personal context, and decision system for saved media"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "ijson>=3.3,<4",
+  "pydantic>=2.11,<3",
+  "pyyaml>=6,<7",
+  "tzdata>=2024.1; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+media = [
+  "yt-dlp",
+]
+slides = [
+  "gallery-dl",
+]
+dev = [
+  "mypy>=1.14,<2",
+  "pytest>=8.3,<10",
+  "ruff>=0.9,<1",
+  "types-pyyaml>=6,<7",
+]
+
+[project.scripts]
+evidence-vault = "evidence_vault.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evidence_vault"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF012"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src:stubs"
+packages = ["evidence_vault"]
+plugins = ["pydantic.mypy"]

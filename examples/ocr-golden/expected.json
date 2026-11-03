@@ -1,0 +1,26 @@
+[
+  {
+    "slide": 1,
+    "expected_text": "Evidence Vault\nSynthetic OCR sample 001"
+  },
+  {
+    "slide": 2,
+    "expected_text": "Архив доказательств\nПроверка распознавания текста"
+  },
+  {
+    "slide": 3,
+    "expected_text": "Version 2.5\nCER and WER metrics"
+  },
+  {
+    "slide": 4,
+    "expected_text": "Capture ID: cap_123456\nStatus: complete"
+  },
+  {
+    "slide": 5,
+    "expected_text": "Small gray text\nfor error analysis"
+  },
+  {
+    "slide": 6,
+    "expected_text": ""
+  }
+]

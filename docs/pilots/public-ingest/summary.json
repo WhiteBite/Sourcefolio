@@ -1,0 +1,151 @@
+{
+  "surrogate": true,
+  "user_export_used": false,
+  "live_network": true,
+  "verification_pass": 2,
+  "first_pass_summary": "summary-first-pass.json",
+  "tools": {
+    "yt_dlp": "2026.10.26",
+    "gallery_dl": "1.32.19"
+  },
+  "operations": {
+    "video": {
+      "url": "https://www.tiktok.com/@.doris_official/video/7488781024571280662",
+      "first_exit_code": 0,
+      "first_results": {
+        "skipped": 0,
+        "succeeded": 1,
+        "partial": 0,
+        "failed": 0
+      },
+      "first_issues": [],
+      "first_wall_seconds": 2.754457775999981,
+      "resume_exit_code": 0,
+      "resume_results": {
+        "skipped": 1,
+        "succeeded": 0,
+        "partial": 0,
+        "failed": 0
+      },
+      "resume_wall_seconds": 0.2267694050000273,
+      "packets": [
+        {
+          "source_id": "src_993b2564e39e9cd3e33d61e704e8eb64a8890f4e7ee45dd0a91682f7d8ba5e7c",
+          "capture_id": "cap_73b8ded8820ebe92127c96a67ac5ce898518951fa6f5f68440b45571648e4047",
+          "kind": "video",
+          "status": "complete",
+          "limitations": [],
+          "artifact_counts_by_role": {
+            "author_metadata": 2,
+            "original_video": 1
+          },
+          "artifact_bytes_by_role": {
+            "author_metadata": 1503,
+            "original_video": 5348655
+          },
+          "artifact_bytes": 5350158,
+          "metadata_keys": [
+            "adapter",
+            "saved_index",
+            "task_id"
+          ]
+        }
+      ],
+      "packet_sha256_before_resume": {
+        "cap_73b8ded8820ebe92127c96a67ac5ce898518951fa6f5f68440b45571648e4047": "7047817f2fb574a6652dd8ee0920d4e0777bc2e7e9d2bfc2e531876cd6c76a84"
+      },
+      "packet_sha256_after_resume": {
+        "cap_73b8ded8820ebe92127c96a67ac5ce898518951fa6f5f68440b45571648e4047": "7047817f2fb574a6652dd8ee0920d4e0777bc2e7e9d2bfc2e531876cd6c76a84"
+      },
+      "artifact_sha256_before_resume": {
+        "art_7b6dde8a41ca0897201baeebcc93b02bcdc973e7cdbb8bcd03c3a8b6b3486713": "7b6dde8a41ca0897201baeebcc93b02bcdc973e7cdbb8bcd03c3a8b6b3486713",
+        "art_2424546d788219219411ddd454d01b9d740c0864f7cefdfbb69833e89285f67a": "2424546d788219219411ddd454d01b9d740c0864f7cefdfbb69833e89285f67a",
+        "art_b2f8d4fdacb43368ede0fd2cd0e980025983292848e9ea31c18f16e3bd382672": "b2f8d4fdacb43368ede0fd2cd0e980025983292848e9ea31c18f16e3bd382672"
+      },
+      "artifact_sha256_after_resume": {
+        "art_7b6dde8a41ca0897201baeebcc93b02bcdc973e7cdbb8bcd03c3a8b6b3486713": "7b6dde8a41ca0897201baeebcc93b02bcdc973e7cdbb8bcd03c3a8b6b3486713",
+        "art_2424546d788219219411ddd454d01b9d740c0864f7cefdfbb69833e89285f67a": "2424546d788219219411ddd454d01b9d740c0864f7cefdfbb69833e89285f67a",
+        "art_b2f8d4fdacb43368ede0fd2cd0e980025983292848e9ea31c18f16e3bd382672": "b2f8d4fdacb43368ede0fd2cd0e980025983292848e9ea31c18f16e3bd382672"
+      },
+      "resume_packets_and_artifact_bytes_unchanged": true,
+      "audit_exit_code": 0,
+      "audit_ok": true,
+      "audit_issue_count": 0,
+      "capture_report_exit_code": 0,
+      "capture_report_jobs": 1,
+      "capture_report_attempts": 1,
+      "stderr_tails": []
+    },
+    "photo": {
+      "url": "https://www.tiktok.com/@velocitydrawing/photo/7266832970353233185",
+      "first_exit_code": 0,
+      "first_results": {
+        "skipped": 0,
+        "succeeded": 1,
+        "partial": 0,
+        "failed": 0
+      },
+      "first_issues": [],
+      "first_wall_seconds": 1.8937627060000182,
+      "resume_exit_code": 0,
+      "resume_results": {
+        "skipped": 1,
+        "succeeded": 0,
+        "partial": 0,
+        "failed": 0
+      },
+      "resume_wall_seconds": 0.24535440200003222,
+      "packets": [
+        {
+          "source_id": "src_04d055e56d65dcb0a147a9644b3b89c92b756564a9f2a1dc41f1bba43f32fbbb",
+          "capture_id": "cap_12be348ea36fe96ea0f2e2548550b603f3a8bd9f5c3af4946686c000486c355b",
+          "kind": "slideshow",
+          "status": "complete",
+          "limitations": [],
+          "artifact_counts_by_role": {
+            "author_metadata": 2,
+            "original_image": 3
+          },
+          "artifact_bytes_by_role": {
+            "author_metadata": 2487,
+            "original_image": 331254
+          },
+          "artifact_bytes": 333741,
+          "metadata_keys": [
+            "adapter",
+            "saved_index",
+            "task_id"
+          ]
+        }
+      ],
+      "packet_sha256_before_resume": {
+        "cap_12be348ea36fe96ea0f2e2548550b603f3a8bd9f5c3af4946686c000486c355b": "02a5b3b0df219b1e09cfe57addfe9b15c0d6b6def62b7dc2af84a97caa55c336"
+      },
+      "packet_sha256_after_resume": {
+        "cap_12be348ea36fe96ea0f2e2548550b603f3a8bd9f5c3af4946686c000486c355b": "02a5b3b0df219b1e09cfe57addfe9b15c0d6b6def62b7dc2af84a97caa55c336"
+      },
+      "artifact_sha256_before_resume": {
+        "art_0daf098d44f0fdb8ec4953b1648dccb32b6bf3ecd30d7f251162ece984b8b770": "0daf098d44f0fdb8ec4953b1648dccb32b6bf3ecd30d7f251162ece984b8b770",
+        "art_237faf5e5a11ba2d8b44eff1487ff4aab3566b0215b26fe36b3e439f648f6be4": "237faf5e5a11ba2d8b44eff1487ff4aab3566b0215b26fe36b3e439f648f6be4",
+        "art_6a3d73ba82ba0919c61884b2481cc4b64d75526a14cb947ca8ade785cbb05629": "6a3d73ba82ba0919c61884b2481cc4b64d75526a14cb947ca8ade785cbb05629",
+        "art_0f5248c206bb48aa287ce2166c22dec35eb069772284298c8c7ebe0544303284": "0f5248c206bb48aa287ce2166c22dec35eb069772284298c8c7ebe0544303284",
+        "art_8eb19f5a2ce020c669d58d5575f1d27a485087d4b7e22ce772277639b1d93270": "8eb19f5a2ce020c669d58d5575f1d27a485087d4b7e22ce772277639b1d93270"
+      },
+      "artifact_sha256_after_resume": {
+        "art_0daf098d44f0fdb8ec4953b1648dccb32b6bf3ecd30d7f251162ece984b8b770": "0daf098d44f0fdb8ec4953b1648dccb32b6bf3ecd30d7f251162ece984b8b770",
+        "art_237faf5e5a11ba2d8b44eff1487ff4aab3566b0215b26fe36b3e439f648f6be4": "237faf5e5a11ba2d8b44eff1487ff4aab3566b0215b26fe36b3e439f648f6be4",
+        "art_6a3d73ba82ba0919c61884b2481cc4b64d75526a14cb947ca8ade785cbb05629": "6a3d73ba82ba0919c61884b2481cc4b64d75526a14cb947ca8ade785cbb05629",
+        "art_0f5248c206bb48aa287ce2166c22dec35eb069772284298c8c7ebe0544303284": "0f5248c206bb48aa287ce2166c22dec35eb069772284298c8c7ebe0544303284",
+        "art_8eb19f5a2ce020c669d58d5575f1d27a485087d4b7e22ce772277639b1d93270": "8eb19f5a2ce020c669d58d5575f1d27a485087d4b7e22ce772277639b1d93270"
+      },
+      "resume_packets_and_artifact_bytes_unchanged": true,
+      "audit_exit_code": 0,
+      "audit_ok": true,
+      "audit_issue_count": 0,
+      "capture_report_exit_code": 0,
+      "capture_report_jobs": 1,
+      "capture_report_attempts": 1,
+      "stderr_tails": []
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "synthetic": true,
+  "live_tesseract": true,
+  "tesseract_version": "5.5.0",
+  "language": "eng+rus",
+  "page_segmentation_mode": 6,
+  "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+  "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+  "ocr_results": {
+    "created": 6,
+    "skipped": 0,
+    "failed": 0
+  },
+  "ocr_wall_seconds": 1.0686936580000008,
+  "evaluation_wall_seconds": 0.2427905690000216,
+  "evaluation_summary": {
+    "sample_count": 6,
+    "evaluated": 6,
+    "failed": 0,
+    "missing": 0,
+    "oversized": 0,
+    "empty_actual": 1,
+    "exact_matches": 5,
+    "multiple_record_samples": 0,
+    "exact_match_rate": 0.8333333333333334,
+    "empty_actual_rate": 0.16666666666666666,
+    "failed_rate": 0.0,
+    "missing_rate": 0.0,
+    "mean_cer": 0.004273504273504273,
+    "mean_wer": 0.06666666666666667
+  },
+  "integrity_ok": true,
+  "integrity_bytes_checked": 6,
+  "raw_packet_byte_identical": true,
+  "cases": [
+    {
+      "sample_id": "synthetic-slide-01",
+      "status": "evaluated",
+      "normalized_exact": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "empty_actual": false,
+      "actual_excerpt": "Evidence Vault Synthetic OCR sample 001",
+      "extraction_limitations": []
+    },
+    {
+      "sample_id": "synthetic-slide-02",
+      "status": "evaluated",
+      "normalized_exact": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "empty_actual": false,
+      "actual_excerpt": "Архив доказательств Проверка распознавания текста",
+      "extraction_limitations": []
+    },
+    {
+      "sample_id": "synthetic-slide-03",
+      "status": "evaluated",
+      "normalized_exact": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "empty_actual": false,
+      "actual_excerpt": "Version 2.5 CER and WER metrics",
+      "extraction_limitations": []
+    },
+    {
+      "sample_id": "synthetic-slide-04",
+      "status": "evaluated",
+      "normalized_exact": false,
+      "cer": 0.02564102564102564,
+      "wer": 0.4,
+      "empty_actual": false,
+      "actual_excerpt": "Capture ID: cap_ 123456 Status: complete",
+      "extraction_limitations": []
+    },
+    {
+      "sample_id": "synthetic-slide-05",
+      "status": "evaluated",
+      "normalized_exact": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "empty_actual": false,
+      "actual_excerpt": "Small gray text for error analysis",
+      "extraction_limitations": []
+    },
+    {
+      "sample_id": "synthetic-slide-06",
+      "status": "evaluated",
+      "normalized_exact": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "empty_actual": true,
+      "actual_excerpt": "",
+      "extraction_limitations": [
+        "OCR returned no text"
+      ]
+    }
+  ]
+}

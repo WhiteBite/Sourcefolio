@@ -1,0 +1,263 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "user",
+        "agent",
+        "tool",
+        "import"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "EvidenceLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "end_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Char"
+        },
+        "end_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Seconds"
+        },
+        "kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "start_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Char"
+        },
+        "start_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Seconds"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "EvidenceLocator",
+      "type": "object"
+    },
+    "ExtractionKind": {
+      "enum": [
+        "ocr_text",
+        "asr_text"
+      ],
+      "title": "ExtractionKind",
+      "type": "string"
+    },
+    "ExtractionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Config",
+          "type": "object"
+        },
+        "extractor": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExtractionKind"
+        },
+        "locator": {
+          "$ref": "#/$defs/EvidenceLocator"
+        },
+        "source_id": {
+          "pattern": "^src_[0-9a-f]{64}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "capture_id",
+        "artifact_id",
+        "kind",
+        "locator",
+        "extractor"
+      ],
+      "title": "ExtractionRequest",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LocatorKind": {
+      "enum": [
+        "slide",
+        "timestamp",
+        "text_span"
+      ],
+      "title": "LocatorKind",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How a record was produced; not a claim that its content is true.",
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "actor_kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "actor_kind",
+        "actor_id",
+        "method"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Derived text, not a creator claim and not part of the immutable raw packet.",
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "excerpt": {
+      "title": "Excerpt",
+      "type": "string"
+    },
+    "extraction_id": {
+      "pattern": "^ext_[0-9a-f]{64}$",
+      "title": "Extraction Id",
+      "type": "string"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "request": {
+      "$ref": "#/$defs/ExtractionRequest"
+    },
+    "request_id": {
+      "pattern": "^exq_[0-9a-f]{64}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "extraction-record/v1",
+      "default": "extraction-record/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request",
+    "request_id",
+    "created_at",
+    "text",
+    "excerpt",
+    "extraction_id"
+  ],
+  "title": "ExtractionRecord",
+  "type": "object"
+}

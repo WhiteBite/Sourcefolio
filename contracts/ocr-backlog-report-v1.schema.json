@@ -1,0 +1,465 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "user",
+        "agent",
+        "tool",
+        "import"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "CaptureStatus": {
+      "enum": [
+        "complete",
+        "partial"
+      ],
+      "title": "CaptureStatus",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "OcrBacklogCountsDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "created": {
+          "minimum": 0,
+          "title": "Created",
+          "type": "integer"
+        },
+        "failed": {
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "skipped": {
+          "minimum": 0,
+          "title": "Skipped",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "created",
+        "skipped",
+        "failed"
+      ],
+      "title": "OcrBacklogCountsDocument",
+      "type": "object"
+    },
+    "OcrBacklogItemDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "minimum": 0,
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "extraction_id": {
+          "anyOf": [
+            {
+              "pattern": "^ext_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extraction Id"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "pattern": "^exq_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "slide": {
+          "minimum": 1,
+          "title": "Slide",
+          "type": "integer"
+        },
+        "source_id": {
+          "pattern": "^src_[0-9a-f]{64}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "created",
+            "skipped",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "capture_id",
+        "artifact_id",
+        "slide",
+        "status",
+        "duration_seconds"
+      ],
+      "title": "OcrBacklogItemDocument",
+      "type": "object"
+    },
+    "OcrBacklogQueryDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "capture_id": {
+          "anyOf": [
+            {
+              "pattern": "^cap_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capture Id"
+        },
+        "capture_limit": {
+          "minimum": 1,
+          "title": "Capture Limit",
+          "type": "integer"
+        },
+        "collection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "latest_only": {
+          "title": "Latest Only",
+          "type": "boolean"
+        },
+        "slide_limit": {
+          "minimum": 1,
+          "title": "Slide Limit",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "capture_limit",
+        "slide_limit",
+        "latest_only"
+      ],
+      "title": "OcrBacklogQueryDocument",
+      "type": "object"
+    },
+    "OcrBacklogSelectionDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "matched_captures": {
+          "minimum": 0,
+          "title": "Matched Captures",
+          "type": "integer"
+        },
+        "selected_captures": {
+          "minimum": 0,
+          "title": "Selected Captures",
+          "type": "integer"
+        },
+        "selected_images": {
+          "minimum": 0,
+          "title": "Selected Images",
+          "type": "integer"
+        },
+        "total_images": {
+          "minimum": 0,
+          "title": "Total Images",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "matched_captures",
+        "selected_captures",
+        "total_images",
+        "selected_images"
+      ],
+      "title": "OcrBacklogSelectionDocument",
+      "type": "object"
+    },
+    "OcrDurationDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "max": {
+          "minimum": 0,
+          "title": "Max",
+          "type": "number"
+        },
+        "mean": {
+          "minimum": 0,
+          "title": "Mean",
+          "type": "number"
+        },
+        "p50": {
+          "minimum": 0,
+          "title": "P50",
+          "type": "number"
+        },
+        "p95": {
+          "minimum": 0,
+          "title": "P95",
+          "type": "number"
+        },
+        "total": {
+          "minimum": 0,
+          "title": "Total",
+          "type": "number"
+        }
+      },
+      "required": [
+        "count",
+        "total",
+        "mean",
+        "p50",
+        "p95",
+        "max"
+      ],
+      "title": "OcrDurationDocument",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How a record was produced; not a claim that its content is true.",
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "actor_kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "actor_kind",
+        "actor_id",
+        "method"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "video",
+        "slideshow",
+        "web_page",
+        "repository",
+        "document",
+        "text",
+        "other"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "adapter_prepared": {
+      "title": "Adapter Prepared",
+      "type": "boolean"
+    },
+    "concurrency": {
+      "minimum": 1,
+      "title": "Concurrency",
+      "type": "integer"
+    },
+    "counts": {
+      "$ref": "#/$defs/OcrBacklogCountsDocument"
+    },
+    "extractor": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "extractor_config": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Extractor Config",
+      "type": "object"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "item_duration_seconds": {
+      "$ref": "#/$defs/OcrDurationDocument"
+    },
+    "items": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/OcrBacklogItemDocument"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "operation": {
+      "enum": [
+        "ocr-capture",
+        "ocr-backlog"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "query": {
+      "$ref": "#/$defs/OcrBacklogQueryDocument"
+    },
+    "runtime": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Runtime",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "ocr-backlog-report/v1",
+      "default": "ocr-backlog-report/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection": {
+      "$ref": "#/$defs/OcrBacklogSelectionDocument"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "wall_seconds": {
+      "minimum": 0,
+      "title": "Wall Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "operation",
+    "started_at",
+    "finished_at",
+    "query",
+    "concurrency",
+    "adapter_prepared",
+    "extractor",
+    "selection",
+    "counts",
+    "wall_seconds",
+    "item_duration_seconds"
+  ],
+  "title": "OcrBacklogReportDocument",
+  "type": "object"
+}

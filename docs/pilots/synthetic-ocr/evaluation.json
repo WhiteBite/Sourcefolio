@@ -1,0 +1,330 @@
+{
+  "batch_report_sha256": [
+    "0926181bc5702948aef27081a24798ff46fd18f5233006fc8a896eb1d46f9924",
+    "e97cb086da1f44610f14d76bd9ca5424189132e4cd8632e1aff73078b341329d"
+  ],
+  "cases": [
+    {
+      "actual_characters": 39,
+      "actual_excerpt": "Evidence Vault Synthetic OCR sample 001",
+      "actual_words": 6,
+      "artifact_id": "art_8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+      "available_records": 1,
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "cer": 0.0,
+      "character_errors": 0,
+      "empty_actual": false,
+      "error": null,
+      "expected_characters": 39,
+      "expected_excerpt": "evidence vault synthetic ocr sample 001",
+      "expected_words": 6,
+      "extraction_id": "ext_483bb90188ceef66277ac1292c05603f492d0adda3da54fe2bf266b1d74da4a5",
+      "extraction_limitations": [],
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "locator": {
+        "end_char": null,
+        "end_seconds": null,
+        "kind": "slide",
+        "slide": 1,
+        "start_char": null,
+        "start_seconds": null
+      },
+      "normalized_actual_sha256": "e140c3230d37343aa81b4ab26b28570f716f6c00440fe68138ef6ec18b3e4320",
+      "normalized_exact": true,
+      "normalized_expected_sha256": "e140c3230d37343aa81b4ab26b28570f716f6c00440fe68138ef6ec18b3e4320",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample.",
+      "request_id": "exq_1b0e42c3885e4f748d6818d2045996f02033e8210d7a986abbcc6133c23519f9",
+      "sample_id": "synthetic-slide-01",
+      "status": "evaluated",
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "actual_characters": 49,
+      "actual_excerpt": "Архив доказательств Проверка распознавания текста",
+      "actual_words": 5,
+      "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+      "available_records": 1,
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "cer": 0.0,
+      "character_errors": 0,
+      "empty_actual": false,
+      "error": null,
+      "expected_characters": 49,
+      "expected_excerpt": "архив доказательств проверка распознавания текста",
+      "expected_words": 5,
+      "extraction_id": "ext_856765d5da55c4ded29c713684cfd7b9636b63272351b183fa100a90fe9f55ac",
+      "extraction_limitations": [],
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "locator": {
+        "end_char": null,
+        "end_seconds": null,
+        "kind": "slide",
+        "slide": 2,
+        "start_char": null,
+        "start_seconds": null
+      },
+      "normalized_actual_sha256": "a1ca7e506df5b7e561db7ca958c10d7f793ec50521289822be58cf90fb32efe4",
+      "normalized_exact": true,
+      "normalized_expected_sha256": "a1ca7e506df5b7e561db7ca958c10d7f793ec50521289822be58cf90fb32efe4",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample.",
+      "request_id": "exq_ffd0030d56aac7cf523a361955732fb8426763b476acae0d38a7319065d50689",
+      "sample_id": "synthetic-slide-02",
+      "status": "evaluated",
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "actual_characters": 31,
+      "actual_excerpt": "Version 2.5 CER and WER metrics",
+      "actual_words": 6,
+      "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+      "available_records": 1,
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "cer": 0.0,
+      "character_errors": 0,
+      "empty_actual": false,
+      "error": null,
+      "expected_characters": 31,
+      "expected_excerpt": "version 2.5 cer and wer metrics",
+      "expected_words": 6,
+      "extraction_id": "ext_da371316c195607c4affdbfc31ddd92c9bbc3590a3faa63120b221d2b175394c",
+      "extraction_limitations": [],
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "locator": {
+        "end_char": null,
+        "end_seconds": null,
+        "kind": "slide",
+        "slide": 3,
+        "start_char": null,
+        "start_seconds": null
+      },
+      "normalized_actual_sha256": "620bccaa5070b73798279bbe4ff4029f65be0665f3cb1b53891184350633c625",
+      "normalized_exact": true,
+      "normalized_expected_sha256": "620bccaa5070b73798279bbe4ff4029f65be0665f3cb1b53891184350633c625",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample.",
+      "request_id": "exq_0ae8352b2c4cdd3db2f12fe950c939ecb6162690d367209e3bac07ebae5c04df",
+      "sample_id": "synthetic-slide-03",
+      "status": "evaluated",
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "actual_characters": 40,
+      "actual_excerpt": "Capture ID: cap_ 123456 Status: complete",
+      "actual_words": 6,
+      "artifact_id": "art_b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
+      "available_records": 1,
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "cer": 0.02564102564102564,
+      "character_errors": 1,
+      "empty_actual": false,
+      "error": null,
+      "expected_characters": 39,
+      "expected_excerpt": "capture id: cap_123456 status: complete",
+      "expected_words": 5,
+      "extraction_id": "ext_a359b0b9f7587a57570dcc820bedb9696da87418569e1b02391f4bedd9a25159",
+      "extraction_limitations": [],
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "locator": {
+        "end_char": null,
+        "end_seconds": null,
+        "kind": "slide",
+        "slide": 4,
+        "start_char": null,
+        "start_seconds": null
+      },
+      "normalized_actual_sha256": "869003ecb0a20181d52a0b4f86e07d111b1e782c638944a1c1d254cb44ecdf06",
+      "normalized_exact": false,
+      "normalized_expected_sha256": "a82fd32ffb965e40643fe8d229fc9ef5cea36a0d98c6e79200d36304125095ba",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample.",
+      "request_id": "exq_cd73c50685348046782feb74c4af0c1ec09b0a7fd16db9846ac986adcd36f4c4",
+      "sample_id": "synthetic-slide-04",
+      "status": "evaluated",
+      "wer": 0.4,
+      "word_errors": 2
+    },
+    {
+      "actual_characters": 34,
+      "actual_excerpt": "Small gray text for error analysis",
+      "actual_words": 6,
+      "artifact_id": "art_8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
+      "available_records": 1,
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "cer": 0.0,
+      "character_errors": 0,
+      "empty_actual": false,
+      "error": null,
+      "expected_characters": 34,
+      "expected_excerpt": "small gray text for error analysis",
+      "expected_words": 6,
+      "extraction_id": "ext_6d21911f32ac42adcf7666404daaf338cd4e8a2d1d8cde18d0b6edc3e77ccbba",
+      "extraction_limitations": [],
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "locator": {
+        "end_char": null,
+        "end_seconds": null,
+        "kind": "slide",
+        "slide": 5,
+        "start_char": null,
+        "start_seconds": null
+      },
+      "normalized_actual_sha256": "c64db72e57536f7e2498a67ab1caac5aef0ceeadb9b7c905b3f1c6b700967961",
+      "normalized_exact": true,
+      "normalized_expected_sha256": "c64db72e57536f7e2498a67ab1caac5aef0ceeadb9b7c905b3f1c6b700967961",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample.",
+      "request_id": "exq_32d585ddb266126636e85fcec06b4d9f47a9fc042586a30c48ed3a4b729a8927",
+      "sample_id": "synthetic-slide-05",
+      "status": "evaluated",
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "actual_characters": 0,
+      "actual_excerpt": "",
+      "actual_words": 0,
+      "artifact_id": "art_8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
+      "available_records": 1,
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "cer": 0.0,
+      "character_errors": 0,
+      "empty_actual": true,
+      "error": null,
+      "expected_characters": 0,
+      "expected_excerpt": "",
+      "expected_words": 0,
+      "extraction_id": "ext_0728b2405645ea63f83eb3d5245c349590ebbbaaac5b485e983de411d8e4b5aa",
+      "extraction_limitations": [
+        "OCR returned no text"
+      ],
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "locator": {
+        "end_char": null,
+        "end_seconds": null,
+        "kind": "slide",
+        "slide": 6,
+        "start_char": null,
+        "start_seconds": null
+      },
+      "normalized_actual_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalized_exact": true,
+      "normalized_expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample.",
+      "request_id": "exq_fcf47c2c6271a86c085eac667015f2a29b8065c1a3d2901f3ed7ea1bea125a77",
+      "sample_id": "synthetic-slide-06",
+      "status": "evaluated",
+      "wer": 0.0,
+      "word_errors": 0
+    }
+  ],
+  "extractors": [
+    {
+      "empty_actual": 1,
+      "evaluated": 6,
+      "exact_match_rate": 0.8333333333333334,
+      "extractor": {
+        "actor_id": "tesseract",
+        "actor_kind": "tool",
+        "method": "subprocess-ocr",
+        "model_id": null,
+        "version": "tesseract 5.5.0"
+      },
+      "extractor_config": {
+        "language": "eng+rus",
+        "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+        "page_segmentation_mode": 6
+      },
+      "mean_cer": 0.004273504273504273,
+      "mean_wer": 0.06666666666666667
+    }
+  ],
+  "generated_at": "2026-11-03T02:36:21.750215Z",
+  "limitations": [
+    "CER/WER measure normalized text similarity, not factual correctness."
+  ],
+  "max_text_chars": 20000,
+  "normalization": "nfkc-casefold-whitespace/v1",
+  "schema_version": "ocr-evaluation-report/v1",
+  "summary": {
+    "empty_actual": 1,
+    "empty_actual_rate": 0.16666666666666666,
+    "evaluated": 6,
+    "exact_match_rate": 0.8333333333333334,
+    "exact_matches": 5,
+    "failed": 0,
+    "failed_rate": 0.0,
+    "mean_cer": 0.004273504273504273,
+    "mean_wer": 0.06666666666666667,
+    "missing": 0,
+    "missing_rate": 0.0,
+    "multiple_record_samples": 0,
+    "oversized": 0,
+    "sample_count": 6
+  }
+}

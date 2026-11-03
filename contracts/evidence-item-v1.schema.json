@@ -1,0 +1,225 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "user",
+        "agent",
+        "tool",
+        "import"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "Approval": {
+      "additionalProperties": false,
+      "description": "Explicit human approval for a record written by another actor.",
+      "properties": {
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "approved_by": {
+          "minLength": 1,
+          "title": "Approved By",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approved_by",
+        "approved_at"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "enum": [
+        "creator_claim",
+        "agent_inference",
+        "external_observation",
+        "user_outcome"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How a record was produced; not a claim that its content is true.",
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "actor_kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "actor_kind",
+        "actor_id",
+        "method"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "anyOf": [
+            {
+              "pattern": "^art_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Id"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "excerpt": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excerpt"
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locator"
+        },
+        "source_id": {
+          "pattern": "^src_[0-9a-f]{64}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "capture_id"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Approval"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence_id": {
+      "pattern": "^ev_[0-9a-f]{64}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/EvidenceKind"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema_version": {
+      "const": "evidence-item/v1",
+      "default": "evidence-item/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Source Refs",
+      "type": "array"
+    },
+    "statement": {
+      "minLength": 1,
+      "title": "Statement",
+      "type": "string"
+    },
+    "supporting_evidence_ids": {
+      "default": [],
+      "items": {
+        "pattern": "^ev_[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Supporting Evidence Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "kind",
+    "statement",
+    "provenance",
+    "created_at",
+    "evidence_id"
+  ],
+  "title": "EvidenceItem",
+  "type": "object"
+}

@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-11-03T02:35:15.750748+00:00",
+  "total_jobs": 1,
+  "status_counts": {
+    "pending": 0,
+    "running": 0,
+    "succeeded": 1,
+    "partial": 0,
+    "failed": 0
+  },
+  "kind_status_counts": {
+    "slideshow": {
+      "pending": 0,
+      "running": 0,
+      "succeeded": 1,
+      "partial": 0,
+      "failed": 0
+    }
+  },
+  "total_attempts": 1,
+  "attempt_status_counts": {
+    "running": 0,
+    "retrying": 0,
+    "succeeded": 1,
+    "partial": 0,
+    "failed": 0,
+    "interrupted": 0
+  },
+  "jobs_with_retries": 0,
+  "retry_attempts": 0,
+  "stale_running_candidates": 0,
+  "attempt_duration_seconds": {
+    "count": 1,
+    "total": 1.662289,
+    "mean": 1.662289,
+    "p50": 1.662289,
+    "p95": 1.662289,
+    "max": 1.662289
+  },
+  "recent_errors": []
+}

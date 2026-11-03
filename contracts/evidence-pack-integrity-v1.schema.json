@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "EvidencePackIntegrityIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "anyOf": [
+            {
+              "pattern": "^art_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Id"
+        },
+        "capture_id": {
+          "anyOf": [
+            {
+              "pattern": "^cap_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capture Id"
+        },
+        "code": {
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "extraction_id": {
+          "anyOf": [
+            {
+              "pattern": "^ext_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extraction Id"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "pattern": "^src_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        }
+      },
+      "required": [
+        "code",
+        "detail"
+      ],
+      "title": "EvidencePackIntegrityIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifact_count": {
+      "minimum": 0,
+      "title": "Artifact Count",
+      "type": "integer"
+    },
+    "bytes_checked": {
+      "minimum": 0,
+      "title": "Bytes Checked",
+      "type": "integer"
+    },
+    "bytes_valid": {
+      "minimum": 0,
+      "title": "Bytes Valid",
+      "type": "integer"
+    },
+    "checked_at": {
+      "format": "date-time",
+      "title": "Checked At",
+      "type": "string"
+    },
+    "excerpt_count": {
+      "minimum": 0,
+      "title": "Excerpt Count",
+      "type": "integer"
+    },
+    "issue_count": {
+      "minimum": 0,
+      "title": "Issue Count",
+      "type": "integer"
+    },
+    "issues": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EvidencePackIntegrityIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "pack_generated_at": {
+      "format": "date-time",
+      "title": "Pack Generated At",
+      "type": "string"
+    },
+    "query": {
+      "title": "Query",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "evidence-pack-integrity/v1",
+      "default": "evidence-pack-integrity/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_count": {
+      "minimum": 0,
+      "title": "Source Count",
+      "type": "integer"
+    },
+    "verify_bytes": {
+      "title": "Verify Bytes",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "checked_at",
+    "query",
+    "pack_generated_at",
+    "verify_bytes",
+    "source_count",
+    "artifact_count",
+    "excerpt_count",
+    "bytes_checked",
+    "bytes_valid",
+    "ok",
+    "issue_count"
+  ],
+  "title": "EvidencePackIntegrityReport",
+  "type": "object"
+}

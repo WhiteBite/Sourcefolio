@@ -1,0 +1,67 @@
+{
+  "schema_version": "capture-manifest/v1",
+  "source": {
+    "platform": "synthetic",
+    "kind": "slideshow",
+    "external_id": "ocr-golden-v1"
+  },
+  "captured_at": "2026-11-03T12:00:00Z",
+  "collector": {
+    "actor_kind": "tool",
+    "actor_id": "synthetic-ocr-golden",
+    "method": "generated-image-import",
+    "version": "1"
+  },
+  "status": "complete",
+  "title": "Synthetic OCR golden slides",
+  "collections": [
+    {
+      "name": "Synthetic OCR"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "images/slide-01.png",
+      "role": "original_image",
+      "media_type": "image/png",
+      "original_filename": "slide-01.png"
+    },
+    {
+      "path": "images/slide-02.png",
+      "role": "original_image",
+      "media_type": "image/png",
+      "original_filename": "slide-02.png"
+    },
+    {
+      "path": "images/slide-03.png",
+      "role": "original_image",
+      "media_type": "image/png",
+      "original_filename": "slide-03.png"
+    },
+    {
+      "path": "images/slide-04.png",
+      "role": "original_image",
+      "media_type": "image/png",
+      "original_filename": "slide-04.png"
+    },
+    {
+      "path": "images/slide-05.png",
+      "role": "original_image",
+      "media_type": "image/png",
+      "original_filename": "slide-05.png"
+    },
+    {
+      "path": "images/slide-06.png",
+      "role": "original_image",
+      "media_type": "image/png",
+      "original_filename": "slide-06.png"
+    }
+  ],
+  "metadata": {
+    "synthetic": true,
+    "font": "DejaVuSans",
+    "image_width": 1200,
+    "image_height": 630,
+    "notes": "Known generated text; not a human-reviewed real-user OCR corpus."
+  }
+}

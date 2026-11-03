@@ -1,0 +1,16 @@
+{
+  "schema_version": "ocr-evaluation/v1",
+  "samples": [
+    {
+      "sample_id": "synthetic-slide-1",
+      "capture_id": "cap_0000000000000000000000000000000000000000000000000000000000000000",
+      "artifact_id": "art_0000000000000000000000000000000000000000000000000000000000000000",
+      "locator": {
+        "kind": "slide",
+        "slide": 1
+      },
+      "expected_text": "Synthetic expected OCR text; replace with a human-reviewed label.",
+      "notes": "Schema example only. Replace capture/artifact IDs and expected text before evaluation."
+    }
+  ]
+}

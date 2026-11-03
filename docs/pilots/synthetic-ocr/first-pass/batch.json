@@ -1,0 +1,132 @@
+{
+  "adapter_prepared": true,
+  "concurrency": 2,
+  "counts": {
+    "created": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "extractor": {
+    "actor_id": "tesseract",
+    "actor_kind": "tool",
+    "method": "subprocess-ocr",
+    "model_id": null,
+    "version": "tesseract 5.5.0"
+  },
+  "extractor_config": {
+    "language": "eng+rus",
+    "language_data_sha256": "920bed2915c33026b14ed69633215e79498efd25659ca6c890448bae2a13a9f1",
+    "page_segmentation_mode": 6
+  },
+  "finished_at": "2026-11-03T02:33:22.448374Z",
+  "item_duration_seconds": {
+    "count": 6,
+    "max": 0.32028652399998236,
+    "mean": 0.2191381010000034,
+    "p50": 0.21988213200000928,
+    "p95": 0.30772421549998796,
+    "total": 1.3148286060000203
+  },
+  "items": [
+    {
+      "artifact_id": "art_8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "duration_seconds": 0.22043308199999956,
+      "error": null,
+      "extraction_id": "ext_5db8bf6240c7a465869ffe1a1c312bf4ca707e8c6df489b42cbbb3b7ab2af816",
+      "limitations": [],
+      "request_id": "exq_1b0e42c3885e4f748d6818d2045996f02033e8210d7a986abbcc6133c23519f9",
+      "slide": 1,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "status": "created"
+    },
+    {
+      "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "duration_seconds": 0.27003729000000476,
+      "error": null,
+      "extraction_id": "ext_5260ca40a20cafbc65a6543de480524f4241a0c9b6ecba9337f0e4372af6cd8a",
+      "limitations": [],
+      "request_id": "exq_ffd0030d56aac7cf523a361955732fb8426763b476acae0d38a7319065d50689",
+      "slide": 2,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "status": "created"
+    },
+    {
+      "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "duration_seconds": 0.16760851400002252,
+      "error": null,
+      "extraction_id": "ext_833134a6eae6361a61eccf67fb7f05937de8f69654ba860c93a040594ca82885",
+      "limitations": [],
+      "request_id": "exq_0ae8352b2c4cdd3db2f12fe950c939ecb6162690d367209e3bac07ebae5c04df",
+      "slide": 3,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "status": "created"
+    },
+    {
+      "artifact_id": "art_b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "duration_seconds": 0.32028652399998236,
+      "error": null,
+      "extraction_id": "ext_5ebde4df9129f849c9dd46a953051dcd1aa09c512697d5080063113ea8ec2bc6",
+      "limitations": [],
+      "request_id": "exq_cd73c50685348046782feb74c4af0c1ec09b0a7fd16db9846ac986adcd36f4c4",
+      "slide": 4,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "status": "created"
+    },
+    {
+      "artifact_id": "art_8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "duration_seconds": 0.219331182000019,
+      "error": null,
+      "extraction_id": "ext_e29984c409f7134c3f2b72e6f358ad2caffe59f2b1a1290fe2455e587a417977",
+      "limitations": [],
+      "request_id": "exq_32d585ddb266126636e85fcec06b4d9f47a9fc042586a30c48ed3a4b729a8927",
+      "slide": 5,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "status": "created"
+    },
+    {
+      "artifact_id": "art_8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "duration_seconds": 0.11713201399999207,
+      "error": null,
+      "extraction_id": "ext_9ef72e2a4d56206a56d2119edd88a38122ef8c403e41503d1fa741ebba4d2e4c",
+      "limitations": [
+        "OCR returned no text"
+      ],
+      "request_id": "exq_fcf47c2c6271a86c085eac667015f2a29b8065c1a3d2901f3ed7ea1bea125a77",
+      "slide": 6,
+      "source_id": "src_6aac017e77ec0fba0d05b9b3cbd97b8b96405caf4e195e4ce53867845b511b9b",
+      "status": "created"
+    }
+  ],
+  "limitations": [],
+  "operation": "ocr-backlog",
+  "query": {
+    "capture_id": null,
+    "capture_limit": 1,
+    "collection": null,
+    "kind": null,
+    "latest_only": true,
+    "slide_limit": 6,
+    "status": null
+  },
+  "runtime": {
+    "max_input_bytes": 52428800,
+    "max_output_bytes": 1048576,
+    "min_free_bytes": 0,
+    "timeout_seconds": 60
+  },
+  "schema_version": "ocr-backlog-report/v1",
+  "selection": {
+    "matched_captures": 1,
+    "selected_captures": 1,
+    "selected_images": 6,
+    "total_images": 6
+  },
+  "started_at": "2026-11-03T02:33:21.616602Z",
+  "wall_seconds": 0.8317774470000074
+}

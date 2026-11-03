@@ -1,0 +1,13 @@
+from collections.abc import Iterator
+from typing import Any, BinaryIO
+
+__version__: str
+
+class JSONError(Exception): ...
+
+class ObjectBuilder:
+    value: Any
+    def event(self, event: str, value: Any) -> None: ...
+
+def parse(file: BinaryIO, **kwargs: Any) -> Iterator[tuple[str, str, Any]]: ...
+def items(file: BinaryIO, prefix: str, **kwargs: Any) -> Iterator[Any]: ...

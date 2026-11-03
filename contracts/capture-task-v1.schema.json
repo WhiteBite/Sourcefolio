@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "CollectionMembership": {
+      "additionalProperties": false,
+      "properties": {
+        "external_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CollectionMembership",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "SourceIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_url": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Url"
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "platform": {
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "title": "Platform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "kind"
+      ],
+      "title": "SourceIdentity",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "video",
+        "slideshow",
+        "web_page",
+        "repository",
+        "document",
+        "text",
+        "other"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "collections": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CollectionMembership"
+      },
+      "title": "Collections",
+      "type": "array"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "raw_entries": {
+      "items": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "type": "object"
+      },
+      "minItems": 1,
+      "title": "Raw Entries",
+      "type": "array"
+    },
+    "saved_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Saved At"
+    },
+    "schema_version": {
+      "const": "capture-task/v1",
+      "default": "capture-task/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceIdentity"
+    },
+    "task_id": {
+      "pattern": "^task_[0-9a-f]{64}$",
+      "title": "Task Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "raw_entries",
+    "task_id"
+  ],
+  "title": "CaptureTask",
+  "type": "object"
+}

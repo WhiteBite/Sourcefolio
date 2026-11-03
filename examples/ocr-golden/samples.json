@@ -1,0 +1,71 @@
+{
+  "schema_version": "ocr-evaluation/v1",
+  "samples": [
+    {
+      "sample_id": "synthetic-slide-01",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "artifact_id": "art_8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+      "locator": {
+        "kind": "slide",
+        "slide": 1
+      },
+      "expected_text": "Evidence Vault\nSynthetic OCR sample 001",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample."
+    },
+    {
+      "sample_id": "synthetic-slide-02",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+      "locator": {
+        "kind": "slide",
+        "slide": 2
+      },
+      "expected_text": "Архив доказательств\nПроверка распознавания текста",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample."
+    },
+    {
+      "sample_id": "synthetic-slide-03",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+      "locator": {
+        "kind": "slide",
+        "slide": 3
+      },
+      "expected_text": "Version 2.5\nCER and WER metrics",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample."
+    },
+    {
+      "sample_id": "synthetic-slide-04",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "artifact_id": "art_b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
+      "locator": {
+        "kind": "slide",
+        "slide": 4
+      },
+      "expected_text": "Capture ID: cap_123456\nStatus: complete",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample."
+    },
+    {
+      "sample_id": "synthetic-slide-05",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "artifact_id": "art_8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
+      "locator": {
+        "kind": "slide",
+        "slide": 5
+      },
+      "expected_text": "Small gray text\nfor error analysis",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample."
+    },
+    {
+      "sample_id": "synthetic-slide-06",
+      "capture_id": "cap_095da4550529f72f380c05eeda988d6a5e9eee5305521caa96ddf10ba100974a",
+      "artifact_id": "art_8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
+      "locator": {
+        "kind": "slide",
+        "slide": 6
+      },
+      "expected_text": "",
+      "notes": "Synthetic generated ground truth; not a real-user human-reviewed sample."
+    }
+  ]
+}

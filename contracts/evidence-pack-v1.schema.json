@@ -1,0 +1,592 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "user",
+        "agent",
+        "tool",
+        "import"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ArtifactRole": {
+      "description": "Raw capture roles only; OCR, ASR, and embeddings are derived records.",
+      "enum": [
+        "original_video",
+        "original_audio",
+        "original_image",
+        "caption_text",
+        "page_snapshot",
+        "author_metadata",
+        "attachment",
+        "other"
+      ],
+      "title": "ArtifactRole",
+      "type": "string"
+    },
+    "CaptureStatus": {
+      "enum": [
+        "complete",
+        "partial"
+      ],
+      "title": "CaptureStatus",
+      "type": "string"
+    },
+    "EvidencePackArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "original_filename": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Filename"
+        },
+        "role": {
+          "$ref": "#/$defs/ArtifactRole"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "exclusiveMinimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "uri": {
+          "minLength": 1,
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "role",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "uri"
+      ],
+      "title": "EvidencePackArtifact",
+      "type": "object"
+    },
+    "EvidencePackExcerptDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9a-f]{64}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_uri": {
+          "minLength": 1,
+          "title": "Artifact Uri",
+          "type": "string"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Config",
+          "type": "object"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "excerpt": {
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "extraction_id": {
+          "pattern": "^ext_[0-9a-f]{64}$",
+          "title": "Extraction Id",
+          "type": "string"
+        },
+        "extractor": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExtractionKind"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "locator": {
+          "$ref": "#/$defs/EvidencePackLocator"
+        },
+        "matched_query": {
+          "title": "Matched Query",
+          "type": "boolean"
+        },
+        "request_id": {
+          "pattern": "^exq_[0-9a-f]{64}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^src_[0-9a-f]{64}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "extraction_id",
+        "request_id",
+        "source_id",
+        "capture_id",
+        "kind",
+        "created_at",
+        "artifact_id",
+        "artifact_uri",
+        "locator",
+        "matched_query",
+        "excerpt",
+        "extractor"
+      ],
+      "title": "EvidencePackExcerptDocument",
+      "type": "object"
+    },
+    "EvidencePackFilters": {
+      "additionalProperties": false,
+      "properties": {
+        "collection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection"
+        },
+        "excerpt_limit": {
+          "minimum": 0,
+          "title": "Excerpt Limit",
+          "type": "integer"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "max_text_artifact_bytes": {
+          "minimum": 1,
+          "title": "Max Text Artifact Bytes",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "limit",
+        "excerpt_limit",
+        "max_text_artifact_bytes"
+      ],
+      "title": "EvidencePackFilters",
+      "type": "object"
+    },
+    "EvidencePackLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical": {
+          "minLength": 1,
+          "title": "Canonical",
+          "type": "string"
+        },
+        "end_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Char"
+        },
+        "end_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Seconds"
+        },
+        "kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "start_char": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Char"
+        },
+        "start_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Seconds"
+        }
+      },
+      "required": [
+        "kind",
+        "canonical"
+      ],
+      "title": "EvidencePackLocator",
+      "type": "object"
+    },
+    "EvidencePackSourceDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/EvidencePackArtifact"
+          },
+          "minItems": 1,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "canonical_url": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Url"
+        },
+        "capture_id": {
+          "pattern": "^cap_[0-9a-f]{64}$",
+          "title": "Capture Id",
+          "type": "string"
+        },
+        "capture_limitations": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Capture Limitations",
+          "type": "array"
+        },
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "collections": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Collections",
+          "type": "array"
+        },
+        "collector": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "excerpts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidencePackExcerptDocument"
+          },
+          "title": "Excerpts",
+          "type": "array"
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "relevance_score": {
+          "minimum": 0,
+          "title": "Relevance Score",
+          "type": "integer"
+        },
+        "snippet": {
+          "title": "Snippet",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^src_[0-9a-f]{64}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CaptureStatus"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rank",
+        "source_id",
+        "capture_id",
+        "title",
+        "kind",
+        "status",
+        "captured_at",
+        "relevance_score",
+        "snippet",
+        "collector",
+        "artifacts"
+      ],
+      "title": "EvidencePackSourceDocument",
+      "type": "object"
+    },
+    "ExtractionKind": {
+      "enum": [
+        "ocr_text",
+        "asr_text"
+      ],
+      "title": "ExtractionKind",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "LocatorKind": {
+      "enum": [
+        "slide",
+        "timestamp",
+        "text_span"
+      ],
+      "title": "LocatorKind",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How a record was produced; not a claim that its content is true.",
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "actor_kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "actor_kind",
+        "actor_id",
+        "method"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "video",
+        "slideshow",
+        "web_page",
+        "repository",
+        "document",
+        "text",
+        "other"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "filters": {
+      "$ref": "#/$defs/EvidencePackFilters"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Limitations",
+      "type": "array"
+    },
+    "pack_type": {
+      "const": "retrieval_only",
+      "default": "retrieval_only",
+      "title": "Pack Type",
+      "type": "string"
+    },
+    "query": {
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "result_count": {
+      "minimum": 0,
+      "title": "Result Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "evidence-pack/v1",
+      "default": "evidence-pack/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sources": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EvidencePackSourceDocument"
+      },
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "query",
+    "generated_at",
+    "filters",
+    "result_count",
+    "limitations"
+  ],
+  "title": "EvidencePackDocument",
+  "type": "object"
+}

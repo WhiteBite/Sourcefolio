@@ -1,0 +1,111 @@
+{
+  "surrogate": true,
+  "user_export_used": false,
+  "live_network": true,
+  "tools": {
+    "yt_dlp": "2026.10.26",
+    "gallery_dl": "1.32.19"
+  },
+  "operations": {
+    "video": {
+      "url": "https://www.tiktok.com/@.doris_official/video/7488781024571280662",
+      "first_exit_code": 0,
+      "first_results": {
+        "skipped": 0,
+        "succeeded": 1,
+        "partial": 0,
+        "failed": 0
+      },
+      "first_issues": [],
+      "first_wall_seconds": 4.232336699000001,
+      "resume_exit_code": 0,
+      "resume_results": {
+        "skipped": 1,
+        "succeeded": 0,
+        "partial": 0,
+        "failed": 0
+      },
+      "resume_wall_seconds": 0.24050387700000897,
+      "packets": [
+        {
+          "source_id": "src_993b2564e39e9cd3e33d61e704e8eb64a8890f4e7ee45dd0a91682f7d8ba5e7c",
+          "capture_id": "cap_89bf2192411e4b24db613c7bfc86321afc4d2e0c6c815f54dad1eb6926bdb420",
+          "kind": "video",
+          "status": "complete",
+          "limitations": [],
+          "artifact_roles": [
+            "original_video",
+            "author_metadata",
+            "author_metadata"
+          ],
+          "artifact_bytes": 5350158,
+          "metadata_keys": [
+            "adapter",
+            "saved_index",
+            "task_id"
+          ]
+        }
+      ],
+      "audit_exit_code": 0,
+      "audit_ok": true,
+      "audit_issue_count": 0,
+      "capture_report_jobs": 1,
+      "capture_report_attempts": 1,
+      "stderr_tails": [],
+      "packet_sha256": {
+        "cap_89bf2192411e4b24db613c7bfc86321afc4d2e0c6c815f54dad1eb6926bdb420": "ed7ee82ae83f07160f8a9d2c34a20a97e2b33494e10e4edaa664e3f4d057cc85"
+      }
+    },
+    "photo": {
+      "url": "https://www.tiktok.com/@velocitydrawing/photo/7266832970353233185",
+      "first_exit_code": 0,
+      "first_results": {
+        "skipped": 0,
+        "succeeded": 1,
+        "partial": 0,
+        "failed": 0
+      },
+      "first_issues": [],
+      "first_wall_seconds": 2.30110564200001,
+      "resume_exit_code": 0,
+      "resume_results": {
+        "skipped": 1,
+        "succeeded": 0,
+        "partial": 0,
+        "failed": 0
+      },
+      "resume_wall_seconds": 0.22666319900000076,
+      "packets": [
+        {
+          "source_id": "src_04d055e56d65dcb0a147a9644b3b89c92b756564a9f2a1dc41f1bba43f32fbbb",
+          "capture_id": "cap_46eb37c346c101c631a4146a6c17038d6cd71e68585aa3474afc0959c9b61806",
+          "kind": "slideshow",
+          "status": "complete",
+          "limitations": [],
+          "artifact_roles": [
+            "original_image",
+            "original_image",
+            "original_image",
+            "author_metadata",
+            "author_metadata"
+          ],
+          "artifact_bytes": 333741,
+          "metadata_keys": [
+            "adapter",
+            "saved_index",
+            "task_id"
+          ]
+        }
+      ],
+      "audit_exit_code": 0,
+      "audit_ok": true,
+      "audit_issue_count": 0,
+      "capture_report_jobs": 1,
+      "capture_report_attempts": 1,
+      "stderr_tails": [],
+      "packet_sha256": {
+        "cap_46eb37c346c101c631a4146a6c17038d6cd71e68585aa3474afc0959c9b61806": "05079fe37c0e3508cd0247d75fe6ace3c2d02a2bb6a3bd0110fccf53e7ce83d8"
+      }
+    }
+  }
+}

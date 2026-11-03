@@ -1,0 +1,25 @@
+{
+  "Activity": {
+    "Favorite Videos": {
+      "FavoriteVideoList": [
+        {
+          "Date": "2026-10-01 18:30:00",
+          "Link": "https://www.tiktok.com/@example/video/7300000000000000001?utm_source=demo",
+          "Collection": "Нейронки",
+          "SyntheticExtraField": {
+            "preserved": true
+          }
+        },
+        {
+          "Date": "2026-10-02T20:00:00+03:00",
+          "Link": "https://www.tiktok.com/@example/photo/7300000000000000002",
+          "Collections": ["Фильмы", "Идеи"]
+        },
+        {
+          "Date": "2026-10-03 09:15:00",
+          "Link": "https://vm.tiktok.com/ZMdemoShort1/"
+        }
+      ]
+    }
+  }
+}

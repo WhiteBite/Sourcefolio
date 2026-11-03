@@ -1,0 +1,18 @@
+{
+  "artifact_count": 6,
+  "bytes_checked": 6,
+  "bytes_valid": 6,
+  "checked_at": "2026-11-03T02:33:23.181761Z",
+  "excerpt_count": 6,
+  "issue_count": 0,
+  "issues": [],
+  "limitations": [
+    "Integrity checks do not establish factual correctness or source trust."
+  ],
+  "ok": true,
+  "pack_generated_at": "2026-11-03T02:33:22.934098Z",
+  "query": "Evidence Vault",
+  "schema_version": "evidence-pack-integrity/v1",
+  "source_count": 1,
+  "verify_bytes": true
+}
