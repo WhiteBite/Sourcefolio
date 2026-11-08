@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import yaml
 
 from evidence_vault.application.extraction_ports import ExtractionRepository
+from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
@@ -41,7 +42,7 @@ class ObsidianOverviewProjection:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def rebuild(self) -> int:
-        packets = tuple(self._packets.iter_packets())
+        packets = tuple(latest_capture_per_source(self._packets.iter_packets()).values())
         status_counts: Counter[str] = Counter()
         kind_counts: Counter[str] = Counter()
         collection_counts: Counter[str] = Counter()

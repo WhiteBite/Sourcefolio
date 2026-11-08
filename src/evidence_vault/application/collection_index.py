@@ -8,6 +8,7 @@ from collections import Counter, defaultdict
 import yaml
 
 from evidence_vault.application.entity_extraction import find_hashtags, find_repositories
+from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
@@ -93,7 +94,7 @@ class CollectionIndexProjection:
 
     def rebuild(self) -> int:
         grouped: dict[str, list[SourcePacket]] = defaultdict(list)
-        for packet in self._packets.iter_packets():
+        for packet in latest_capture_per_source(self._packets.iter_packets()).values():
             for collection in packet.collections:
                 grouped[collection.name].append(packet)
         slugs = self._slugs(grouped)

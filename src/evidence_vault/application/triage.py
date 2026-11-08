@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import yaml
 
+from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.projection_ports import HumanNoteStore
 from evidence_vault.domain.source import SourcePacket
@@ -27,14 +28,7 @@ class IdeaScaffolder:
         self._notes = notes
 
     def scaffold(self) -> IdeaScaffoldResult:
-        latest: dict[str, SourcePacket] = {}
-        for packet in self._packets.iter_packets():
-            current = latest.get(packet.source_id)
-            if current is None or (packet.captured_at, packet.capture_id) > (
-                current.captured_at,
-                current.capture_id,
-            ):
-                latest[packet.source_id] = packet
+        latest = latest_capture_per_source(self._packets.iter_packets())
 
         created_paths: list[str] = []
         skipped = 0

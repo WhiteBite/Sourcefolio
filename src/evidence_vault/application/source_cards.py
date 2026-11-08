@@ -8,6 +8,7 @@ import yaml
 from pydantic import JsonValue
 
 from evidence_vault.application.extraction_ports import ExtractionRepository
+from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.ports import ArtifactLocator, SourcePacketRepository
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
@@ -79,9 +80,10 @@ class SourceCardProjection:
         self._extractions = extractions
 
     def rebuild(self) -> int:
+        latest = latest_capture_per_source(self._packets.iter_packets())
         return self._store.replace_namespace(
             self.NAMESPACE,
-            (self.render(packet) for packet in self._packets.iter_packets()),
+            (self.render(packet) for packet in latest.values()),
         )
 
     def render(self, packet: SourcePacket) -> GeneratedDocument:
