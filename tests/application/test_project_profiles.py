@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from evidence_vault.adapters.filesystem import FileSystemHumanNoteStore
@@ -49,3 +50,14 @@ def test_project_profile_scaffolder_creates_then_skips(tmp_path: Path) -> None:
     assert second.skipped == 2
     assert second.created_paths == ()
     assert alpha.read_text(encoding="utf-8") == "human edit"
+
+
+def test_project_profile_scaffolder_rejects_escaping_id(tmp_path: Path) -> None:
+    root = tmp_path / "profiles"
+    scaffolder = ProjectProfileScaffolder(FileSystemHumanNoteStore(root))
+
+    with pytest.raises(ValueError):
+        scaffolder.scaffold((Project(id="a/b", name="Escape", description=""),))
+
+    assert not (root / "a").exists()
+    assert not (tmp_path / "a").exists()

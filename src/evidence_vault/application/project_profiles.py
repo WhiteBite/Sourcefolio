@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import yaml
 
-from evidence_vault.application.project_fit import Project
+from evidence_vault.application.project_fit import Project, validate_project_id
 from evidence_vault.application.projection_ports import HumanNoteStore
 
 
@@ -52,6 +52,7 @@ class ProjectProfileScaffolder:
         created_paths: list[str] = []
         skipped = 0
         for project in projects:
+            validate_project_id(project.id)
             path = f"{project.id}.md"
             if self._notes.create_if_absent(path, render_draft(project)):
                 created_paths.append(path)
