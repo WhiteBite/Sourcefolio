@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -43,11 +44,13 @@ SYSTEM_PROMPT = (
 
 _MAX_COMMENTS = 10
 _FITS = frozenset({"high", "medium", "low"})
-_FIT_RANK = {"high": 3, "medium": 2, "low": 1}
+FIT_RANK = {"high": 3, "medium": 2, "low": 1}
 _MAX_ATTEMPTS = 3
 _DRY_RUN_PREVIEWS = 2
 _MAX_IRRELEVANT = 20
 _INDEX_VERSION = 1
+_GENERATOR_VERSION = "1"
+PROJECT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 def _as_str(value: object) -> str:
@@ -71,6 +74,12 @@ class Project:
         )
 
 
+def validate_project_id(value: str) -> str:
+    if not PROJECT_ID_PATTERN.fullmatch(value):
+        raise ValueError(f"invalid project id: {value!r}")
+    return value
+
+
 def parse_projects(payload: Mapping[str, object]) -> tuple[Project, ...]:
     raw = payload.get("projects")
     if not isinstance(raw, list) or not raw:
@@ -83,6 +92,7 @@ def parse_projects(payload: Mapping[str, object]) -> tuple[Project, ...]:
         project = Project.from_payload(item)
         if not project.id or not project.name:
             raise ValueError("each project requires a non-empty id and name")
+        validate_project_id(project.id)
         if project.id in seen:
             raise ValueError(f"duplicate project id: {project.id}")
         seen.add(project.id)
@@ -218,7 +228,7 @@ class ProjectFitIndexStore(Protocol):
         ...
 
 
-def _parse_index(payload: Mapping[str, JsonValue] | None) -> dict[str, ProjectFitIndexEntry]:
+def parse_index(payload: Mapping[str, JsonValue] | None) -> dict[str, ProjectFitIndexEntry]:
     if not isinstance(payload, Mapping):
         return {}
     items = payload.get("items")
@@ -234,9 +244,24 @@ def _parse_index(payload: Mapping[str, JsonValue] | None) -> dict[str, ProjectFi
     return entries
 
 
-def _index_payload(entries: Mapping[str, ProjectFitIndexEntry]) -> dict[str, JsonValue]:
+def index_project_slugs(payload: Mapping[str, JsonValue] | None) -> dict[str, str]:
+    if not isinstance(payload, Mapping):
+        return {}
+    raw = payload.get("project_slugs")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        key: value for key, value in raw.items() if isinstance(key, str) and isinstance(value, str)
+    }
+
+
+def _index_payload(
+    entries: Mapping[str, ProjectFitIndexEntry],
+    slugs: Mapping[str, str],
+) -> dict[str, JsonValue]:
     return {
         "version": _INDEX_VERSION,
+        "project_slugs": dict(slugs),
         "items": {key: entries[key].to_payload() for key in sorted(entries)},
     }
 
@@ -314,8 +339,9 @@ def _build_user_prompt(packet: SourcePacket, projects: tuple[Project, ...], ocr_
     return "\n".join(lines)
 
 
-def _cache_key(packet: SourcePacket, user_prompt: str) -> str:
-    digest = hashlib.sha256(user_prompt.encode("utf-8")).hexdigest()[:16]
+def _cache_key(packet: SourcePacket, user_prompt: str, *, model: str) -> str:
+    material = f"{_GENERATOR_VERSION}\x00{model}\x00{user_prompt}"
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
     return f"{packet.source_id}__{digest}"
 
 
@@ -360,7 +386,7 @@ def project_slugs(projects: tuple[Project, ...]) -> dict[str, str]:
     return slugs
 
 
-def _entry_title(entry: ProjectFitIndexEntry) -> str:
+def entry_title(entry: ProjectFitIndexEntry) -> str:
     if entry.summary:
         first_line = entry.summary.splitlines()[0].strip()
         if first_line:
@@ -401,7 +427,7 @@ def _render_project_note(
         elif any(item.project_id in known_ids for item in entry.matches):
             mentioned.append(entry)
     matched.sort(
-        key=lambda item: (_FIT_RANK[item[1].fit], item[0].updated_at, item[0].source_id),
+        key=lambda item: (FIT_RANK[item[1].fit], item[0].updated_at, item[0].source_id),
         reverse=True,
     )
     low.sort(key=lambda item: (item[0].updated_at, item[0].source_id), reverse=True)
@@ -436,7 +462,7 @@ def _render_project_note(
     ]
     if matched:
         for entry, match in matched:
-            lines.append(f"### {escape(_entry_title(entry), table=True)}")
+            lines.append(f"### {escape(entry_title(entry), table=True)}")
             lines.append("")
             lines.append(f"- Source: {_entry_link(generated_prefix, entry)}")
             lines.append(f"- Fit: {escape(match.fit, table=True)}")
@@ -586,7 +612,7 @@ class ProjectFitRunner:
         for position, packet in enumerate(selected, start=1):
             ocr_text = _ocr_text(self._extractions, packet.capture_id, query.max_ocr_kb)
             user_prompt = _build_user_prompt(packet, self._projects, ocr_text)
-            key = _cache_key(packet, user_prompt)
+            key = _cache_key(packet, user_prompt, model=self._model)
             cached = None
             if not query.refresh:
                 try:
@@ -618,7 +644,7 @@ class ProjectFitRunner:
             self._emit_progress(position, total, "processed")
 
         if not query.dry_run:
-            self._index.save(_index_payload(entries))
+            self._index.save(_index_payload(entries, project_slugs(self._projects)))
 
         per_project, unmatched = self._aggregate(entries)
         notes: tuple[GeneratedDocument, ...] = ()
@@ -726,7 +752,7 @@ class ProjectFitRunner:
             payload = self._index.load()
         except Exception:
             return {}
-        return _parse_index(payload)
+        return parse_index(payload)
 
     def _emit_progress(self, position: int, total: int, status: str) -> None:
         if self._progress is not None:

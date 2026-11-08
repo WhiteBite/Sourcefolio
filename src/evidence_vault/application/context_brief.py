@@ -11,10 +11,10 @@ from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.markdown import escape
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.project_fit import (
-    _FIT_RANK,
+    FIT_RANK,
     Project,
     ProjectFitIndexStore,
-    _parse_index,
+    parse_index,
 )
 from evidence_vault.application.projection_ports import HumanNoteReader
 
@@ -96,7 +96,7 @@ def _context_projects(
 
 def _context_matches(index: ProjectFitIndexStore) -> tuple[ContextMatch, ...]:
     try:
-        entries = _parse_index(index.load())
+        entries = parse_index(index.load())
     except Exception:
         entries = {}
     ranked: list[tuple[tuple[int, str, str, str], ContextMatch]] = []
@@ -105,7 +105,7 @@ def _context_matches(index: ProjectFitIndexStore) -> tuple[ContextMatch, ...]:
             ranked.append(
                 (
                     (
-                        _FIT_RANK.get(match.fit, 0),
+                        FIT_RANK.get(match.fit, 0),
                         entry.updated_at,
                         entry.source_id,
                         match.project_id,

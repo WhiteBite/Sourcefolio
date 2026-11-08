@@ -23,6 +23,7 @@ from evidence_vault.application.project_fit import (
     _build_user_prompt,
     _cache_key,
     _projects_key,
+    index_project_slugs,
     parse_projects,
 )
 from evidence_vault.domain.common import ActorKind, Provenance
@@ -305,7 +306,7 @@ def test_project_fit_treats_corrupt_cache_as_miss(tmp_path: Path) -> None:
     cache_root = tmp_path / "derived" / "project-fit"
     cache_root.mkdir(parents=True)
     prompt = _build_user_prompt(packet, PROJECTS, "")
-    key = _cache_key(packet, prompt)
+    key = _cache_key(packet, prompt, model="test-model")
     (cache_root / f"{key}.json").write_text("{not json", encoding="utf-8")
 
     client = FakeChatClient({"trading bot idea": MATCH_MIDAS})
@@ -572,3 +573,37 @@ def test_project_fit_note_heading_uses_summary(tmp_path: Path) -> None:
     assert "### Great backtest idea" in notes["midasai.md"]
     assert "index.md" in notes
     assert "## Globally irrelevant (0)" in notes["index.md"]
+
+
+def test_project_fit_index_persists_project_slugs(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="trading bot idea")
+    runner(tmp_path, FakeChatClient({"trading bot idea": MATCH_MIDAS})).run(
+        ProjectFitQuery(collections=("Нейронки",))
+    )
+
+    index = json.loads((tmp_path / "derived" / "project-fit" / "index.json").read_text("utf-8"))
+    assert index["project_slugs"] == {"midas": "midasai", "mafiin": "mafiin"}
+
+
+def test_index_project_slugs_reads_persisted_map(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="trading bot idea")
+    runner(tmp_path, FakeChatClient({"trading bot idea": MATCH_MIDAS})).run(
+        ProjectFitQuery(collections=("Нейронки",))
+    )
+
+    payload = json.loads((tmp_path / "derived" / "project-fit" / "index.json").read_text("utf-8"))
+    assert index_project_slugs(payload) == {"midas": "midasai", "mafiin": "mafiin"}
+    assert index_project_slugs(None) == {}
+
+
+def test_cache_key_is_model_aware(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc="trading bot idea")
+    prompt = _build_user_prompt(packet, PROJECTS, "")
+
+    assert _cache_key(packet, prompt, model="m") != _cache_key(packet, prompt, model="n")
+
+
+@pytest.mark.parametrize("bad_id", ["A B", "foo/bar", "../x", "_x"])
+def test_parse_projects_rejects_invalid_ids(bad_id: str) -> None:
+    with pytest.raises(ValueError, match="invalid project id"):
+        parse_projects({"projects": [{"id": bad_id, "name": "N", "description": ""}]})

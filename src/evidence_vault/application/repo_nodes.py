@@ -17,7 +17,7 @@ from evidence_vault.application.project_fit import (
     Project,
     ProjectFitIndexEntry,
     ProjectFitIndexStore,
-    _parse_index,
+    parse_index,
     project_slugs,
 )
 from evidence_vault.application.projection_ports import ProjectionStore
@@ -75,7 +75,7 @@ class RepoNodeProjection:
         self._clock = clock
 
     def rebuild(self) -> int:
-        fit = _parse_index(self._project_fit_index.load())
+        fit = parse_index(self._project_fit_index.load())
         documents = [self._render(ref, packets, fit) for ref, packets in self._collect()]
         return self._store.replace_namespace(self.NAMESPACE, documents)
 
