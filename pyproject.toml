@@ -22,6 +22,9 @@ media = [
 slides = [
   "gallery-dl",
 ]
+mcp = [
+  "mcp>=2",
+]
 dev = [
   "mypy>=1.14,<2",
   "pytest>=8.3,<10",
@@ -31,6 +34,7 @@ dev = [
 
 [project.scripts]
 evidence-vault = "evidence_vault.cli:main"
+evidence-vault-mcp = "evidence_vault.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evidence_vault"]

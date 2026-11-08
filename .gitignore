@@ -17,3 +17,6 @@ data/
 .vscode/
 .opencode/dejavu/
 .omo/
+
+# Local machine-specific opencode config (absolute venv path)
+opencode.json
