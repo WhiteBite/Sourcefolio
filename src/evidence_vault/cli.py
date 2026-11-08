@@ -73,6 +73,12 @@ from evidence_vault.application.ocr_evaluation import (
     OcrEvaluationSet,
     OcrEvaluator,
 )
+from evidence_vault.application.project_fit import (
+    Project,
+    ProjectFitQuery,
+    ProjectFitRunner,
+    parse_projects,
+)
 from evidence_vault.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
 from evidence_vault.application.search import SearchIndexBuilder
 from evidence_vault.application.search_evaluation import SearchEvaluationSet, SearchEvaluator
@@ -165,6 +171,18 @@ def resolve_llm_config(
             "LLM api_key is required: pass --api-key, set EV_LLM_API_KEY, or add data/llm.json"
         )
     return LlmConfig(base_url=resolved_base_url, api_key=resolved_api_key, model=resolved_model)
+
+
+def _load_projects(path: Path) -> tuple[Project, ...]:
+    if not path.is_file():
+        raise ValueError(f"projects file not found: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read projects file: {path}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("projects file must contain a JSON object")
+    return parse_projects(data)
 
 
 def _archive_capture(args: argparse.Namespace) -> int:
@@ -930,6 +948,73 @@ def _repo_catalog(args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def _project_fit(args: argparse.Namespace) -> int:
+    projects = _load_projects(Path(args.projects))
+    config = resolve_llm_config(
+        base_url=args.base_url,
+        api_key=args.api_key,
+        model=args.model,
+    )
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "evidence-vault"
+    report = ProjectFitRunner(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        client=OpenAIChatClient(
+            OpenAIChatConfig(
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model=config.model,
+            )
+        ),
+        cache=FileSystemLlmCache(derived_root, namespace=ProjectFitRunner.CACHE_NAMESPACE),
+        model=config.model,
+        projects=projects,
+        extractions=FileSystemExtractionRepository(derived_root),
+        generated_prefix=generated_root.relative_to(vault_root).as_posix(),
+    ).run(
+        ProjectFitQuery(
+            collections=tuple(args.collection),
+            limit=args.limit,
+            refresh=args.refresh,
+            dry_run=args.dry_run,
+        )
+    )
+    note_paths: list[str] = []
+    if report.notes:
+        FileSystemProjectionStore(generated_root).replace_namespace(
+            ProjectFitRunner.NAMESPACE,
+            report.notes,
+        )
+        note_paths = [
+            str(generated_root / ProjectFitRunner.NAMESPACE / note.path) for note in report.notes
+        ]
+    output = {
+        "collections": list(report.collections),
+        "model": report.model,
+        "items_scanned": report.items_scanned,
+        "processed": report.processed,
+        "skipped_cached": report.skipped_cached,
+        "failed": report.failed,
+        "unmatched": report.unmatched,
+        "per_project": dict(report.per_project),
+        "dry_run": report.dry_run,
+        "note_paths": note_paths,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "status": item.status,
+                "error": item.error,
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
+
+
 def _evidence_pack(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     artifacts = FileSystemArtifactStore(archive_root)
@@ -1368,6 +1453,28 @@ def _build_parser() -> argparse.ArgumentParser:
     repo_catalog.add_argument("--dry-run", action="store_true", help="report without writing")
     repo_catalog.add_argument("--token", help="GitHub API token; defaults to env GITHUB_TOKEN")
     repo_catalog.set_defaults(handler=_repo_catalog)
+
+    project_fit = subcommands.add_parser(
+        "project-fit",
+        help="match a collection's items to the user's projects and write per-project briefs",
+    )
+    project_fit.add_argument(
+        "--collection",
+        action="append",
+        required=True,
+        help="collection name; repeat to scan several collections",
+    )
+    project_fit.add_argument("--projects", default="data/projects.json")
+    project_fit.add_argument("--archive-dir", default="data/archive")
+    project_fit.add_argument("--derived-dir", default="data/derived")
+    project_fit.add_argument("--vault", default="data/vault")
+    project_fit.add_argument("--limit", type=int, help="process at most N captures")
+    project_fit.add_argument("--refresh", action="store_true", help="ignore the cache and re-query")
+    project_fit.add_argument("--dry-run", action="store_true", help="report without writing")
+    project_fit.add_argument("--base-url")
+    project_fit.add_argument("--api-key")
+    project_fit.add_argument("--model")
+    project_fit.set_defaults(handler=_project_fit)
 
     evidence_pack = subcommands.add_parser(
         "evidence-pack",

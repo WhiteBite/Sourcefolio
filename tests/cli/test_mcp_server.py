@@ -21,3 +21,12 @@ def test_archive_audit_tool_runs_on_empty_archive(tmp_path: Path) -> None:
     output = mcp_server.archive_audit(archive_dir=str(tmp_path))
 
     assert '"ok": true' in output
+
+
+def test_project_fit_tool_reports_missing_projects(tmp_path: Path) -> None:
+    pytest.importorskip("mcp")
+    from evidence_vault import mcp_server
+
+    output = mcp_server.project_fit(collection=["X"], projects=str(tmp_path / "missing.json"))
+
+    assert "error" in output
