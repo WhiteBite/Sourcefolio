@@ -251,6 +251,31 @@ def test_llm_enrich_limit_selects_latest_captures(tmp_path: Path) -> None:
     assert report.processed == 2
 
 
+def test_llm_enrich_treats_corrupt_cache_as_miss(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one")
+    cache_root = tmp_path / "derived" / "llm"
+    cache_root.mkdir(parents=True)
+    key = _cache_key(packet, _build_user_prompt(packet))
+    (cache_root / f"{key}.json").write_text("{not json", encoding="utf-8")
+
+    client = FakeChatClient()
+    report = runner(tmp_path, client).run(LlmEnrichQuery(collection="Нейронки"))
+
+    assert (report.processed, report.skipped_cached, report.failed) == (1, 0, 0)
+    assert client.calls == 1
+    payload = json.loads((cache_root / f"{key}.json").read_text("utf-8"))
+    assert payload["title"] == "Title 1"
+
+
+def test_llm_cache_load_returns_none_for_corrupt_entry(tmp_path: Path) -> None:
+    cache = FileSystemLlmCache(tmp_path)
+    path = tmp_path / "llm" / "k.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{not json", encoding="utf-8")
+
+    assert cache.load("k") is None
+
+
 def test_extract_json_object_handles_messy_text() -> None:
     messy = (
         "Sure! Here is the result:\n"

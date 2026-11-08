@@ -1,24 +1,19 @@
 from __future__ import annotations
 
-import html
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-import yaml
-
 from evidence_vault.application.extraction_ports import ExtractionRepository
 from evidence_vault.application.latest_captures import latest_capture_per_source
+from evidence_vault.application.markdown import (
+    escape,
+    generated_callout,
+    generated_frontmatter,
+)
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
-
-
-def _md(value: object) -> str:
-    text = html.escape(" ".join(str(value).split()), quote=False)
-    for character in ("\\", "`", "*", "_", "[", "]", "|"):
-        text = text.replace(character, f"\\{character}")
-    return text
 
 
 class ObsidianOverviewProjection:
@@ -69,22 +64,17 @@ class ObsidianOverviewProjection:
                     captures_with_text.add(packet.capture_id)
 
         generated_at = self._clock()
-        properties = {
-            "schema_version": "obsidian-overview/v1",
-            "generated": True,
-            "generator": "evidence-vault",
-            "generator_version": "1",
-            "generated_at": generated_at.isoformat(),
-            "capture_count": len(packets),
-            "source_count": len({packet.source_id for packet in packets}),
-            "derived_extraction_count": sum(extraction_counts.values()),
-            "captures_with_derived_text": len(captures_with_text),
-        }
-        frontmatter = yaml.safe_dump(
-            properties,
-            allow_unicode=True,
-            sort_keys=False,
-        ).strip()
+        frontmatter = generated_frontmatter(
+            {
+                "generated_at": generated_at.isoformat(),
+                "capture_count": len(packets),
+                "source_count": len({packet.source_id for packet in packets}),
+                "derived_extraction_count": sum(extraction_counts.values()),
+                "captures_with_derived_text": len(captures_with_text),
+            },
+            schema_version="obsidian-overview/v1",
+            generator_version="1",
+        )
         lines = [
             "---",
             frontmatter,
@@ -92,9 +82,10 @@ class ObsidianOverviewProjection:
             "",
             "# Evidence Vault overview",
             "",
-            "> [!note] Generated view",
-            "> Rebuildable from source packets and derived records; human notes are "
-            "outside this namespace.",
+            *generated_callout(
+                "Rebuildable from source packets and derived records; "
+                "human notes are outside this namespace."
+            ),
             "",
             "## Coverage",
             "",
@@ -111,10 +102,14 @@ class ObsidianOverviewProjection:
             "|---|---:|",
         ]
         lines.extend(
-            f"| {_md(status)} | {count} |" for status, count in sorted(status_counts.items())
+            f"| {escape(status, table=True)} | {count} |"
+            for status, count in sorted(status_counts.items())
         )
         lines.extend(["", "## Source kinds", "", "| Kind | Count |", "|---|---:|"])
-        lines.extend(f"| {_md(kind)} | {count} |" for kind, count in sorted(kind_counts.items()))
+        lines.extend(
+            f"| {escape(kind, table=True)} | {count} |"
+            for kind, count in sorted(kind_counts.items())
+        )
         lines.extend(
             [
                 "",
@@ -126,7 +121,8 @@ class ObsidianOverviewProjection:
         )
         if extraction_counts:
             lines.extend(
-                f"| {_md(kind)} | {count} |" for kind, count in sorted(extraction_counts.items())
+                f"| {escape(kind, table=True)} | {count} |"
+                for kind, count in sorted(extraction_counts.items())
             )
         else:
             lines.append("| — | 0 |")
@@ -141,7 +137,7 @@ class ObsidianOverviewProjection:
         )
         if collection_counts:
             lines.extend(
-                f"| {_md(name)} | {count} | {len(collection_sources[name])} |"
+                f"| {escape(name, table=True)} | {count} | {len(collection_sources[name])} |"
                 for name, count in sorted(
                     collection_counts.items(), key=lambda item: item[0].casefold()
                 )
@@ -167,10 +163,12 @@ class ObsidianOverviewProjection:
             card = f"../source-cards/{packet.source_id}/{packet.capture_id}.md"
             collections = ", ".join(collection.name for collection in packet.collections)
             lines.append(
-                f"| {packet.captured_at.isoformat()} | {_md(packet.source.kind.value)} "
-                f"| {_md(packet.status.value)} | {_md(collections or '—')} "
+                f"| {packet.captured_at.isoformat()} "
+                f"| {escape(packet.source.kind.value, table=True)} "
+                f"| {escape(packet.status.value, table=True)} "
+                f"| {escape(collections or '—', table=True)} "
                 f"| {derived_by_capture[packet.capture_id]} "
-                f"| [{_md(title)}]({card}) |"
+                f"| [{escape(title, table=True)}]({card}) |"
             )
         if len(latest) > self._latest_limit:
             lines.extend(

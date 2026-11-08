@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import yaml
-
+from evidence_vault.application.markdown import generated_callout, generated_frontmatter
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
 
@@ -21,14 +20,11 @@ class TriageDashboardProjection:
 
     @staticmethod
     def _render(status: str) -> GeneratedDocument:
-        properties = {
-            "schema_version": "triage-dashboard/v1",
-            "generated": True,
-            "generator": "evidence-vault",
-            "generator_version": "1",
-            "status": status,
-        }
-        frontmatter = yaml.safe_dump(properties, allow_unicode=True, sort_keys=False).strip()
+        frontmatter = generated_frontmatter(
+            {"status": status},
+            schema_version="triage-dashboard/v1",
+            generator_version="1",
+        )
         lines = [
             "---",
             frontmatter,
@@ -36,8 +32,9 @@ class TriageDashboardProjection:
             "",
             f"# {status.capitalize()}",
             "",
-            "> [!note] Generated view",
-            "> Requires the Dataview plugin. Rebuildable; edit human notes in `ideas/`.",
+            *generated_callout(
+                "Requires the Dataview plugin. Rebuildable; edit human notes in `ideas/`."
+            ),
             "",
             "```dataview",
             f'TABLE title, collections FROM "ideas" WHERE status = "{status}"',

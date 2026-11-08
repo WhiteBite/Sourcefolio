@@ -59,7 +59,7 @@ def install_temp_file(
         temp_path.unlink(missing_ok=True)
 
 
-def write_immutable_bytes(final_path: Path, data: bytes) -> bool:
+def _write_temp_file(final_path: Path, data: bytes) -> Path:
     final_path.parent.mkdir(parents=True, exist_ok=True)
     file_descriptor, temp_name = tempfile.mkstemp(
         dir=final_path.parent,
@@ -71,6 +71,24 @@ def write_immutable_bytes(final_path: Path, data: bytes) -> bool:
             temp_file.write(data)
             temp_file.flush()
             os.fsync(temp_file.fileno())
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+    return temp_path
+
+
+def write_atomic_bytes(final_path: Path, data: bytes) -> None:
+    temp_path = _write_temp_file(final_path, data)
+    try:
+        os.replace(temp_path, final_path)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
+def write_immutable_bytes(final_path: Path, data: bytes) -> bool:
+    temp_path = _write_temp_file(final_path, data)
+    try:
         return install_temp_file(temp_path, final_path)
     except Exception:
         temp_path.unlink(missing_ok=True)

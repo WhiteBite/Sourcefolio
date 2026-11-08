@@ -6,7 +6,7 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -115,7 +115,7 @@ DEFAULT_LLM_CONFIG_PATH = Path("data/llm.json")
 @dataclass(frozen=True)
 class LlmConfig:
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)
     model: str
 
 
@@ -720,7 +720,8 @@ def _llm_enrich(args: argparse.Namespace) -> int:
     )
     archive_root = Path(args.archive_dir).resolve()
     derived_root = Path(args.derived_dir).resolve()
-    generated_root = Path(args.vault).resolve() / "_generated" / "evidence-vault"
+    vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "evidence-vault"
     report = LlmEnrichRunner(
         packets=FileSystemSourcePacketRepository(archive_root),
         client=OpenAIChatClient(
@@ -732,6 +733,7 @@ def _llm_enrich(args: argparse.Namespace) -> int:
         ),
         cache=FileSystemLlmCache(derived_root),
         model=config.model,
+        generated_prefix=generated_root.relative_to(vault_root).as_posix(),
     ).run(
         LlmEnrichQuery(
             collection=args.collection,

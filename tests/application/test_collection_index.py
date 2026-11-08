@@ -12,8 +12,9 @@ from evidence_vault.adapters.filesystem import (
 )
 from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
 from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.collection_index import CollectionIndexProjection, slugify
+from evidence_vault.application.collection_index import CollectionIndexProjection
 from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from evidence_vault.application.slugs import slugify
 from evidence_vault.domain.common import ActorKind, Provenance
 from evidence_vault.domain.source import (
     ArtifactRole,

@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import hashlib
-import html
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-import yaml
 from pydantic import JsonValue
 
-from evidence_vault.application.collection_index import slugify
 from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.llm_ports import ChatClient, LlmCacheStore
+from evidence_vault.application.markdown import card_link, escape, generated_frontmatter
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.projection_types import GeneratedDocument
 from evidence_vault.application.saved_index import (
@@ -21,6 +19,7 @@ from evidence_vault.application.saved_index import (
     saved_index,
     saved_str,
 )
+from evidence_vault.application.slugs import slugify
 from evidence_vault.domain.source import CaptureId, SourceId, SourcePacket
 
 SYSTEM_PROMPT = (
@@ -35,20 +34,6 @@ SYSTEM_PROMPT = (
 )
 
 _MAX_COMMENTS = 10
-
-
-def _md(value: object) -> str:
-    text = html.escape(" ".join(str(value).split()), quote=False)
-    for character in ("\\", "`", "*", "_", "[", "]", "|"):
-        text = text.replace(character, f"\\{character}")
-    return text
-
-
-def _wikilink_alias(value: str) -> str:
-    cleaned = " ".join(value.split())
-    for character in ("[", "]", "|", "#", "^"):
-        cleaned = cleaned.replace(character, " ")
-    return " ".join(cleaned.split()) or "source"
 
 
 def _balanced_object(text: str, start: int) -> str | None:
@@ -212,40 +197,34 @@ def _cache_key(packet: SourcePacket, user_prompt: str) -> str:
     return f"{packet.source_id}__{digest}"
 
 
-def _card_link(packet: SourcePacket) -> str:
-    target = f"_generated/evidence-vault/source-cards/{packet.source_id}/{packet.capture_id}"
-    alias = _wikilink_alias(packet.title or packet.source.external_id or packet.source_id)
-    return f"[[{target}|{alias}]]"
-
-
 def _render_note(
     *,
     collection: str,
     slug: str,
     model: str,
     generated_at: datetime,
+    generated_prefix: str,
     entries: list[tuple[SourcePacket, LlmEnrichment]],
     failures: list[tuple[SourcePacket, str]],
 ) -> GeneratedDocument:
-    properties = {
-        "schema_version": "llm-digest/v1",
-        "generated": True,
-        "generator": "evidence-vault",
-        "generator_version": "1",
-        "collection": collection,
-        "slug": slug,
-        "model": model,
-        "video_count": len(entries),
-        "generated_at": generated_at.isoformat(),
-        "provenance": "agent_inference",
-    }
-    frontmatter = yaml.safe_dump(properties, allow_unicode=True, sort_keys=False).strip()
+    frontmatter = generated_frontmatter(
+        {
+            "collection": collection,
+            "slug": slug,
+            "model": model,
+            "video_count": len(entries),
+            "generated_at": generated_at.isoformat(),
+            "provenance": "agent_inference",
+        },
+        schema_version="llm-digest/v1",
+        generator_version="1",
+    )
     lines = [
         "---",
         frontmatter,
         "---",
         "",
-        f"# {_md(collection)} — LLM digest",
+        f"# {escape(collection, table=True)} — LLM digest",
         "",
         "> [!warning] Machine inference",
         "> Derived, rebuildable agent inference, not creator_claim. "
@@ -256,15 +235,15 @@ def _render_note(
     ]
     for packet, enrichment in entries:
         title = enrichment.title or packet.title or packet.source.external_id or packet.source_id
-        lines.append(f"### {_md(title)}")
+        lines.append(f"### {escape(title, table=True)}")
         lines.append("")
-        lines.append(f"- Source: {_card_link(packet)}")
+        lines.append(f"- Source: {card_link(generated_prefix, packet)}")
         if enrichment.category:
-            lines.append(f"- Category: {_md(enrichment.category)}")
+            lines.append(f"- Category: {escape(enrichment.category, table=True)}")
         if enrichment.tags:
-            lines.append(f"- Tags: {_md(', '.join(enrichment.tags))}")
+            lines.append(f"- Tags: {escape(', '.join(enrichment.tags), table=True)}")
         if enrichment.summary:
-            lines.extend(["", _md(enrichment.summary)])
+            lines.extend(["", escape(enrichment.summary, table=True)])
         lines.append("")
 
     entities: dict[tuple[str, str], None] = {}
@@ -282,26 +261,31 @@ def _render_note(
     if entities:
         lines.extend(["| Type | Value |", "|---|---|"])
         lines.extend(
-            f"| {_md(kind)} | {_md(value)} |"
+            f"| {escape(kind, table=True)} | {escape(value, table=True)} |"
             for kind, value in sorted(entities, key=lambda item: (item[0].casefold(), item[1]))
         )
     else:
         lines.append("No entities found.")
     lines.extend(["", "## Links", ""])
     if links:
-        lines.extend(f"- {_md(link)}" for link in sorted(links))
+        lines.extend(f"- {escape(link, table=True)}" for link in sorted(links))
     else:
         lines.append("No links found.")
     lines.extend(["", "## Categories", ""])
     if categories:
-        lines.extend(f"- {_md(category)}" for category in sorted(categories, key=str.casefold))
+        lines.extend(
+            f"- {escape(category, table=True)}" for category in sorted(categories, key=str.casefold)
+        )
     else:
         lines.append("No categories found.")
     lines.append("")
 
     if failures:
         lines.extend(["## Failed", ""])
-        lines.extend(f"- {_card_link(packet)}: {_md(error)}" for packet, error in failures)
+        lines.extend(
+            f"- {card_link(generated_prefix, packet)}: {escape(error, table=True)}"
+            for packet, error in failures
+        )
         lines.append("")
 
     return GeneratedDocument(path=f"{slug}.md", content="\n".join(lines))
@@ -317,12 +301,14 @@ class LlmEnrichRunner:
         client: ChatClient,
         cache: LlmCacheStore,
         model: str,
+        generated_prefix: str = "_generated/evidence-vault",
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._packets = packets
         self._client = client
         self._cache = cache
         self._model = model
+        self._generated_prefix = generated_prefix.strip("/")
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def run(self, query: LlmEnrichQuery) -> LlmEnrichReport:
@@ -333,7 +319,12 @@ class LlmEnrichRunner:
         for packet in selected:
             user_prompt = _build_user_prompt(packet)
             key = _cache_key(packet, user_prompt)
-            cached = None if query.refresh else self._cache.load(key)
+            cached = None
+            if not query.refresh:
+                try:
+                    cached = self._cache.load(key)
+                except Exception:
+                    cached = None
             if cached is not None:
                 entries.append((packet, LlmEnrichment.from_payload(cached)))
                 results.append(self._result(packet, "skipped_cached"))
@@ -360,6 +351,7 @@ class LlmEnrichRunner:
                 slug=slugify(query.collection),
                 model=self._model,
                 generated_at=self._clock(),
+                generated_prefix=self._generated_prefix,
                 entries=entries,
                 failures=failures,
             )

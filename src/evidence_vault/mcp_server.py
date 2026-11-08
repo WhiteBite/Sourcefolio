@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import threading
 from contextlib import redirect_stderr, redirect_stdout
 
 from mcp.server.mcpserver import MCPServer
@@ -9,12 +10,14 @@ from evidence_vault import cli
 
 server = MCPServer("evidence-vault")
 
+_CAPTURE_LOCK = threading.Lock()
+
 
 def _run(arguments: list[str]) -> str:
     stdout = io.StringIO()
     stderr = io.StringIO()
     try:
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        with _CAPTURE_LOCK, redirect_stdout(stdout), redirect_stderr(stderr):
             code = cli.main(arguments)
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 1
