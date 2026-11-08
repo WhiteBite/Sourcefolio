@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from evidence_vault.adapters.filesystem import FileSystemHumanNoteStore
@@ -80,6 +81,7 @@ def test_index_lists_decisions_with_wikilinks(tmp_path: Path) -> None:
     count = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault),
         store=store,
+        note_prefix="decisions",
     ).rebuild()
 
     assert count == 1
@@ -108,6 +110,7 @@ def test_index_ignores_stray_top_level_note_when_root_is_vault(tmp_path: Path) -
     count = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault),
         store=store,
+        note_prefix="decisions",
     ).rebuild()
 
     assert count == 1
@@ -128,9 +131,67 @@ def test_search_finds_body_term_and_respects_limit(tmp_path: Path) -> None:
         make_draft(title="Drop JSON store", date="2026-11-07", problem="resumable backlog")
     )
 
-    search = DecisionSearch(notes=FileSystemHumanNoteStore(vault))
+    search = DecisionSearch(notes=FileSystemHumanNoteStore(vault), note_prefix="decisions")
 
     hits = search.search("resumable", 10)
     assert len(hits) == 2
     assert search.search("resumable", 1) == hits[:1]
     assert search.search("", 10) == ()
+
+
+def test_index_and_search_tolerate_broken_and_fence_frontmatter(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    decisions_dir = vault / "decisions"
+    decisions_dir.mkdir(parents=True)
+    (decisions_dir / "2026-11-08-broken.md").write_text(
+        '---\ntitle: "unterminated\n---\n\nresumable body\n',
+        encoding="utf-8",
+    )
+    (decisions_dir / "2026-11-07-fence.md").write_text(
+        "---\ndate: 2026-11-07\ntitle: A --- B\nstatus: open\n---\n\nresumable body\n",
+        encoding="utf-8",
+    )
+
+    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    count = DecisionIndexProjection(
+        notes=FileSystemHumanNoteStore(vault),
+        store=store,
+        note_prefix="decisions",
+    ).rebuild()
+
+    assert count == 1
+    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert "A --- B" in index
+
+    search = DecisionSearch(notes=FileSystemHumanNoteStore(vault), note_prefix="decisions")
+    assert len(search.search("resumable", 10)) == 2
+
+
+def test_index_preserves_nested_wikilink_path(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    nested = vault / "decisions" / "2026" / "sub"
+    nested.mkdir(parents=True)
+    (nested / "x.md").write_text(
+        "---\ndate: 2026-11-08\ntitle: Nested\nstatus: open\n---\n",
+        encoding="utf-8",
+    )
+
+    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    count = DecisionIndexProjection(
+        notes=FileSystemHumanNoteStore(vault),
+        store=store,
+        note_prefix="decisions",
+    ).rebuild()
+
+    assert count == 1
+    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert "[[decisions/2026/sub/x|Nested]]" in index
+
+
+def test_blank_title_rejected() -> None:
+    with pytest.raises(ValueError):
+        make_draft(title="", date="2026-11-08")

@@ -5,7 +5,8 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
-from evidence_vault.application.decisions import _frontmatter, _is_decision_note
+from evidence_vault.application.decisions import is_decision_note
+from evidence_vault.application.frontmatter import note_body, parse_frontmatter
 from evidence_vault.application.latest_captures import latest_capture_per_source
 from evidence_vault.application.markdown import escape
 from evidence_vault.application.ports import SourcePacketRepository
@@ -66,15 +67,6 @@ class ContextBrief:
     stats: ContextStats
 
 
-def _note_body(content: str) -> str:
-    if not content.startswith("---"):
-        return content
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return content
-    return parts[2].strip()
-
-
 def _profile(profiles: HumanNoteReader | None, project_id: str) -> str | None:
     if profiles is None:
         return None
@@ -84,7 +76,7 @@ def _profile(profiles: HumanNoteReader | None, project_id: str) -> str | None:
         return None
     if content is None:
         return None
-    return _note_body(content)
+    return note_body(content)
 
 
 def _context_projects(
@@ -133,14 +125,16 @@ def _context_matches(index: ProjectFitIndexStore) -> tuple[ContextMatch, ...]:
     return tuple(match for _, match in ranked[:_MAX_MATCHES])
 
 
-def _context_decisions(decisions: HumanNoteReader | None) -> tuple[ContextDecision, ...]:
+def _context_decisions(
+    decisions: HumanNoteReader | None, prefix: str
+) -> tuple[ContextDecision, ...]:
     if decisions is None:
         return ()
     items: list[ContextDecision] = []
     for path, content in decisions.iter_notes():
-        if not _is_decision_note(path, decisions.root):
+        if not is_decision_note(path, prefix=prefix):
             continue
-        properties = _frontmatter(content)
+        properties = parse_frontmatter(content).properties
         raw_projects = properties.get("projects")
         projects = (
             tuple(str(item) for item in raw_projects) if isinstance(raw_projects, list) else ()
@@ -172,6 +166,7 @@ class ContextBriefBuilder:
         projects: tuple[Project, ...],
         profiles: HumanNoteReader | None = None,
         decisions: HumanNoteReader | None = None,
+        decisions_prefix: str = "",
         ideas: HumanNoteReader | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -180,6 +175,7 @@ class ContextBriefBuilder:
         self._projects = projects
         self._profiles = profiles
         self._decisions = decisions
+        self._decisions_prefix = decisions_prefix
         self._ideas = ideas
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -188,7 +184,7 @@ class ContextBriefBuilder:
         collections = {
             collection.name for packet in latest.values() for collection in packet.collections
         }
-        all_decisions = _context_decisions(self._decisions)
+        all_decisions = _context_decisions(self._decisions, self._decisions_prefix)
         stats = ContextStats(
             sources=len(latest),
             collections=len(collections),

@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
 
 import yaml
 
+from evidence_vault.application.frontmatter import parse_frontmatter
 from evidence_vault.application.markdown import (
     escape,
     generated_callout,
@@ -21,7 +21,6 @@ from evidence_vault.application.projection_ports import (
 from evidence_vault.application.projection_types import GeneratedDocument
 from evidence_vault.application.slugs import slugify
 
-_HUMAN_DIR = "decisions"
 _TERM = re.compile(r"\w+", re.UNICODE)
 
 
@@ -37,6 +36,10 @@ class DecisionDraft:
     tags: tuple[str, ...]
     date: str
 
+    def __post_init__(self) -> None:
+        if not self.title.strip():
+            raise ValueError("decision title must not be blank")
+
 
 @dataclass(frozen=True)
 class DecisionHit:
@@ -46,28 +49,16 @@ class DecisionHit:
     status: str
 
 
-def _frontmatter(content: str) -> dict[str, object]:
-    if not content.startswith("---"):
-        return {}
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return {}
-    loaded = yaml.safe_load(parts[1])
-    if not isinstance(loaded, dict):
-        return {}
-    return {str(key): value for key, value in loaded.items()}
-
-
-def _is_decision_note(path: str, root: Path) -> bool:
+def is_decision_note(path: str, *, prefix: str) -> bool:
     if not path.endswith(".md"):
         return False
-    if path.startswith(f"{_HUMAN_DIR}/"):
-        return True
-    return root.name == _HUMAN_DIR and "/" not in path
+    if prefix:
+        return path.startswith(f"{prefix}/")
+    return "/" not in path
 
 
 def _wikilink_target(path: str) -> str:
-    return f"{_HUMAN_DIR}/{PurePosixPath(path).stem}"
+    return path[:-3] if path.endswith(".md") else path
 
 
 class DecisionScaffolder:
@@ -126,9 +117,10 @@ class DecisionScaffolder:
 class DecisionIndexProjection:
     NAMESPACE = "decisions"
 
-    def __init__(self, notes: HumanNoteReader, store: ProjectionStore) -> None:
+    def __init__(self, notes: HumanNoteReader, store: ProjectionStore, note_prefix: str) -> None:
         self._notes = notes
         self._store = store
+        self._note_prefix = note_prefix
 
     def rebuild(self) -> int:
         entries = [self._entry(path, content) for path, content in self._decisions()]
@@ -137,12 +129,12 @@ class DecisionIndexProjection:
 
     def _decisions(self) -> Iterator[tuple[str, str]]:
         for path, content in self._notes.iter_notes():
-            if _is_decision_note(path, self._notes.root):
+            if is_decision_note(path, prefix=self._note_prefix):
                 yield path, content
 
     @staticmethod
     def _entry(path: str, content: str) -> tuple[str, str, str, str, str]:
-        properties = _frontmatter(content)
+        properties = parse_frontmatter(content).properties
         projects = properties.get("projects")
         projects_text = (
             ", ".join(str(item) for item in projects) if isinstance(projects, list) else ""
@@ -186,8 +178,9 @@ class DecisionIndexProjection:
 
 
 class DecisionSearch:
-    def __init__(self, notes: HumanNoteReader) -> None:
+    def __init__(self, notes: HumanNoteReader, note_prefix: str) -> None:
         self._notes = notes
+        self._note_prefix = note_prefix
 
     def search(self, query: str, limit: int) -> tuple[DecisionHit, ...]:
         terms = [term.casefold() for term in _TERM.findall(query)]
@@ -195,12 +188,12 @@ class DecisionSearch:
             return ()
         hits: list[DecisionHit] = []
         for path, content in self._notes.iter_notes():
-            if not _is_decision_note(path, self._notes.root):
+            if not is_decision_note(path, prefix=self._note_prefix):
                 continue
             folded = content.casefold()
             if any(term not in folded for term in terms):
                 continue
-            properties = _frontmatter(content)
+            properties = parse_frontmatter(content).properties
             hits.append(
                 DecisionHit(
                     path=path,

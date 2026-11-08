@@ -777,6 +777,7 @@ def _project_obsidian(args: argparse.Namespace) -> int:
     decision_documents = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault_root / "decisions"),
         store=store,
+        note_prefix="",
     ).rebuild()
     ideas_created = 0
     ideas_skipped = 0
@@ -855,6 +856,7 @@ def _decision_search(args: argparse.Namespace) -> int:
     vault_root = Path(args.vault).resolve()
     hits = DecisionSearch(
         FileSystemHumanNoteStore(vault_root / "decisions"),
+        note_prefix="",
     ).search(args.query, args.limit)
     output = {
         "count": len(hits),
