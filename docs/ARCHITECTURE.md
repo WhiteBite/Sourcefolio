@@ -144,6 +144,10 @@ Vault разделён на две зоны. Human-зона (`ideas/`, `projects
 
 `evidence-pack-verify` принимает сохранённый `evidence-pack/v1` и не пересчитывает ranking. Сначала contract проверяет typed locators и внутренние parent refs, затем verifier сравнивает source/artifact metadata, extraction request/excerpt/provenance и `matched_query` с canonical packets/records. Optional `--verify-bytes` проверяет content-addressed bytes. Невалидная schema отклоняется при загрузке; валидный pack с dangling/tampered refs получает structured issues и exit code 1.
 
+### Кэш project-fit
+
+`project-fit` кэширует каждый элемент по content-ключу, производному от промпта элемента, а в промпт теперь входит и текст профиля проекта. Поэтому правка профиля проекта, его имени или описания меняет ключ, и затронутые элементы перезапрашиваются у модели на следующем запуске; у уже существующих записей индекса при этом обновляются `projects_key` и `updated_at`. Рендер briefs пересобирается из индекса `data/derived/project-fit/index.json`, а не из текущего прогона, поэтому briefs, собранные по другим коллекциям, сохраняются.
+
 До пилота нельзя выбирать `claude-obsidian` или `llm-wiki-compiler` как обязательный центр. Baseline A обязан оставаться полноценным вариантом.
 
 ## 8. Безопасность и приватность
