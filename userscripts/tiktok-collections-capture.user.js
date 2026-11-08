@@ -757,7 +757,7 @@
         totals.errors.length +
         ' ошибок.';
       setStatus(summaryText);
-      setSummary(summaryText + (totals.errors.length ? '\n' + totals.errors.join('\n') : ''));
+      setSummary(totals.errors.length ? totals.errors.join('\n') : '');
     } catch (error) {
       if (control.stopped) {
         setStatus('Остановлено. Прогресс сохранён — следующий запуск продолжит с места остановки.');
