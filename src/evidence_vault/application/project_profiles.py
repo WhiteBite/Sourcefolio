@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from evidence_vault.application.markdown import generated_frontmatter
+import yaml
+
 from evidence_vault.application.project_fit import Project
 from evidence_vault.application.projection_ports import HumanNoteStore
 
@@ -15,16 +16,13 @@ class ProfileScaffoldResult:
 
 
 def render_draft(project: Project) -> str:
-    frontmatter = generated_frontmatter(
-        {
-            "id": project.id,
-            "name": project.name,
-            "status": "draft",
-            "type": "project",
-        },
-        schema_version="project-profile/v1",
-        generator_version="1",
-    )
+    properties = {
+        "id": project.id,
+        "name": project.name,
+        "status": "draft",
+        "type": "project",
+    }
+    frontmatter = yaml.safe_dump(properties, allow_unicode=True, sort_keys=False).strip()
     lines = [
         "---",
         frontmatter,

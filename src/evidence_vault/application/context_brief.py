@@ -66,13 +66,25 @@ class ContextBrief:
     stats: ContextStats
 
 
+def _note_body(content: str) -> str:
+    if not content.startswith("---"):
+        return content
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return content
+    return parts[2].strip()
+
+
 def _profile(profiles: HumanNoteReader | None, project_id: str) -> str | None:
     if profiles is None:
         return None
     try:
-        return profiles.read(f"{project_id}.md")
+        content = profiles.read(f"{project_id}.md")
     except Exception:
         return None
+    if content is None:
+        return None
+    return _note_body(content)
 
 
 def _context_projects(

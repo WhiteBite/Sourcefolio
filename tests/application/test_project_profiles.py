@@ -24,6 +24,8 @@ def test_render_draft_seeds_frontmatter_and_sections() -> None:
     assert properties["name"] == "Alpha"
     assert properties["status"] == "draft"
     assert properties["type"] == "project"
+    for marker in ("generated", "generator", "generator_version", "schema_version"):
+        assert marker not in properties
     for section in ("## Purpose", "## Stack", "## What's interesting", "## Constraints"):
         assert section in content
     assert "First project" in content

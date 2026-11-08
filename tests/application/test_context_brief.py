@@ -134,7 +134,11 @@ def test_populated_brief_has_projects_matches_decisions(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one", desc="trading bot idea")
     save_fit_index(tmp_path, [fit_entry(packet)])
     profiles = FileSystemHumanNoteStore(tmp_path / "profiles")
-    profiles.create_if_absent("alpha.md", "# Alpha\n\nPurpose: trading bot\n")
+    profiles.create_if_absent(
+        "alpha.md",
+        "---\nid: alpha\nname: Alpha\nstatus: draft\ntype: project\n---\n\n"
+        "# Alpha\n\nPurpose: trading bot\n",
+    )
     decisions = FileSystemHumanNoteStore(tmp_path / "decisions")
     decisions.create_if_absent(
         "2026-11-08-adopt-sqlite.md",
@@ -150,6 +154,8 @@ def test_populated_brief_has_projects_matches_decisions(tmp_path: Path) -> None:
     alpha = next(project for project in brief.projects if project.id == "alpha")
     assert alpha.profile is not None
     assert "trading bot" in alpha.profile
+    assert "status: draft" not in alpha.profile
+    assert "---" not in alpha.profile
     assert len(brief.matches) >= 1
     assert brief.matches[0].project_id == "alpha"
     assert len(brief.decisions) >= 1
