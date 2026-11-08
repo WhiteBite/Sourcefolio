@@ -348,7 +348,7 @@ def _valid_matches(
     return tuple(match for match in result.matches if match.project_id in known_ids)
 
 
-def _project_slugs(projects: tuple[Project, ...]) -> dict[str, str]:
+def project_slugs(projects: tuple[Project, ...]) -> dict[str, str]:
     slugs: dict[str, str] = {}
     used: set[str] = set()
     for project in projects:
@@ -693,7 +693,7 @@ class ProjectFitRunner:
         entries: Mapping[str, ProjectFitIndexEntry],
     ) -> tuple[GeneratedDocument, ...]:
         ordered = list(entries.values())
-        slugs = _project_slugs(self._projects)
+        slugs = project_slugs(self._projects)
         generated_at = self._clock()
         documents = [
             _render_project_note(

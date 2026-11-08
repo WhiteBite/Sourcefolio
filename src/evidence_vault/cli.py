@@ -758,12 +758,15 @@ def _project_obsidian(args: argparse.Namespace) -> int:
     ).rebuild()
     dashboard_documents = TriageDashboardProjection(store=store).rebuild()
     project_fit_index = FileSystemProjectFitIndex(derived_root)
+    projects_path = Path(args.projects)
+    projects = _load_projects(projects_path) if projects_path.is_file() else ()
     repo_node_documents = RepoNodeProjection(
         packets=packets,
         store=store,
         repo_cache=FileSystemLlmCache(derived_root, namespace=RepoCatalogRunner.NAMESPACE),
         project_fit_index=project_fit_index,
         generated_prefix=generated_prefix,
+        projects=projects,
     ).rebuild()
     graph_documents = KnowledgeGraphProjection(
         packets=packets,
@@ -1531,6 +1534,7 @@ def _build_parser() -> argparse.ArgumentParser:
     project.add_argument("--archive-dir", default="data/archive")
     project.add_argument("--derived-dir", default="data/derived")
     project.add_argument("--vault", default="data/vault")
+    project.add_argument("--projects", default="data/projects.json")
     project.add_argument(
         "--scaffold-ideas",
         action="store_true",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from io import BytesIO
@@ -9,11 +10,18 @@ from pydantic import JsonValue
 
 from evidence_vault.adapters.filesystem import (
     FileSystemArtifactStore,
+    FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
 from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
 from evidence_vault.application.archive_capture import ArchiveCapture
 from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from evidence_vault.application.project_fit import (
+    Project,
+    ProjectFitIndexStore,
+    ProjectFitQuery,
+    ProjectFitRunner,
+)
 from evidence_vault.application.projection_types import GeneratedDocument
 from evidence_vault.application.repo_catalog import (
     RepoCatalogRunner,
@@ -121,7 +129,8 @@ def projection(
     root: Path,
     store: FakeStore,
     *,
-    fit: FakeFitIndex | None = None,
+    fit: ProjectFitIndexStore | None = None,
+    projects: tuple[Project, ...] = (),
 ) -> RepoNodeProjection:
     return RepoNodeProjection(
         packets=FileSystemSourcePacketRepository(root),
@@ -130,7 +139,16 @@ def projection(
         project_fit_index=fit or FakeFitIndex(),
         generated_prefix=PREFIX,
         clock=lambda: NOW,
+        projects=projects,
     )
+
+
+class FakeChatClient:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        return json.dumps(self._payload)
 
 
 def fit_payload(packet: SourcePacket, project_id: str) -> dict[str, JsonValue]:
@@ -176,13 +194,54 @@ def test_repo_nodes_links_matched_project(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one", desc="https://github.com/owner/repo")
     write_cache(tmp_path, "owner/repo")
     store = FakeStore()
+    projects = (Project(id="midas", name="MidasAI", description="trading bot"),)
 
-    projection(tmp_path, store, fit=FakeFitIndex(fit_payload(packet, "midas"))).rebuild()
+    projection(
+        tmp_path,
+        store,
+        fit=FakeFitIndex(fit_payload(packet, "midas")),
+        projects=projects,
+    ).rebuild()
 
     content = store.documents[0].content
-    assert "[[_generated/evidence-vault/projects/midas|midas]]" in content
+    assert "[[_generated/evidence-vault/projects/midasai|midas]]" in content
     assert "## Projects (1)" in content
     assert "project_ids:\n- midas" in content
+
+
+def test_repo_nodes_project_link_matches_written_brief_on_slug_collision(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="https://github.com/owner/repo")
+    write_cache(tmp_path, "owner/repo")
+    projects = (
+        Project(id="midas", name="MidasAI", description="a"),
+        Project(id="midas2", name="midasai", description="b"),
+    )
+    index = FileSystemProjectFitIndex(tmp_path / "derived")
+    report = ProjectFitRunner(
+        packets=FileSystemSourcePacketRepository(tmp_path),
+        client=FakeChatClient(
+            {
+                "relevant": True,
+                "summary": "",
+                "matches": [{"project_id": "midas2", "fit": "high", "feature": "x", "why": "y"}],
+            }
+        ),
+        cache=FileSystemLlmCache(tmp_path / "derived", namespace=ProjectFitRunner.CACHE_NAMESPACE),
+        index=index,
+        model="test-model",
+        projects=projects,
+        clock=lambda: NOW,
+        sleep=lambda _: None,
+    ).run(ProjectFitQuery())
+    written = {note.path for note in report.notes}
+    assert "midasai.md" in written
+    assert "midasai-midas2.md" in written
+
+    store = FakeStore()
+    projection(tmp_path, store, fit=index, projects=projects).rebuild()
+
+    content = store.documents[0].content
+    assert "[[_generated/evidence-vault/projects/midasai-midas2|midas2]]" in content
 
 
 def test_repo_nodes_without_fit_index_has_empty_projects(tmp_path: Path) -> None:

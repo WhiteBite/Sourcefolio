@@ -133,6 +133,7 @@ def project_obsidian(
     derived_dir: str = "data/derived",
     vault: str = "data/vault",
     scaffold_ideas: bool = False,
+    projects: str = "data/projects.json",
 ) -> str:
     """Rebuild generated Obsidian source cards from canonical packets."""
     arguments = [
@@ -143,6 +144,8 @@ def project_obsidian(
         derived_dir,
         "--vault",
         vault,
+        "--projects",
+        projects,
     ]
     if scaffold_ideas:
         arguments.append("--scaffold-ideas")

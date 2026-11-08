@@ -14,9 +14,11 @@ from evidence_vault.application.markdown import (
 )
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.project_fit import (
+    Project,
     ProjectFitIndexEntry,
     ProjectFitIndexStore,
     _parse_index,
+    project_slugs,
 )
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
@@ -51,11 +53,6 @@ def _note_path(ref: RepoRef) -> str:
     return f"{owner}__{repository}.md"
 
 
-def _project_link(generated_prefix: str, project_id: str) -> str:
-    target = f"{generated_prefix}/projects/{slugify(project_id)}"
-    return f"[[{target}|{wikilink_alias(project_id)}]]"
-
-
 class RepoNodeProjection:
     NAMESPACE = "entities"
 
@@ -66,6 +63,7 @@ class RepoNodeProjection:
         repo_cache: RepoCacheStore,
         project_fit_index: ProjectFitIndexStore,
         generated_prefix: str,
+        projects: tuple[Project, ...] = (),
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._packets = packets
@@ -73,6 +71,7 @@ class RepoNodeProjection:
         self._repo_cache = repo_cache
         self._project_fit_index = project_fit_index
         self._generated_prefix = generated_prefix.strip("/")
+        self._project_slugs = project_slugs(projects)
         self._clock = clock
 
     def rebuild(self) -> int:
@@ -117,6 +116,11 @@ class RepoNodeProjection:
                 continue
             ids.update(match.project_id for match in entry.matches if match.project_id)
         return sorted(ids)
+
+    def _project_link(self, project_id: str) -> str:
+        slug = self._project_slugs.get(project_id, slugify(project_id))
+        target = f"{self._generated_prefix}/projects/{slug}"
+        return f"[[{target}|{wikilink_alias(project_id)}]]"
 
     def _render(
         self,
@@ -180,10 +184,7 @@ class RepoNodeProjection:
         lines.append("")
         lines.extend([f"## Projects ({len(project_ids)})", ""])
         if project_ids:
-            lines.extend(
-                f"- {_project_link(self._generated_prefix, project_id)}"
-                for project_id in project_ids
-            )
+            lines.extend(f"- {self._project_link(project_id)}" for project_id in project_ids)
         else:
             lines.append("None.")
         lines.append("")
