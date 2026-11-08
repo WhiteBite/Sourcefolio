@@ -5,12 +5,22 @@ import threading
 from contextlib import redirect_stderr, redirect_stdout
 
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 
 from evidence_vault import cli
 
 server = MCPServer("evidence-vault")
 
 _CAPTURE_LOCK = threading.Lock()
+
+
+def _annotations(title: str, *, read_only: bool, open_world: bool = False) -> ToolAnnotations:
+    return ToolAnnotations(
+        title=title,
+        read_only_hint=read_only,
+        destructive_hint=False,
+        open_world_hint=open_world,
+    )
 
 
 def _run(arguments: list[str]) -> str:
@@ -30,7 +40,7 @@ def _run(arguments: list[str]) -> str:
     return f"error (exit {code}): {detail}"
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Search archive", read_only=True))
 def search(
     query: str,
     collection: str | None = None,
@@ -47,7 +57,7 @@ def search(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Build evidence pack", read_only=True))
 def evidence_pack(
     query: str,
     format: str = "json",
@@ -75,7 +85,7 @@ def evidence_pack(
     )
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Import collections", read_only=False))
 def import_collections(
     file: str,
     archive_dir: str = "data/archive",
@@ -99,7 +109,7 @@ def import_collections(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Fetch slides", read_only=False))
 def fetch_slides(
     collection: str,
     archive_dir: str = "data/archive",
@@ -127,7 +137,7 @@ def fetch_slides(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Project Obsidian vault", read_only=False))
 def project_obsidian(
     archive_dir: str = "data/archive",
     derived_dir: str = "data/derived",
@@ -152,13 +162,13 @@ def project_obsidian(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Scaffold ideas", read_only=False))
 def scaffold_ideas(archive_dir: str = "data/archive", vault: str = "data/vault") -> str:
     """Create missing human idea notes under <vault>/ideas without overwriting."""
     return _run(["scaffold-ideas", "--archive-dir", archive_dir, "--vault", vault])
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Enrich with LLM", read_only=False, open_world=True))
 def llm_enrich(
     collection: str,
     archive_dir: str = "data/archive",
@@ -198,7 +208,7 @@ def llm_enrich(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Build LLM catalog", read_only=False, open_world=True))
 def llm_catalog(
     collection: str,
     archive_dir: str = "data/archive",
@@ -238,7 +248,7 @@ def llm_catalog(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Catalog repositories", read_only=False, open_world=True))
 def repo_catalog(
     collection: str,
     archive_dir: str = "data/archive",
@@ -272,7 +282,7 @@ def repo_catalog(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Match projects", read_only=False))
 def project_fit(
     collection: list[str] | None = None,
     projects: str = "data/projects.json",
@@ -318,7 +328,7 @@ def project_fit(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Audit archive", read_only=True))
 def archive_audit(archive_dir: str = "data/archive", verify_bytes: bool = False) -> str:
     """Verify artifact references and optionally hash all archived bytes."""
     arguments = ["archive-audit", "--archive-dir", archive_dir]
@@ -327,7 +337,7 @@ def archive_audit(archive_dir: str = "data/archive", verify_bytes: bool = False)
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Capture report", read_only=True))
 def capture_report(
     control_db: str = "data/control/capture.sqlite3",
     format: str = "json",
@@ -336,13 +346,13 @@ def capture_report(
     return _run(["capture-report", "--control-db", control_db, "--format", format])
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Export schema", read_only=True))
 def schema(contract: str) -> str:
     """Export a versioned JSON Schema for a contract."""
     return _run(["schema", contract])
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Build context brief", read_only=False))
 def context(
     vault: str = "data/vault",
     derived_dir: str = "data/derived",
@@ -368,26 +378,28 @@ def context(
     )
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Scaffold projects", read_only=False))
 def scaffold_projects(vault: str = "data/vault", projects: str = "data/projects.json") -> str:
     """Create missing human project profile notes under <vault>/projects."""
     return _run(["scaffold-projects", "--vault", vault, "--projects", projects])
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Create decision", read_only=False))
 def decision_new(
+    title: str,
     vault: str = "data/vault",
-    title: str = "",
     problem: str = "",
     options: list[str] | None = None,
     chosen: str = "",
     rationale: str = "",
     follow_ups: list[str] | None = None,
-    projects_: list[str] | None = None,
+    project_ids: list[str] | None = None,
     tags: list[str] | None = None,
     date: str = "",
 ) -> str:
     """Create a human decision note under <vault>/decisions without overwriting."""
+    if not title.strip():
+        return "error: title is required"
     arguments = [
         "decision-new",
         "--vault",
@@ -405,7 +417,7 @@ def decision_new(
         arguments += ["--option", option]
     for follow_up in follow_ups or []:
         arguments += ["--follow-up", follow_up]
-    for project in projects_ or []:
+    for project in project_ids or []:
         arguments += ["--project", project]
     for tag in tags or []:
         arguments += ["--tag", tag]
@@ -414,7 +426,7 @@ def decision_new(
     return _run(arguments)
 
 
-@server.tool()
+@server.tool(annotations=_annotations("Search decisions", read_only=True))
 def decision_search(query: str, vault: str = "data/vault", limit: int = 20) -> str:
     """Search human decision notes by terms."""
     return _run(["decision-search", query, "--vault", vault, "--limit", str(limit)])

@@ -72,3 +72,29 @@ def test_scaffold_projects_tool_reports_missing_projects(tmp_path: Path) -> None
     )
 
     assert "error" in output
+
+
+def test_decision_new_requires_title(tmp_path: Path) -> None:
+    pytest.importorskip("mcp")
+    from evidence_vault import mcp_server
+
+    output = mcp_server.decision_new(title="", vault=str(tmp_path / "vault"))
+
+    assert "error" in output
+
+
+def test_tool_annotations_expose_read_only_hints() -> None:
+    pytest.importorskip("mcp")
+    import asyncio
+
+    from evidence_vault import mcp_server
+
+    tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
+
+    search = tools["search"].annotations
+    decision_new = tools["decision_new"].annotations
+    assert search is not None
+    assert decision_new is not None
+    assert search.read_only_hint is True
+    assert decision_new.read_only_hint is False
+    assert "title" in tools["decision_new"].input_schema["required"]
