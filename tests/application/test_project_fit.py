@@ -22,6 +22,7 @@ from evidence_vault.application.project_fit import (
     ProjectFitRunner,
     _build_user_prompt,
     _cache_key,
+    _projects_key,
     parse_projects,
 )
 from evidence_vault.domain.common import ActorKind, Provenance
@@ -418,6 +419,51 @@ def test_parse_projects_validates_shape() -> None:
 
     projects = parse_projects({"projects": [{"id": "a", "name": "A", "description": "d"}]})
     assert projects == (Project(id="a", name="A", description="d"),)
+
+
+def test_parse_projects_reads_profile() -> None:
+    projects = parse_projects(
+        {"projects": [{"id": "a", "name": "A", "description": "d", "profile": "  human notes  "}]}
+    )
+
+    assert projects == (Project(id="a", name="A", description="d", profile="human notes"),)
+
+
+def test_project_fit_prompt_includes_profile(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc="trading bot idea")
+    projects = (
+        Project(
+            id="midas",
+            name="MidasAI",
+            description="trading bot",
+            profile="Focus on backtesting and risk.",
+        ),
+        Project(id="mafiin", name="Mafiin", description="party game"),
+    )
+
+    prompt = _build_user_prompt(packet, projects, "")
+
+    assert "Profile: Focus on backtesting and risk." in prompt
+    assert prompt.count("Profile:") == 1
+
+
+def test_project_fit_prompt_unchanged_without_profile(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc="trading bot idea")
+
+    prompt = _build_user_prompt(packet, PROJECTS, "")
+
+    assert "Profile:" not in prompt
+    assert "- midas | MidasAI | trading bot" in prompt
+    assert "- mafiin | Mafiin | party game" in prompt
+
+
+def test_projects_key_changes_with_profile() -> None:
+    base = (Project(id="midas", name="MidasAI", description="trading bot"),)
+    with_profile = (
+        Project(id="midas", name="MidasAI", description="trading bot", profile="extra"),
+    )
+
+    assert _projects_key(base) != _projects_key(with_profile)
 
 
 def test_project_fit_accumulates_across_collections(tmp_path: Path) -> None:

@@ -59,6 +59,7 @@ class Project:
     id: str
     name: str
     description: str
+    profile: str = ""
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, object]) -> Project:
@@ -66,6 +67,7 @@ class Project:
             id=_as_str(payload.get("id")),
             name=_as_str(payload.get("name")),
             description=_as_str(payload.get("description")),
+            profile=_as_str(payload.get("profile")),
         )
 
 
@@ -285,6 +287,9 @@ def _projects_block(projects: tuple[Project, ...]) -> str:
     lines = ["Projects:"]
     for project in sorted(projects, key=lambda item: item.id):
         lines.append(f"- {project.id} | {project.name} | {project.description}")
+        profile = project.profile.strip()
+        if profile:
+            lines.append(f"  Profile: {profile}")
     return "\n".join(lines)
 
 
@@ -760,7 +765,12 @@ class ProjectFitRunner:
 
 def _projects_key(projects: tuple[Project, ...]) -> str:
     payload = [
-        {"id": project.id, "name": project.name, "description": project.description}
+        {
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "profile": project.profile,
+        }
         for project in projects
     ]
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
