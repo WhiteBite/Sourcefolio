@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import BinaryIO
+from typing import IO
 
 from pydantic import JsonValue
 
@@ -23,7 +23,7 @@ class ArtifactPayload:
 
     role: ArtifactRole
     media_type: str
-    stream: BinaryIO
+    stream: IO[bytes]
     original_filename: str | None = None
 
 

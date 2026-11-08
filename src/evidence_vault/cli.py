@@ -33,6 +33,10 @@ from evidence_vault.adapters.tiktok.gallery_dl import (
     GalleryDlConfig,
     GalleryDlTikTokSlidesAdapter,
 )
+from evidence_vault.adapters.tiktok.slides_images import (
+    SlidesImageConfig,
+    SlidesImageFetcher,
+)
 from evidence_vault.adapters.tiktok.yt_dlp import YtDlpConfig, YtDlpTikTokAdapter
 from evidence_vault.application.archive_capture import ArchiveCapture
 from evidence_vault.application.audit import ArchiveAudit
@@ -72,6 +76,7 @@ from evidence_vault.application.ocr_evaluation import (
 from evidence_vault.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
 from evidence_vault.application.search import SearchIndexBuilder
 from evidence_vault.application.search_evaluation import SearchEvaluationSet, SearchEvaluator
+from evidence_vault.application.slides_fetch import FetchSlidesQuery, FetchSlidesRunner
 from evidence_vault.application.source_cards import SourceCardProjection
 from evidence_vault.application.triage import IdeaScaffolder
 from evidence_vault.domain.capture import CaptureTask
@@ -480,6 +485,47 @@ def _import_collections(args: argparse.Namespace) -> int:
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 1 if counts[BatchItemStatus.FAILED.value] else 0
+
+
+def _fetch_slides(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    packets = FileSystemSourcePacketRepository(archive_root)
+    report = FetchSlidesRunner(
+        packets=packets,
+        archive=ArchiveCapture(
+            artifacts=FileSystemArtifactStore(archive_root),
+            packets=packets,
+        ),
+        fetcher=SlidesImageFetcher(
+            SlidesImageConfig(max_bytes=args.max_mb * 1024**2),
+        ),
+    ).run(
+        FetchSlidesQuery(
+            collection=args.collection,
+            limit=args.limit,
+            max_slides=args.max_slides,
+        )
+    )
+    output = {
+        "collection": report.collection,
+        "sources": report.sources,
+        "images_downloaded": report.images_downloaded,
+        "failed": report.failed,
+        "created": report.created,
+        "skipped": report.skipped,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "status": item.status,
+                "images_downloaded": item.images_downloaded,
+                "failed_indexes": list(item.failed_indexes),
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
 
 
 def _ocr_adapter(args: argparse.Namespace) -> TesseractOcrAdapter:
@@ -1186,6 +1232,28 @@ def _build_parser() -> argparse.ArgumentParser:
     import_collections.add_argument("--concurrency", type=int, default=4)
     import_collections.add_argument("--limit", type=int, help="process at most N unique tasks")
     import_collections.set_defaults(handler=_import_collections)
+
+    fetch_slides = subcommands.add_parser(
+        "fetch-slides",
+        help="download slideshow images for a collection and archive them as image artifacts",
+    )
+    fetch_slides.add_argument("--collection", required=True)
+    fetch_slides.add_argument("--archive-dir", default="data/archive")
+    fetch_slides.add_argument("--control-db", default="data/control/capture.sqlite3")
+    fetch_slides.add_argument("--limit", type=int, help="process at most N sources")
+    fetch_slides.add_argument(
+        "--max-slides",
+        type=int,
+        default=50,
+        help="download at most N images in total across the run",
+    )
+    fetch_slides.add_argument(
+        "--max-mb",
+        type=int,
+        default=20,
+        help="per-image byte limit in MiB",
+    )
+    fetch_slides.set_defaults(handler=_fetch_slides)
 
     ocr = subcommands.add_parser(
         "ocr-capture",

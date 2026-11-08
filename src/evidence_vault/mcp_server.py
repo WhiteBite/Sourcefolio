@@ -100,6 +100,34 @@ def import_collections(
 
 
 @server.tool()
+def fetch_slides(
+    collection: str,
+    archive_dir: str = "data/archive",
+    control_db: str = "data/control/capture.sqlite3",
+    limit: int | None = None,
+    max_slides: int = 50,
+    max_mb: int = 20,
+) -> str:
+    """Download slideshow images for a collection and archive them as image artifacts."""
+    arguments = [
+        "fetch-slides",
+        "--collection",
+        collection,
+        "--archive-dir",
+        archive_dir,
+        "--control-db",
+        control_db,
+        "--max-slides",
+        str(max_slides),
+        "--max-mb",
+        str(max_mb),
+    ]
+    if limit is not None:
+        arguments += ["--limit", str(limit)]
+    return _run(arguments)
+
+
+@server.tool()
 def project_obsidian(
     archive_dir: str = "data/archive",
     derived_dir: str = "data/derived",
