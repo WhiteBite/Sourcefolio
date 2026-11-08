@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Protocol
 
 from evidence_vault.application.projection_types import GeneratedDocument
@@ -23,6 +24,11 @@ class HumanNoteStore(Protocol):
 
 
 class HumanNoteReader(Protocol):
+    @property
+    def root(self) -> Path:
+        """Filesystem directory the reader is anchored at."""
+        ...
+
     def iter_notes(self) -> Iterable[tuple[str, str]]:
         """Yield (posix_relpath, content) for every human-owned note."""
         ...

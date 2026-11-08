@@ -11,6 +11,10 @@ class FileSystemHumanNoteStore:
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
 
+    @property
+    def root(self) -> Path:
+        return self._root
+
     @staticmethod
     def _relative_path(value: str) -> Path:
         if not value or "\\" in value:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -58,10 +58,12 @@ def _frontmatter(content: str) -> dict[str, object]:
     return {str(key): value for key, value in loaded.items()}
 
 
-def _is_decision_note(path: str) -> bool:
+def _is_decision_note(path: str, root: Path) -> bool:
     if not path.endswith(".md"):
         return False
-    return "/" not in path or path.startswith(f"{_HUMAN_DIR}/")
+    if path.startswith(f"{_HUMAN_DIR}/"):
+        return True
+    return root.name == _HUMAN_DIR and "/" not in path
 
 
 def _wikilink_target(path: str) -> str:
@@ -135,7 +137,7 @@ class DecisionIndexProjection:
 
     def _decisions(self) -> Iterator[tuple[str, str]]:
         for path, content in self._notes.iter_notes():
-            if _is_decision_note(path):
+            if _is_decision_note(path, self._notes.root):
                 yield path, content
 
     @staticmethod
@@ -193,7 +195,7 @@ class DecisionSearch:
             return ()
         hits: list[DecisionHit] = []
         for path, content in self._notes.iter_notes():
-            if not _is_decision_note(path):
+            if not _is_decision_note(path, self._notes.root):
                 continue
             folded = content.casefold()
             if any(term not in folded for term in terms):

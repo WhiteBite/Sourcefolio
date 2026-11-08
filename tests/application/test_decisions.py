@@ -91,6 +91,33 @@ def test_index_lists_decisions_with_wikilinks(tmp_path: Path) -> None:
     assert index.index("2026-11-08") < index.index("2026-11-07")
 
 
+def test_index_ignores_stray_top_level_note_when_root_is_vault(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    decisions_dir = vault / "decisions"
+    decisions_dir.mkdir(parents=True)
+    (decisions_dir / "2026-11-08-real.md").write_text(
+        "---\ndate: 2026-11-08\ntitle: Real\nstatus: open\n---\n",
+        encoding="utf-8",
+    )
+    (vault / "stray.md").write_text(
+        "---\ndate: 2026-11-09\ntitle: Stray\nstatus: open\n---\n",
+        encoding="utf-8",
+    )
+
+    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    count = DecisionIndexProjection(
+        notes=FileSystemHumanNoteStore(vault),
+        store=store,
+    ).rebuild()
+
+    assert count == 1
+    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Real" in index
+    assert "Stray" not in index
+
+
 def test_search_finds_body_term_and_respects_limit(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     scaffolder = DecisionScaffolder(notes=FileSystemHumanNoteStore(vault / "decisions"))

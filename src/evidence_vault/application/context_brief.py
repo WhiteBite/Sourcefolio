@@ -138,7 +138,7 @@ def _context_decisions(decisions: HumanNoteReader | None) -> tuple[ContextDecisi
         return ()
     items: list[ContextDecision] = []
     for path, content in decisions.iter_notes():
-        if not _is_decision_note(path):
+        if not _is_decision_note(path, decisions.root):
             continue
         properties = _frontmatter(content)
         raw_projects = properties.get("projects")
