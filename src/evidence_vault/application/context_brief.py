@@ -16,10 +16,13 @@ from evidence_vault.application.project_fit import (
     ProjectFitIndexStore,
     parse_index,
 )
-from evidence_vault.application.projection_ports import HumanNoteReader
+from evidence_vault.application.projection_ports import HumanNoteReader, ProjectionStore
+from evidence_vault.application.projection_types import GeneratedDocument
 
 _MAX_MATCHES = 20
+_MAX_MATCHES_PER_PROJECT = 3
 _MAX_DECISIONS = 20
+_MAX_IDEAS = 20
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,12 @@ class ContextDecision:
 
 
 @dataclass(frozen=True)
+class ContextIdea:
+    path: str
+    title: str
+
+
+@dataclass(frozen=True)
 class ContextStats:
     sources: int
     collections: int
@@ -64,6 +73,7 @@ class ContextBrief:
     projects: tuple[ContextProject, ...]
     matches: tuple[ContextMatch, ...]
     decisions: tuple[ContextDecision, ...]
+    ideas: tuple[ContextIdea, ...]
     stats: ContextStats
 
 
@@ -122,7 +132,16 @@ def _context_matches(index: ProjectFitIndexStore) -> tuple[ContextMatch, ...]:
                 )
             )
     ranked.sort(key=lambda item: item[0], reverse=True)
-    return tuple(match for _, match in ranked[:_MAX_MATCHES])
+    per_project: dict[str, int] = {}
+    selected: list[ContextMatch] = []
+    for _, candidate in ranked:
+        if per_project.get(candidate.project_id, 0) >= _MAX_MATCHES_PER_PROJECT:
+            continue
+        per_project[candidate.project_id] = per_project.get(candidate.project_id, 0) + 1
+        selected.append(candidate)
+        if len(selected) >= _MAX_MATCHES:
+            break
+    return tuple(selected)
 
 
 def _context_decisions(
@@ -150,6 +169,19 @@ def _context_decisions(
         )
     items.sort(key=lambda item: (item.date, item.path), reverse=True)
     return tuple(items)
+
+
+def _context_ideas(ideas: HumanNoteReader | None) -> tuple[ContextIdea, ...]:
+    if ideas is None:
+        return ()
+    items: list[ContextIdea] = []
+    for path, content in ideas.iter_notes():
+        if not path.endswith(".md"):
+            continue
+        properties = parse_frontmatter(content).properties
+        items.append(ContextIdea(path=path, title=str(properties.get("title", ""))))
+    items.sort(key=lambda item: item.path, reverse=True)
+    return tuple(items[:_MAX_IDEAS])
 
 
 def _idea_count(ideas: HumanNoteReader | None) -> int:
@@ -196,6 +228,7 @@ class ContextBriefBuilder:
             projects=_context_projects(self._projects, self._profiles),
             matches=_context_matches(self._project_fit_index),
             decisions=all_decisions[:_MAX_DECISIONS],
+            ideas=_context_ideas(self._ideas),
             stats=stats,
         )
 
@@ -248,6 +281,12 @@ def render_markdown(brief: ContextBrief) -> str:
             )
     else:
         lines.append("None.")
+    lines.extend(["", f"## Ideas ({len(brief.ideas)})", ""])
+    if brief.ideas:
+        for idea in brief.ideas:
+            lines.append(f"- {escape(idea.title, table=True)} (`{escape(idea.path, table=True)}`)")
+    else:
+        lines.append("None.")
     lines.extend(
         [
             "",
@@ -261,3 +300,17 @@ def render_markdown(brief: ContextBrief) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+class ContextBriefProjection:
+    NAMESPACE = "context"
+
+    def __init__(self, store: ProjectionStore) -> None:
+        self._store = store
+
+    def rebuild(self, brief: ContextBrief) -> int:
+        documents = (
+            GeneratedDocument(path="index.md", content=render_markdown(brief)),
+            GeneratedDocument(path="context.json", content=render_json(brief)),
+        )
+        return self._store.replace_namespace(self.NAMESPACE, documents)

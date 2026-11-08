@@ -11,9 +11,10 @@ from evidence_vault.adapters.filesystem import (
     FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
+from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
 from evidence_vault.application.archive_capture import ArchiveCapture
 from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.context_brief import ContextBriefBuilder
+from evidence_vault.application.context_brief import ContextBriefBuilder, ContextBriefProjection
 from evidence_vault.application.project_fit import Project
 from evidence_vault.domain.common import ActorKind, Provenance
 from evidence_vault.domain.source import (
@@ -121,6 +122,7 @@ def test_empty_vault_yields_zero_counts(tmp_path: Path) -> None:
     assert brief.projects == ()
     assert brief.matches == ()
     assert brief.decisions == ()
+    assert brief.ideas == ()
     assert brief.stats.sources == 0
     assert brief.stats.collections == 0
     assert brief.stats.ideas == 0
@@ -173,11 +175,11 @@ def test_json_and_markdown_render(tmp_path: Path) -> None:
     brief_builder = builder(tmp_path)
 
     payload = json.loads(brief_builder.to_json())
-    assert set(payload) == {"generated_at", "projects", "matches", "decisions", "stats"}
+    assert set(payload) == {"generated_at", "projects", "matches", "decisions", "ideas", "stats"}
 
     markdown = brief_builder.to_markdown()
     assert markdown.startswith("# ")
-    for section in ("## Projects", "## Matches", "## Decisions", "## Stats"):
+    for section in ("## Projects", "## Matches", "## Decisions", "## Ideas", "## Stats"):
         assert section in markdown
 
 
@@ -226,7 +228,59 @@ def test_build_is_deterministic(tmp_path: Path) -> None:
     assert brief_builder.to_markdown() == brief_builder.to_markdown()
 
 
-def test_build_writes_nothing(tmp_path: Path) -> None:
+def test_ideas_surfaced_in_markdown_and_json(tmp_path: Path) -> None:
+    ideas = FileSystemHumanNoteStore(tmp_path / "ideas")
+    ideas.create_if_absent("a.md", "---\ntitle: Alpha idea\nstatus: inbox\n---\n")
+    ideas.create_if_absent("b.md", "---\ntitle: Beta idea\nstatus: inbox\n---\n")
+
+    brief_builder = builder(tmp_path, ideas=ideas)
+    brief = brief_builder.build()
+
+    assert [idea.title for idea in brief.ideas] == ["Beta idea", "Alpha idea"]
+    assert "Beta idea" in brief_builder.to_markdown()
+    payload = json.loads(brief_builder.to_json())
+    assert payload["ideas"] == [
+        {"path": "b.md", "title": "Beta idea"},
+        {"path": "a.md", "title": "Alpha idea"},
+    ]
+
+
+def test_per_project_match_cap_keeps_other_projects(tmp_path: Path) -> None:
+    entries = [
+        fit_entry(add_packet(tmp_path, f"alpha-{index}"), project_id="alpha", fit="high")
+        for index in range(5)
+    ]
+    entries.append(fit_entry(add_packet(tmp_path, "beta-0"), project_id="beta", fit="high"))
+    save_fit_index(tmp_path, entries)
+
+    brief = builder(tmp_path).build()
+
+    assert sum(match.project_id == "alpha" for match in brief.matches) == 3
+    assert sum(match.project_id == "beta" for match in brief.matches) == 1
+
+
+def test_context_projection_writes_index_and_json_deterministically(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one")
+    save_fit_index(tmp_path, [fit_entry(packet)])
+    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    projection = ContextBriefProjection(FileSystemProjectionStore(generated))
+
+    assert projection.rebuild(builder(tmp_path).build()) == 2
+    namespace = generated / ContextBriefProjection.NAMESPACE
+    assert sorted(path.name for path in namespace.iterdir() if path.name != "manifest.json") == [
+        "context.json",
+        "index.md",
+    ]
+    first = (namespace / "index.md").read_text(encoding="utf-8")
+    assert json.loads((namespace / "context.json").read_text(encoding="utf-8"))["generated_at"] == (
+        NOW.isoformat()
+    )
+
+    projection.rebuild(builder(tmp_path).build())
+    assert (namespace / "index.md").read_text(encoding="utf-8") == first
+
+
+def test_builder_writes_nothing(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one")
     save_fit_index(tmp_path, [fit_entry(packet)])
     profiles = FileSystemHumanNoteStore(tmp_path / "profiles")
