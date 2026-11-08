@@ -2,7 +2,7 @@
 
 Рабочее название локальной системы, которая превращает сохранённые TikTok-видео, слайдшоу и другие источники не в очередную базу саммари, а в **архив доказательств, личный контекст и историю решений**.
 
-> Реализованы evidence-ядро, resumable ingestion, `yt-dlp` video path, отдельный `gallery-dl` slideshow resolver, archive audit, operational capture report, bounded OCR backlog + saved reports, OCR quality evaluation, generated Obsidian cards/overview, lexical search + evaluation, retrieval-only evidence packs + integrity verification и versioned OCR records. Дополнительно выполнены live public surrogate ingest (1 video + 1 slideshow) и real Tesseract на 6 synthetic golden slides. Это не заменяет пилот личного export и human-reviewed качество. ASR/keyframes, LLM answers и wiki-compilers остаются следующими этапами.
+> Реализованы evidence-ядро, resumable ingestion, `yt-dlp` video path, отдельный `gallery-dl` slideshow resolver, archive audit, operational capture report, bounded OCR backlog + saved reports, OCR quality evaluation, generated Obsidian cards/overview, lexical search + evaluation, retrieval-only evidence packs + integrity verification и versioned OCR records. Добавлены TikTok-collections pipeline (userscript → `import-collections` → collection indexes, triage dashboards и human `ideas/`), per-collection LLM digest (`llm-enrich`) и MCP-сервер. Дополнительно выполнены live public surrogate ingest (1 video + 1 slideshow) и real Tesseract на 6 synthetic golden slides. Это не заменяет пилот личного export и human-reviewed качество. ASR/keyframes, on-demand LLM answers и wiki-compilers остаются следующими этапами.
 
 ## Главная идея
 
@@ -39,6 +39,11 @@
 20. `ocr-backlog --report`: immutable `ocr-backlog-report/v1` с parameters, extractor config, per-item request IDs, failures и resume history.
 21. `ocr-evaluate`: golden `ocr-evaluation/v1`, NFKC/casefold/whitespace normalization, exact/CER/WER, empty/failed/missing и per-extractor metrics.
 22. `evidence-pack-verify`: schema/reference/provenance checks и optional SHA-256 verification сохранённого pack.
+23. `import-collections`: архивирует `collection-capture/v1` metadata-only packets с resumable bounded workers; повтор идемпотентен.
+24. `project-obsidian` collection indexes: per-collection `collection-index/v1` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags.
+25. Triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
+26. `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
+27. MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 
 ## Быстрый старт
 
@@ -201,7 +206,83 @@ evidence-vault schema evidence-pack-integrity
 evidence-vault schema ocr-backlog-report
 evidence-vault schema ocr-evaluation
 evidence-vault schema ocr-evaluation-report
+evidence-vault schema collection-capture
 ```
+
+## TikTok collections → база знаний
+
+Tampermonkey userscript `userscripts/tiktok-collections-capture.user.js` собирает коллекции из залогиненной веб-сессии TikTok в `collection-capture/v1` JSON (или CSV). Режим «Собрать» делает полный слепок, «Только новое» — инкрементальный diff против сохранённого baseline. Опционально собираются топ-20 комментариев по выбранным коллекциям. Прогресс хранится в GM storage: пауза, стоп и продолжение с места остановки.
+
+Архивировать metadata-only packets (медиа не скачивается):
+
+```bash
+evidence-vault import-collections \
+  /path/to/tiktok-collections-<stamp>.json \
+  --archive-dir data/archive \
+  --control-db data/control/capture.sqlite3 \
+  --concurrency 4
+```
+
+`import-collections` создаёт resumable backlog и честные partial packets; повтор той же операции идемпотентен. Затем пересобрать generated views и, при желании, создать human `ideas/`:
+
+```bash
+evidence-vault project-obsidian \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault \
+  --scaffold-ideas
+
+evidence-vault scaffold-ideas \
+  --archive-dir data/archive \
+  --vault data/vault
+```
+
+`project-obsidian` дополнительно строит per-collection indexes в `<vault>/_generated/evidence-vault/collections/`: для каждой коллекции `<slug>.md` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags, плюс `index.md`. Triage dashboards лежат в `.../dashboards/` (`inbox`, `keep`, `drop`, `done`) и используют Dataview-запросы над `ideas/`, поэтому **нужен плагин Obsidian Dataview**. `--scaffold-ideas` создаёт отсутствующие human notes в `<vault>/ideas/<source_id>.md` (frontmatter `status: inbox`) и не перезаписывает существующие; `scaffold-ideas` делает то же без пересборки generated views.
+
+Per-collection LLM digest:
+
+```bash
+evidence-vault llm-enrich \
+  --collection Нейронки \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault \
+  --limit 20
+```
+
+`llm-enrich` прогоняет latest captures коллекции через OpenAI-compatible chat model и пишет `llm-digest/v1` в `<vault>/_generated/evidence-vault/llm/<slug>.md`. Digest помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`. Конфигурация резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults. Ответы кэшируются в `data/derived/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет.
+
+## MCP-сервер
+
+Установить extra и запустить сервер:
+
+```bash
+python -m pip install -e ".[mcp]"
+evidence-vault-mcp
+```
+
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `archive_audit`, `capture_report`, `schema`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
+
+Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "evidence-vault": {
+      "type": "local",
+      "command": [
+        "D:/Sources/WhiteBite/Sourcefolio/.venv/Scripts/python.exe",
+        "-m",
+        "evidence_vault.mcp_server"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+После правки `opencode.json` нужно перезапустить opencode, чтобы он подхватил сервер.
 
 ## Структура
 
@@ -232,4 +313,4 @@ tests/             # домен, вертикальный срез, CLI и archi
 
 ## Следующий шаг
 
-Нужен пилот на реальном export пользователя и representative личном backlog, включая недоступные элементы и interrupted live resume. Public surrogate video/photo уже проверен, но не закрывает collection coverage и failure mix. Real Tesseract на known-text synthetic slides проверил OCR/resume/evaluation/integrity; остаётся разметить human-reviewed реальный OCR golden set и 10 реальных judged questions. ASR/keyframes подключаются через тот же derived contract после отдельных resource/quality gates. До измеренных результатов не добавляем GraphRAG и не запускаем два wiki-compiler в одном vault.
+Нужен пилот на реальном export пользователя и representative личном backlog, включая недоступные элементы и interrupted live resume. Public surrogate video/photo уже проверен, но не закрывает collection coverage и failure mix. TikTok-collections pipeline и LLM digest работают на synthetic/локальных данных; остаётся прогнать их на реальном личном export и collections и оценить качество digest и triage. Real Tesseract на known-text synthetic slides проверил OCR/resume/evaluation/integrity; остаётся разметить human-reviewed реальный OCR golden set и 10 реальных judged questions. ASR/keyframes подключаются через тот же derived contract после отдельных resource/quality gates. До измеренных результатов не добавляем GraphRAG и не запускаем два wiki-compiler в одном vault.

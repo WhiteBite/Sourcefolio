@@ -27,6 +27,7 @@
 - `yt-dlp` video adapter и `tiktok-download`: bounded subprocesses, site limit, timeouts/kill, disk/byte limits, sanitized metadata и resume. Есть fake-executable regression и отдельный [live public surrogate](pilots/public-ingest/README.md): 1 video complete, resume skip, raw/artifact hashes и byte audit совпали.
 - Отдельный `gallery-dl` slideshow resolver и `tiktok-slides`: только photo tasks, ordered images, slide/total limits, inventory/completeness checks и честный partial при непроверяемом числе слайдов. На одном live public photo post получено 3 ordered images и complete packet; это ещё не representative пользовательский corpus.
 - Read-only `capture-report` из существующего SQLite: status/kind counts, attempts/retries, finished-attempt p50/p95, stale running candidates и recent partial/failed errors без миграции схемы.
+- `collection-capture/v1` path: Tampermonkey userscript собирает коллекции из залогиненной веб-сессии (full/incremental, optional top-20 comments), `import-collections` архивирует metadata-only packets с resumable bounded workers. Это отдельный discovery-путь, не заменяющий официальный export.
 
 **Осталось проверить на реальных данных**
 
@@ -72,6 +73,9 @@
 - `evidence-pack` JSON/Markdown: ranked sources, snippets, raw artifact links, typed derived locators, provenance и limitations без автоматического LLM-ответа.
 - `evidence-pack-verify` + `evidence-pack-integrity/v1`: source/artifact/extraction reference и provenance checks, optional byte hashes, structured issues.
 - `search-evaluation/v1` и `search-evaluate`: hit rate, MRR, recall, precision@k и per-query ranking для записанных judged questions.
+- Per-collection indexes (`collection-index/v1`) с извлечением repositories (GitHub/GitLab) и hashtags; triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
+- `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
+- MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 
 **Ещё не доказано на реальном корпусе**
 
