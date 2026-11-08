@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
@@ -32,13 +33,23 @@ class FileSystemHumanNoteStore:
             key=lambda path: path.relative_to(self._root).as_posix(),
         )
         for path in paths:
-            yield path.relative_to(self._root).as_posix(), path.read_text(encoding="utf-8")
+            relative = path.relative_to(self._root).as_posix()
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError) as error:
+                warnings.warn(f"skipping unreadable human note {relative}: {error}", stacklevel=2)
+                continue
+            yield relative, content
 
     def read(self, relative_path: str) -> str | None:
         path = self._root / self._relative_path(relative_path)
         if not path.is_file():
             return None
-        return path.read_text(encoding="utf-8")
+        try:
+            return path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as error:
+            warnings.warn(f"skipping unreadable human note {relative_path}: {error}", stacklevel=2)
+            return None
 
     def create_if_absent(self, relative_path: str, content: str) -> bool:
         path = self._root / self._relative_path(relative_path)

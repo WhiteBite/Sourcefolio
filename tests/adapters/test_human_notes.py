@@ -46,6 +46,21 @@ def test_read_rejects_escape(tmp_path: Path) -> None:
         FileSystemHumanNoteStore(tmp_path).read("../escape.md")
 
 
+def test_iter_notes_skips_undecodable_file(tmp_path: Path) -> None:
+    root = tmp_path / "notes"
+    root.mkdir()
+    (root / "good.md").write_text("ok", encoding="utf-8")
+    (root / "bad.md").write_bytes("привет".encode("cp1251"))
+
+    store = FileSystemHumanNoteStore(root)
+
+    with pytest.warns(UserWarning):
+        notes = list(store.iter_notes())
+
+    assert notes == [("good.md", "ok")]
+    assert store.read("bad.md") is None
+
+
 def test_create_if_absent_never_overwrites(tmp_path: Path) -> None:
     root = tmp_path / "notes"
     store = FileSystemHumanNoteStore(root)
