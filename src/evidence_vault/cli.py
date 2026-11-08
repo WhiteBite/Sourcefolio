@@ -52,7 +52,12 @@ from evidence_vault.application.capture_report import (
 from evidence_vault.application.capture_types import BatchItemStatus, RetryPolicy
 from evidence_vault.application.collection_index import CollectionIndexProjection
 from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.context_brief import ContextBriefBuilder
+from evidence_vault.application.context_brief import (
+    ContextBriefBuilder,
+    ContextBriefProjection,
+    render_json,
+    render_markdown,
+)
 from evidence_vault.application.dashboards import TriageDashboardProjection
 from evidence_vault.application.decisions import (
     DecisionDraft,
@@ -70,6 +75,7 @@ from evidence_vault.application.evidence_pack_integrity import (
     EvidencePackIntegrityReport,
     EvidencePackVerifier,
 )
+from evidence_vault.application.frontmatter import note_body
 from evidence_vault.application.knowledge_graph import KnowledgeGraphProjection
 from evidence_vault.application.llm_catalog import LlmCatalogQuery, LlmCatalogRunner
 from evidence_vault.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
@@ -200,9 +206,12 @@ def _load_projects(path: Path) -> tuple[Project, ...]:
 
 def _with_profiles(projects: tuple[Project, ...], profiles_root: Path) -> tuple[Project, ...]:
     notes = FileSystemHumanNoteStore(profiles_root)
-    return tuple(
-        replace(project, profile=notes.read(f"{project.id}.md") or "") for project in projects
-    )
+    result: list[Project] = []
+    for project in projects:
+        content = notes.read(f"{project.id}.md")
+        profile = note_body(content) if content is not None else project.profile
+        result.append(replace(project, profile=profile))
+    return tuple(result)
 
 
 def _archive_capture(args: argparse.Namespace) -> int:
@@ -870,18 +879,27 @@ def _context(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     derived_root = Path(args.derived_dir).resolve()
     vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "evidence-vault"
+    projects_path = Path(args.projects)
+    projects = _load_projects(projects_path) if projects_path.is_file() else ()
     builder = ContextBriefBuilder(
         packets=FileSystemSourcePacketRepository(archive_root),
         project_fit_index=FileSystemProjectFitIndex(derived_root),
-        projects=_load_projects(Path(args.projects)),
+        projects=projects,
         profiles=FileSystemHumanNoteStore(vault_root / "projects"),
         decisions=FileSystemHumanNoteStore(vault_root / "decisions"),
         ideas=FileSystemHumanNoteStore(vault_root / "ideas"),
     )
+    brief = builder.build()
+    store = FileSystemProjectionStore(generated_root)
+    store.replace_namespace(
+        ContextBriefProjection.NAMESPACE,
+        ContextBriefProjection(store=store).render(brief),
+    )
     if args.context_format == "markdown":
-        print(builder.to_markdown())
+        print(render_markdown(brief))
     else:
-        print(builder.to_json())
+        print(render_json(brief))
     return 0
 
 

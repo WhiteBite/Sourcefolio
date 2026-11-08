@@ -308,9 +308,11 @@ class ContextBriefProjection:
     def __init__(self, store: ProjectionStore) -> None:
         self._store = store
 
-    def rebuild(self, brief: ContextBrief) -> int:
-        documents = (
+    def render(self, brief: ContextBrief) -> tuple[GeneratedDocument, ...]:
+        return (
             GeneratedDocument(path="index.md", content=render_markdown(brief)),
             GeneratedDocument(path="context.json", content=render_json(brief)),
         )
-        return self._store.replace_namespace(self.NAMESPACE, documents)
+
+    def rebuild(self, brief: ContextBrief) -> int:
+        return self._store.replace_namespace(self.NAMESPACE, self.render(brief))

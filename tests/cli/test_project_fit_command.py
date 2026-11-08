@@ -188,3 +188,22 @@ def test_project_fit_cli_profiles_reach_prompt(tmp_path: Path, capsys, monkeypat
     assert main(arguments(tmp_path, "--profiles", str(profiles), "--dry-run")) == 0
     captured = capsys.readouterr()
     assert "PROFILE-MARKER-12345" in captured.err
+
+
+def test_project_fit_cli_profiles_strip_frontmatter(tmp_path: Path, capsys, monkeypatch) -> None:
+    add_packet(tmp_path / "archive", "one", desc="trading bot idea")
+    write_projects(tmp_path / "projects.json")
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    (profiles / "midas.md").write_text(
+        "---\nid: midas\nstatus: draft\ntype: project\n---\n\nPROFILE-BODY-MARKER\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "OpenAIChatClient", FakeChatClient)
+
+    assert main(arguments(tmp_path, "--profiles", str(profiles), "--dry-run")) == 0
+    err = capsys.readouterr().err
+    prompt = err.split("--- preview 1 user ---\n", 1)[1]
+    assert "PROFILE-BODY-MARKER" in prompt
+    assert "status: draft" not in prompt
+    assert "---" not in prompt

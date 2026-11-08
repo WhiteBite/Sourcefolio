@@ -112,3 +112,34 @@ def test_context_command_json_and_markdown(tmp_path: Path, capsys) -> None:
     markdown = capsys.readouterr().out
     assert "# Session context brief" in markdown
     assert "Adopt SQLite" in markdown
+
+
+def test_context_command_degrades_on_missing_projects_and_writes_brief(
+    tmp_path: Path, capsys
+) -> None:
+    archive = tmp_path / "archive"
+    derived = tmp_path / "derived"
+    vault = tmp_path / "vault"
+    add_packet(archive, "one")
+
+    assert (
+        main(
+            [
+                "context",
+                "--vault",
+                str(vault),
+                "--derived-dir",
+                str(derived),
+                "--archive-dir",
+                str(archive),
+                "--projects",
+                str(tmp_path / "missing.json"),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    index = vault / "_generated" / "evidence-vault" / "context" / "index.md"
+    assert index.is_file()
+    assert "# Session context brief" in index.read_text(encoding="utf-8")
