@@ -58,6 +58,114 @@ def add_packet(root: Path, external_id: str, title: str) -> None:
     )
 
 
+def add_packet_with_saved_index(root: Path, external_id: str, saved_index: dict) -> None:
+    store = FileSystemArtifactStore(root)
+    packets = FileSystemSourcePacketRepository(root)
+    ArchiveCapture(artifacts=store, packets=packets).handle(
+        ArchiveCaptureCommand(
+            source=SourceIdentity(
+                platform="tiktok",
+                kind=SourceKind.VIDEO,
+                external_id=external_id,
+                canonical_url=f"https://www.tiktok.com/@x/video/{external_id}",
+            ),
+            captured_at=NOW,
+            collector=Provenance(actor_kind=ActorKind.TOOL, actor_id="test", method="test"),
+            title="Ролик",
+            collections=(CollectionMembership(name="Нейронки"),),
+            artifacts=(
+                ArtifactPayload(
+                    role=ArtifactRole.CAPTION_TEXT,
+                    media_type="text/plain",
+                    stream=BytesIO(b"caption"),
+                ),
+            ),
+            metadata={"saved_index": saved_index},
+        )
+    )
+
+
+def _render_single_card(archive: Path, tmp_path: Path) -> str:
+    generated_root = tmp_path / "vault" / "_generated" / "evidence-vault"
+    projection = SourceCardProjection(
+        packets=FileSystemSourcePacketRepository(archive),
+        artifacts=FileSystemArtifactStore(archive),
+        store=FileSystemProjectionStore(generated_root),
+    )
+    packet = next(FileSystemSourcePacketRepository(archive).iter_packets())
+    return projection.render(packet).content
+
+
+def test_source_card_renders_saved_index_metadata(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet_with_saved_index(
+        archive,
+        "1",
+        {
+            "author": "one",
+            "type": "video",
+            "post_created_at": "2026-01-01T12:00:00.000Z",
+            "desc": "первое видео #нейронки",
+            "comments": [
+                {
+                    "text": "класс",
+                    "author": "bob",
+                    "likes": 2,
+                    "created_at": "2026-01-02T00:00:00.000Z",
+                },
+                {
+                    "text": "спасибо",
+                    "author": "ann",
+                    "likes": 5,
+                    "created_at": "2026-01-03T00:00:00.000Z",
+                },
+            ],
+        },
+    )
+
+    content = _render_single_card(archive, tmp_path)
+    properties = yaml.safe_load(content.split("---", 2)[1])
+
+    assert properties["author"] == "one"
+    assert properties["video_type"] == "video"
+    assert properties["post_created_at"] == "2026-01-01T12:00:00.000Z"
+    assert "## Description" in content
+    assert "первое видео" in content
+    assert "## Comments" in content
+    assert content.index("спасибо") < content.index("класс")
+
+
+def test_source_card_is_defensive_without_saved_index(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Без метаданных")
+
+    content = _render_single_card(archive, tmp_path)
+    properties = yaml.safe_load(content.split("---", 2)[1])
+
+    assert properties["author"] is None
+    assert properties["video_type"] is None
+    assert properties["post_created_at"] is None
+    assert "## Description" not in content
+    assert "## Comments" not in content
+
+
+def test_source_card_handles_null_comment_fields(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet_with_saved_index(
+        archive,
+        "1",
+        {
+            "desc": "текст",
+            "comments": [{"text": "без лайков", "author": None, "likes": None}],
+        },
+    )
+
+    content = _render_single_card(archive, tmp_path)
+
+    assert "## Comments" in content
+    assert "без лайков" in content
+
+
 def test_obsidian_projection_is_rebuildable_and_has_yaml_properties(
     tmp_path: Path,
 ) -> None:

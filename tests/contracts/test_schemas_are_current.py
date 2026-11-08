@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from evidence_vault.adapters.tiktok.collections import CollectionCaptureDocument
 from evidence_vault.application.evidence_pack import EvidencePackDocument
 from evidence_vault.application.evidence_pack_integrity import EvidencePackIntegrityReport
 from evidence_vault.application.ocr_backlog_report import OcrBacklogReportDocument
@@ -32,6 +33,7 @@ CONTRACTS = Path(__file__).parents[2] / "contracts"
         ("ocr-backlog-report-v1.schema.json", OcrBacklogReportDocument),
         ("ocr-evaluation-v1.schema.json", OcrEvaluationSet),
         ("ocr-evaluation-report-v1.schema.json", OcrEvaluationReport),
+        ("collection-capture-v1.schema.json", CollectionCaptureDocument),
     ],
 )
 def test_exported_schema_matches_domain_contract(

@@ -1,0 +1,372 @@
+{
+  "$defs": {
+    "CollectionCaptureAccount": {
+      "properties": {
+        "sec_uid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sec Uid"
+        },
+        "uid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uid"
+        },
+        "unique_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unique Id"
+        }
+      },
+      "title": "CollectionCaptureAccount",
+      "type": "object"
+    },
+    "CollectionCaptureCollection": {
+      "properties": {
+        "actual": {
+          "default": 0,
+          "title": "Actual",
+          "type": "integer"
+        },
+        "collection_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection Id"
+        },
+        "expected": {
+          "default": 0,
+          "title": "Expected",
+          "type": "integer"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CollectionCaptureItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "title": "CollectionCaptureCollection",
+      "type": "object"
+    },
+    "CollectionCaptureComment": {
+      "properties": {
+        "author": {
+          "default": "",
+          "title": "Author",
+          "type": "string"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "likes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Likes"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "title": "CollectionCaptureComment",
+      "type": "object"
+    },
+    "CollectionCaptureItem": {
+      "properties": {
+        "author": {
+          "default": "",
+          "title": "Author",
+          "type": "string"
+        },
+        "comments": {
+          "items": {
+            "$ref": "#/$defs/CollectionCaptureComment"
+          },
+          "title": "Comments",
+          "type": "array"
+        },
+        "cover": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cover"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "desc": {
+          "default": "",
+          "title": "Desc",
+          "type": "string"
+        },
+        "images": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Images",
+          "type": "array"
+        },
+        "stats": {
+          "$ref": "#/$defs/CollectionCaptureStats"
+        },
+        "type": {
+          "default": "video",
+          "title": "Type",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "video_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Video Id"
+        }
+      },
+      "title": "CollectionCaptureItem",
+      "type": "object"
+    },
+    "CollectionCaptureRun": {
+      "properties": {
+        "finished_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finished At"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "totals": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Totals",
+          "type": "object"
+        }
+      },
+      "title": "CollectionCaptureRun",
+      "type": "object"
+    },
+    "CollectionCaptureStats": {
+      "properties": {
+        "comments": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comments"
+        },
+        "likes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Likes"
+        },
+        "plays": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plays"
+        },
+        "shares": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shares"
+        }
+      },
+      "title": "CollectionCaptureStats",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "properties": {
+    "account": {
+      "$ref": "#/$defs/CollectionCaptureAccount"
+    },
+    "captured_at": {
+      "title": "Captured At",
+      "type": "string"
+    },
+    "collections": {
+      "items": {
+        "$ref": "#/$defs/CollectionCaptureCollection"
+      },
+      "title": "Collections",
+      "type": "array"
+    },
+    "platform": {
+      "title": "Platform",
+      "type": "string"
+    },
+    "run": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CollectionCaptureRun"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "const": "collection-capture/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "captured_at",
+    "platform",
+    "account"
+  ],
+  "title": "CollectionCaptureDocument",
+  "type": "object"
+}

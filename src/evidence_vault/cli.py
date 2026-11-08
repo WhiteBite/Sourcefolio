@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, JsonValue, ValidationError
 
 from evidence_vault.adapters.filesystem import (
     FileSystemArtifactStore,
+    FileSystemHumanNoteStore,
     FileSystemSourcePacketRepository,
 )
 from evidence_vault.adapters.filesystem.atomic import ImmutableStoreConflict, write_immutable_bytes
@@ -20,7 +21,8 @@ from evidence_vault.adapters.filesystem.projections import FileSystemProjectionS
 from evidence_vault.adapters.metadata_only import MetadataOnlyCaptureAdapter
 from evidence_vault.adapters.ocr.tesseract import TesseractConfig, TesseractOcrAdapter
 from evidence_vault.adapters.sqlite import SQLiteCaptureState
-from evidence_vault.adapters.tiktok import TikTokExportParser
+from evidence_vault.adapters.tiktok import CollectionCaptureParser, TikTokExportParser
+from evidence_vault.adapters.tiktok.collections import CollectionCaptureDocument
 from evidence_vault.adapters.tiktok.export import ExportParseResult
 from evidence_vault.adapters.tiktok.gallery_dl import (
     GalleryDlConfig,
@@ -36,7 +38,9 @@ from evidence_vault.application.capture_report import (
     render_capture_report_markdown,
 )
 from evidence_vault.application.capture_types import BatchItemStatus, RetryPolicy
+from evidence_vault.application.collection_index import CollectionIndexProjection
 from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from evidence_vault.application.dashboards import TriageDashboardProjection
 from evidence_vault.application.evidence_pack import (
     EvidencePackBuilder,
     EvidencePackDocument,
@@ -61,6 +65,7 @@ from evidence_vault.application.ocr_evaluation import (
 from evidence_vault.application.search import SearchIndexBuilder
 from evidence_vault.application.search_evaluation import SearchEvaluationSet, SearchEvaluator
 from evidence_vault.application.source_cards import SourceCardProjection
+from evidence_vault.application.triage import IdeaScaffolder
 from evidence_vault.domain.capture import CaptureTask
 from evidence_vault.domain.common import ContractModel, Provenance, UtcDateTime
 from evidence_vault.domain.evidence import EvidenceItem
@@ -371,6 +376,52 @@ def _tiktok_slides(args: argparse.Namespace) -> int:
     )
 
 
+def _import_collections(args: argparse.Namespace) -> int:
+    if args.limit is not None and args.limit < 1:
+        raise ValueError("limit must be at least 1")
+    parsed = CollectionCaptureParser().parse(Path(args.file).resolve())
+    tasks = parsed.tasks[: args.limit] if args.limit is not None else parsed.tasks
+    archive_root = Path(args.archive_dir).resolve()
+    control_path = Path(args.control_db).resolve()
+    archive = ArchiveCapture(
+        artifacts=FileSystemArtifactStore(archive_root),
+        packets=FileSystemSourcePacketRepository(archive_root),
+    )
+    adapter = MetadataOnlyCaptureAdapter()
+    with SQLiteCaptureState(control_path) as state:
+        runner = CaptureBatchRunner(
+            adapter=adapter,
+            archive=archive,
+            state=state,
+            concurrency=args.concurrency,
+        )
+        results = asyncio.run(runner.run(tasks))
+
+    counts = {status.value: 0 for status in BatchItemStatus}
+    for result in results:
+        counts[result.status.value] += 1
+    output = {
+        "operation": adapter.operation_key,
+        "entries_read": parsed.entries_read,
+        "unique_tasks": len(parsed.tasks),
+        "submitted_tasks": len(tasks),
+        "results": counts,
+        "archive_dir": str(archive_root),
+        "control_db": str(control_path),
+        "issues": [
+            {
+                "collection_index": issue.collection_index,
+                "item_index": issue.item_index,
+                "reason": issue.reason,
+            }
+            for issue in parsed.issues
+        ],
+        "warnings": list(parsed.warnings),
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if counts[BatchItemStatus.FAILED.value] else 0
+
+
 def _ocr_adapter(args: argparse.Namespace) -> TesseractOcrAdapter:
     return TesseractOcrAdapter(
         TesseractConfig(
@@ -537,7 +588,8 @@ def _ocr_evaluate(args: argparse.Namespace) -> int:
 
 def _project_obsidian(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
-    generated_root = Path(args.vault).resolve() / "_generated" / "evidence-vault"
+    vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "evidence-vault"
     packets = FileSystemSourcePacketRepository(archive_root)
     store = FileSystemProjectionStore(generated_root)
     extractions = FileSystemExtractionRepository(Path(args.derived_dir).resolve())
@@ -553,11 +605,51 @@ def _project_obsidian(args: argparse.Namespace) -> int:
         store=store,
         extractions=extractions,
     ).rebuild()
+    generated_prefix = generated_root.relative_to(vault_root).as_posix()
+    collection_documents = CollectionIndexProjection(
+        packets=packets,
+        store=store,
+        generated_prefix=generated_prefix,
+    ).rebuild()
+    dashboard_documents = TriageDashboardProjection(store=store).rebuild()
+    ideas_created = 0
+    ideas_skipped = 0
+    if args.scaffold_ideas:
+        scaffold = IdeaScaffolder(
+            packets=packets,
+            notes=FileSystemHumanNoteStore(vault_root / "ideas"),
+        ).scaffold()
+        ideas_created = scaffold.created
+        ideas_skipped = scaffold.skipped
     output = {
         "documents": documents,
         "overview_documents": overview_documents,
+        "collection_documents": collection_documents,
+        "dashboard_documents": dashboard_documents,
+        "ideas_created": ideas_created,
+        "ideas_skipped": ideas_skipped,
         "generated_root": str(generated_root / SourceCardProjection.NAMESPACE),
         "overview_root": str(generated_root / ObsidianOverviewProjection.NAMESPACE),
+        "collections_root": str(generated_root / CollectionIndexProjection.NAMESPACE),
+        "dashboards_root": str(generated_root / TriageDashboardProjection.NAMESPACE),
+        "ideas_root": str(vault_root / "ideas"),
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _scaffold_ideas(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    result = IdeaScaffolder(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        notes=FileSystemHumanNoteStore(vault_root / "ideas"),
+    ).scaffold()
+    output = {
+        "created": result.created,
+        "skipped": result.skipped,
+        "created_paths": list(result.created_paths),
+        "ideas_root": str(vault_root / "ideas"),
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
@@ -725,6 +817,7 @@ def _export_schema(args: argparse.Namespace) -> int:
         "ocr-backlog-report": OcrBacklogReportDocument,
         "ocr-evaluation": OcrEvaluationSet,
         "ocr-evaluation-report": OcrEvaluationReport,
+        "collection-capture": CollectionCaptureDocument,
     }
     schema = models[args.contract].model_json_schema()
     print(json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True))
@@ -854,6 +947,17 @@ def _build_parser() -> argparse.ArgumentParser:
     slides.add_argument("--min-free-mb", type=int, default=512)
     slides.set_defaults(handler=_tiktok_slides)
 
+    import_collections = subcommands.add_parser(
+        "import-collections",
+        help="archive collection-capture/v1 metadata with resumable bounded workers",
+    )
+    import_collections.add_argument("file", help="path to collection-capture/v1 JSON")
+    import_collections.add_argument("--archive-dir", default="data/archive")
+    import_collections.add_argument("--control-db", default="data/control/capture.sqlite3")
+    import_collections.add_argument("--concurrency", type=int, default=4)
+    import_collections.add_argument("--limit", type=int, help="process at most N unique tasks")
+    import_collections.set_defaults(handler=_import_collections)
+
     ocr = subcommands.add_parser(
         "ocr-capture",
         help="extract searchable text from original images in one capture",
@@ -903,7 +1007,20 @@ def _build_parser() -> argparse.ArgumentParser:
     project.add_argument("--archive-dir", default="data/archive")
     project.add_argument("--derived-dir", default="data/derived")
     project.add_argument("--vault", default="data/vault")
+    project.add_argument(
+        "--scaffold-ideas",
+        action="store_true",
+        help="also create missing human idea notes under <vault>/ideas",
+    )
     project.set_defaults(handler=_project_obsidian)
+
+    scaffold_ideas = subcommands.add_parser(
+        "scaffold-ideas",
+        help="create missing human idea notes under <vault>/ideas without overwriting",
+    )
+    scaffold_ideas.add_argument("--archive-dir", default="data/archive")
+    scaffold_ideas.add_argument("--vault", default="data/vault")
+    scaffold_ideas.set_defaults(handler=_scaffold_ideas)
 
     evidence_pack = subcommands.add_parser(
         "evidence-pack",
@@ -972,6 +1089,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "ocr-backlog-report",
             "ocr-evaluation",
             "ocr-evaluation-report",
+            "collection-capture",
         ),
     )
     schema.set_defaults(handler=_export_schema)

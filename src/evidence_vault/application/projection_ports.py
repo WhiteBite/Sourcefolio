@@ -14,3 +14,9 @@ class ProjectionStore(Protocol):
     ) -> int:
         """Replace only a machine-owned namespace and return its document count."""
         ...
+
+
+class HumanNoteStore(Protocol):
+    def create_if_absent(self, relative_path: str, content: str) -> bool:
+        """Create a human-owned note only when absent; return True if created."""
+        ...

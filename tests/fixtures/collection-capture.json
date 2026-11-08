@@ -1,0 +1,114 @@
+{
+  "schema_version": "collection-capture/v1",
+  "captured_at": "2026-11-08T10:00:00.000Z",
+  "platform": "tiktok",
+  "account": {
+    "unique_id": "example",
+    "sec_uid": "MS4wLjABAAAAsynthetic",
+    "uid": "7000000000000000001"
+  },
+  "collections": [
+    {
+      "collection_id": "7001",
+      "name": "Нейронки",
+      "expected": 2,
+      "actual": 2,
+      "items": [
+        {
+          "video_id": "7300000000000000001",
+          "type": "video",
+          "url": "https://www.tiktok.com/@one/video/7300000000000000001",
+          "author": "one",
+          "desc": "первое видео",
+          "created_at": "2026-01-01T12:00:00.000Z",
+          "stats": {
+            "plays": 10,
+            "likes": 5,
+            "comments": 1,
+            "shares": 0
+          },
+          "images": [],
+          "cover": "https://cdn.example/cover-1.jpg",
+          "comments": [
+            {
+              "id": "c1",
+              "text": "класс",
+              "author": "bob",
+              "likes": 2,
+              "created_at": "2026-01-02T00:00:00.000Z"
+            }
+          ],
+          "synthetic_extra_field": {
+            "preserved": true
+          }
+        },
+        {
+          "video_id": "7300000000000000002",
+          "type": "slideshow",
+          "url": "https://www.tiktok.com/@two/photo/7300000000000000002",
+          "author": "two",
+          "desc": "слайды",
+          "created_at": null,
+          "stats": {
+            "plays": null,
+            "likes": null,
+            "comments": null,
+            "shares": null
+          },
+          "images": [
+            "https://cdn.example/slide-1.jpg",
+            "https://cdn.example/slide-2.jpg"
+          ],
+          "cover": null,
+          "comments": []
+        }
+      ]
+    },
+    {
+      "collection_id": "7002",
+      "name": "Идеи",
+      "expected": 2,
+      "actual": 2,
+      "items": [
+        {
+          "video_id": "7300000000000000001",
+          "type": "video",
+          "url": "https://www.tiktok.com/@one/video/7300000000000000001",
+          "author": "one",
+          "desc": "первое видео",
+          "created_at": "2026-01-01T12:00:00.000Z",
+          "stats": {
+            "plays": 10,
+            "likes": 5,
+            "comments": 1,
+            "shares": 0
+          },
+          "images": [],
+          "cover": "https://cdn.example/cover-1.jpg",
+          "comments": []
+        },
+        {
+          "video_id": "7300000000000000003",
+          "type": "video",
+          "url": "not-a-url",
+          "author": "three",
+          "desc": "битая ссылка",
+          "created_at": null,
+          "stats": {},
+          "images": [],
+          "cover": null,
+          "comments": []
+        }
+      ]
+    }
+  ],
+  "run": {
+    "started_at": "2026-11-08T09:59:00.000Z",
+    "finished_at": "2026-11-08T10:00:00.000Z",
+    "mode": "full",
+    "totals": {
+      "collections": 2,
+      "items": 4
+    }
+  }
+}
