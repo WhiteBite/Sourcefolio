@@ -71,7 +71,24 @@ def mermaid_id(kind: str, key: str) -> str:
 
 def mermaid_label(value: str) -> str:
     cleaned = " ".join(value.split())
-    for character in ('"', "[", "]", ";", "`", "#", "%", "<", ">", "(", ")"):
+    for character in (
+        '"',
+        "[",
+        "]",
+        ";",
+        "`",
+        "#",
+        "%",
+        "<",
+        ">",
+        "(",
+        ")",
+        "{",
+        "}",
+        "&",
+        "|",
+        "\\",
+    ):
         cleaned = cleaned.replace(character, "")
     return cleaned
 
