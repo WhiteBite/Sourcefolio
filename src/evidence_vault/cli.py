@@ -7,7 +7,8 @@ import os
 import sys
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -51,7 +52,14 @@ from evidence_vault.application.capture_report import (
 from evidence_vault.application.capture_types import BatchItemStatus, RetryPolicy
 from evidence_vault.application.collection_index import CollectionIndexProjection
 from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from evidence_vault.application.context_brief import ContextBriefBuilder
 from evidence_vault.application.dashboards import TriageDashboardProjection
+from evidence_vault.application.decisions import (
+    DecisionDraft,
+    DecisionIndexProjection,
+    DecisionScaffolder,
+    DecisionSearch,
+)
 from evidence_vault.application.evidence_pack import (
     EvidencePackBuilder,
     EvidencePackDocument,
@@ -62,6 +70,7 @@ from evidence_vault.application.evidence_pack_integrity import (
     EvidencePackIntegrityReport,
     EvidencePackVerifier,
 )
+from evidence_vault.application.knowledge_graph import KnowledgeGraphProjection
 from evidence_vault.application.llm_catalog import LlmCatalogQuery, LlmCatalogRunner
 from evidence_vault.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
 from evidence_vault.application.obsidian_views import ObsidianOverviewProjection
@@ -81,7 +90,9 @@ from evidence_vault.application.project_fit import (
     ProjectFitRunner,
     parse_projects,
 )
+from evidence_vault.application.project_profiles import ProjectProfileScaffolder
 from evidence_vault.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
+from evidence_vault.application.repo_nodes import RepoNodeProjection
 from evidence_vault.application.search import SearchIndexBuilder
 from evidence_vault.application.search_evaluation import SearchEvaluationSet, SearchEvaluator
 from evidence_vault.application.slides_fetch import FetchSlidesQuery, FetchSlidesRunner
@@ -185,6 +196,13 @@ def _load_projects(path: Path) -> tuple[Project, ...]:
     if not isinstance(data, dict):
         raise ValueError("projects file must contain a JSON object")
     return parse_projects(data)
+
+
+def _with_profiles(projects: tuple[Project, ...], profiles_root: Path) -> tuple[Project, ...]:
+    notes = FileSystemHumanNoteStore(profiles_root)
+    return tuple(
+        replace(project, profile=notes.read(f"{project.id}.md") or "") for project in projects
+    )
 
 
 def _archive_capture(args: argparse.Namespace) -> int:
@@ -714,11 +732,12 @@ def _ocr_evaluate(args: argparse.Namespace) -> int:
 
 def _project_obsidian(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
     vault_root = Path(args.vault).resolve()
     generated_root = vault_root / "_generated" / "evidence-vault"
     packets = FileSystemSourcePacketRepository(archive_root)
     store = FileSystemProjectionStore(generated_root)
-    extractions = FileSystemExtractionRepository(Path(args.derived_dir).resolve())
+    extractions = FileSystemExtractionRepository(derived_root)
     projection = SourceCardProjection(
         packets=packets,
         artifacts=FileSystemArtifactStore(archive_root),
@@ -738,6 +757,24 @@ def _project_obsidian(args: argparse.Namespace) -> int:
         generated_prefix=generated_prefix,
     ).rebuild()
     dashboard_documents = TriageDashboardProjection(store=store).rebuild()
+    project_fit_index = FileSystemProjectFitIndex(derived_root)
+    repo_node_documents = RepoNodeProjection(
+        packets=packets,
+        store=store,
+        repo_cache=FileSystemLlmCache(derived_root, namespace=RepoCatalogRunner.NAMESPACE),
+        project_fit_index=project_fit_index,
+        generated_prefix=generated_prefix,
+    ).rebuild()
+    graph_documents = KnowledgeGraphProjection(
+        packets=packets,
+        store=store,
+        project_fit_index=project_fit_index,
+        generated_prefix=generated_prefix,
+    ).rebuild()
+    decision_documents = DecisionIndexProjection(
+        notes=FileSystemHumanNoteStore(vault_root / "decisions"),
+        store=store,
+    ).rebuild()
     ideas_created = 0
     ideas_skipped = 0
     if args.scaffold_ideas:
@@ -752,15 +789,94 @@ def _project_obsidian(args: argparse.Namespace) -> int:
         "overview_documents": overview_documents,
         "collection_documents": collection_documents,
         "dashboard_documents": dashboard_documents,
+        "repo_node_documents": repo_node_documents,
+        "graph_documents": graph_documents,
+        "decision_documents": decision_documents,
         "ideas_created": ideas_created,
         "ideas_skipped": ideas_skipped,
         "generated_root": str(generated_root / SourceCardProjection.NAMESPACE),
         "overview_root": str(generated_root / ObsidianOverviewProjection.NAMESPACE),
         "collections_root": str(generated_root / CollectionIndexProjection.NAMESPACE),
         "dashboards_root": str(generated_root / TriageDashboardProjection.NAMESPACE),
+        "entities_root": str(generated_root / RepoNodeProjection.NAMESPACE),
+        "graph_root": str(generated_root / KnowledgeGraphProjection.NAMESPACE),
+        "decisions_root": str(generated_root / DecisionIndexProjection.NAMESPACE),
         "ideas_root": str(vault_root / "ideas"),
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _scaffold_projects(args: argparse.Namespace) -> int:
+    projects = _load_projects(Path(args.projects))
+    vault_root = Path(args.vault).resolve()
+    result = ProjectProfileScaffolder(
+        FileSystemHumanNoteStore(vault_root / "projects"),
+    ).scaffold(projects)
+    output = {
+        "created": result.created,
+        "skipped": result.skipped,
+        "created_paths": list(result.created_paths),
+        "projects_root": str(vault_root / "projects"),
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _decision_new(args: argparse.Namespace) -> int:
+    vault_root = Path(args.vault).resolve()
+    draft = DecisionDraft(
+        title=args.title,
+        problem=args.problem,
+        options=tuple(args.option or ()),
+        chosen=args.chosen,
+        rationale=args.rationale,
+        follow_ups=tuple(args.follow_up or ()),
+        projects=tuple(args.project or ()),
+        tags=tuple(args.tag or ()),
+        date=args.date or datetime.now(UTC).date().isoformat(),
+    )
+    created = DecisionScaffolder(
+        FileSystemHumanNoteStore(vault_root / "decisions"),
+    ).scaffold(draft)
+    output = {
+        "created": created,
+        "path": DecisionScaffolder.path_for(draft),
+        "decisions_root": str(vault_root / "decisions"),
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _decision_search(args: argparse.Namespace) -> int:
+    vault_root = Path(args.vault).resolve()
+    hits = DecisionSearch(
+        FileSystemHumanNoteStore(vault_root / "decisions"),
+    ).search(args.query, args.limit)
+    output = {
+        "count": len(hits),
+        "hits": [asdict(hit) for hit in hits],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _context(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    builder = ContextBriefBuilder(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        project_fit_index=FileSystemProjectFitIndex(derived_root),
+        projects=_load_projects(Path(args.projects)),
+        profiles=FileSystemHumanNoteStore(vault_root / "projects"),
+        decisions=FileSystemHumanNoteStore(vault_root / "decisions"),
+        ideas=FileSystemHumanNoteStore(vault_root / "ideas"),
+    )
+    if args.context_format == "markdown":
+        print(builder.to_markdown())
+    else:
+        print(builder.to_json())
     return 0
 
 
@@ -956,6 +1072,8 @@ def _project_fit_progress(position: int, total: int, status: str) -> None:
 
 def _project_fit(args: argparse.Namespace) -> int:
     projects = _load_projects(Path(args.projects))
+    if args.profiles:
+        projects = _with_profiles(projects, Path(args.profiles).resolve())
     config = resolve_llm_config(
         base_url=args.base_url,
         api_key=args.api_key,
@@ -1428,6 +1546,55 @@ def _build_parser() -> argparse.ArgumentParser:
     scaffold_ideas.add_argument("--vault", default="data/vault")
     scaffold_ideas.set_defaults(handler=_scaffold_ideas)
 
+    scaffold_projects = subcommands.add_parser(
+        "scaffold-projects",
+        help="create missing human project profile notes under <vault>/projects",
+    )
+    scaffold_projects.add_argument("--vault", default="data/vault")
+    scaffold_projects.add_argument("--projects", default="data/projects.json")
+    scaffold_projects.set_defaults(handler=_scaffold_projects)
+
+    decision_new = subcommands.add_parser(
+        "decision-new",
+        help="create a human decision note under <vault>/decisions without overwriting",
+    )
+    decision_new.add_argument("--vault", default="data/vault")
+    decision_new.add_argument("--title", required=True)
+    decision_new.add_argument("--problem", default="")
+    decision_new.add_argument("--option", action="append")
+    decision_new.add_argument("--chosen", default="")
+    decision_new.add_argument("--rationale", default="")
+    decision_new.add_argument("--follow-up", action="append")
+    decision_new.add_argument("--project", action="append")
+    decision_new.add_argument("--tag", action="append")
+    decision_new.add_argument("--date", help="ISO date; defaults to today in UTC")
+    decision_new.set_defaults(handler=_decision_new)
+
+    decision_search = subcommands.add_parser(
+        "decision-search",
+        help="search human decision notes by terms",
+    )
+    decision_search.add_argument("query")
+    decision_search.add_argument("--vault", default="data/vault")
+    decision_search.add_argument("--limit", type=int, default=20)
+    decision_search.set_defaults(handler=_decision_search)
+
+    context = subcommands.add_parser(
+        "context",
+        help="build a session context brief from projects, matches, and decisions",
+    )
+    context.add_argument("--vault", default="data/vault")
+    context.add_argument("--derived-dir", default="data/derived")
+    context.add_argument("--archive-dir", default="data/archive")
+    context.add_argument("--projects", default="data/projects.json")
+    context.add_argument(
+        "--format",
+        dest="context_format",
+        choices=("json", "markdown"),
+        default="json",
+    )
+    context.set_defaults(handler=_context)
+
     llm_enrich = subcommands.add_parser(
         "llm-enrich",
         help="enrich a collection's latest captures with an OpenAI-compatible chat model",
@@ -1488,6 +1655,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="collection name; repeat to scan several; omit to scan every source",
     )
     project_fit.add_argument("--projects", default="data/projects.json")
+    project_fit.add_argument(
+        "--profiles",
+        help="directory of per-project profile notes named <project.id>.md",
+    )
     project_fit.add_argument("--archive-dir", default="data/archive")
     project_fit.add_argument("--derived-dir", default="data/derived")
     project_fit.add_argument("--vault", default="data/vault")

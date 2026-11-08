@@ -40,8 +40,15 @@ def test_obsidian_projection_and_search_cli(tmp_path: Path, capsys) -> None:
     )
     projection = json.loads(capsys.readouterr().out)
     assert projection["documents"] == 3
+    assert projection["repo_node_documents"] == 0
+    assert projection["graph_documents"] == 1
+    assert projection["decision_documents"] == 1
     cards = list((vault / "_generated" / "evidence-vault" / "source-cards").rglob("*.md"))
     assert len(cards) == 3
+    generated = vault / "_generated" / "evidence-vault"
+    assert (generated / "entities").is_dir()
+    assert (generated / "graph" / "index.md").is_file()
+    assert (generated / "decisions" / "index.md").is_file()
 
     assert main(["search", "Нейронки", "--archive-dir", str(archive)]) == 0
     search = json.loads(capsys.readouterr().out)

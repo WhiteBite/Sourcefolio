@@ -175,3 +175,16 @@ def test_project_fit_cli_fails_on_missing_projects(tmp_path: Path, capsys, monke
 
     assert excinfo.value.code == 2
     assert "projects file not found" in capsys.readouterr().err
+
+
+def test_project_fit_cli_profiles_reach_prompt(tmp_path: Path, capsys, monkeypatch) -> None:
+    add_packet(tmp_path / "archive", "one", desc="trading bot idea")
+    write_projects(tmp_path / "projects.json")
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    (profiles / "midas.md").write_text("PROFILE-MARKER-12345", encoding="utf-8")
+    monkeypatch.setattr(cli, "OpenAIChatClient", FakeChatClient)
+
+    assert main(arguments(tmp_path, "--profiles", str(profiles), "--dry-run")) == 0
+    captured = capsys.readouterr()
+    assert "PROFILE-MARKER-12345" in captured.err

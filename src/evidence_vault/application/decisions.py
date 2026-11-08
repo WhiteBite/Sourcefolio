@@ -72,9 +72,12 @@ class DecisionScaffolder:
     def __init__(self, notes: HumanNoteStore) -> None:
         self._notes = notes
 
+    @staticmethod
+    def path_for(draft: DecisionDraft) -> str:
+        return f"{draft.date}-{slugify(draft.title)}.md"
+
     def scaffold(self, draft: DecisionDraft) -> bool:
-        path = f"{draft.date}-{slugify(draft.title)}.md"
-        return self._notes.create_if_absent(path, self._render(draft))
+        return self._notes.create_if_absent(self.path_for(draft), self._render(draft))
 
     @staticmethod
     def _render(draft: DecisionDraft) -> str:
