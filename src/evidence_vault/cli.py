@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from collections.abc import Sequence
+import os
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -17,7 +19,9 @@ from evidence_vault.adapters.filesystem import (
 )
 from evidence_vault.adapters.filesystem.atomic import ImmutableStoreConflict, write_immutable_bytes
 from evidence_vault.adapters.filesystem.extractions import FileSystemExtractionRepository
+from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
 from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
+from evidence_vault.adapters.llm import OpenAIChatClient, OpenAIChatConfig
 from evidence_vault.adapters.metadata_only import MetadataOnlyCaptureAdapter
 from evidence_vault.adapters.ocr.tesseract import TesseractConfig, TesseractOcrAdapter
 from evidence_vault.adapters.sqlite import SQLiteCaptureState
@@ -51,6 +55,7 @@ from evidence_vault.application.evidence_pack_integrity import (
     EvidencePackIntegrityReport,
     EvidencePackVerifier,
 )
+from evidence_vault.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
 from evidence_vault.application.obsidian_views import ObsidianOverviewProjection
 from evidence_vault.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
 from evidence_vault.application.ocr_backlog_report import (
@@ -100,6 +105,58 @@ class CaptureManifest(ContractModel):
     collections: tuple[CollectionMembership, ...] = ()
     limitations: tuple[str, ...] = ()
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+DEFAULT_LLM_BASE_URL = "https://api.reformboss.com/v1"
+DEFAULT_LLM_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash"
+DEFAULT_LLM_CONFIG_PATH = Path("data/llm.json")
+
+
+@dataclass(frozen=True)
+class LlmConfig:
+    base_url: str
+    api_key: str
+    model: str
+
+
+def _read_llm_config_file(path: Path) -> Mapping[str, str]:
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read LLM config file: {path}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("LLM config file must contain a JSON object")
+    return {key: value for key, value in data.items() if isinstance(value, str)}
+
+
+def resolve_llm_config(
+    *,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+    config_path: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> LlmConfig:
+    environment = os.environ if environ is None else environ
+    path = DEFAULT_LLM_CONFIG_PATH if config_path is None else config_path
+    file_config = _read_llm_config_file(path)
+    resolved_base_url = (
+        base_url
+        or environment.get("EV_LLM_BASE_URL")
+        or file_config.get("base_url")
+        or DEFAULT_LLM_BASE_URL
+    )
+    resolved_api_key = api_key or environment.get("EV_LLM_API_KEY") or file_config.get("api_key")
+    resolved_model = (
+        model or environment.get("EV_LLM_MODEL") or file_config.get("model") or DEFAULT_LLM_MODEL
+    )
+    if not resolved_api_key:
+        raise ValueError(
+            "LLM api_key is required: pass --api-key, set EV_LLM_API_KEY, or add data/llm.json"
+        )
+    return LlmConfig(base_url=resolved_base_url, api_key=resolved_api_key, model=resolved_model)
 
 
 def _archive_capture(args: argparse.Namespace) -> int:
@@ -655,6 +712,63 @@ def _scaffold_ideas(args: argparse.Namespace) -> int:
     return 0
 
 
+def _llm_enrich(args: argparse.Namespace) -> int:
+    config = resolve_llm_config(
+        base_url=args.base_url,
+        api_key=args.api_key,
+        model=args.model,
+    )
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    generated_root = Path(args.vault).resolve() / "_generated" / "evidence-vault"
+    report = LlmEnrichRunner(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        client=OpenAIChatClient(
+            OpenAIChatConfig(
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model=config.model,
+            )
+        ),
+        cache=FileSystemLlmCache(derived_root),
+        model=config.model,
+    ).run(
+        LlmEnrichQuery(
+            collection=args.collection,
+            limit=args.limit,
+            refresh=args.refresh,
+            dry_run=args.dry_run,
+        )
+    )
+    note_path: str | None = None
+    if report.note is not None:
+        FileSystemProjectionStore(generated_root).replace_namespace(
+            LlmEnrichRunner.NAMESPACE,
+            [report.note],
+        )
+        note_path = str(generated_root / LlmEnrichRunner.NAMESPACE / report.note.path)
+    output = {
+        "collection": report.collection,
+        "model": report.model,
+        "processed": report.processed,
+        "skipped_cached": report.skipped_cached,
+        "failed": report.failed,
+        "dry_run": report.dry_run,
+        "note_path": note_path,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "status": item.status,
+                "error": item.error,
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
+
+
 def _evidence_pack(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     artifacts = FileSystemArtifactStore(archive_root)
@@ -1021,6 +1135,22 @@ def _build_parser() -> argparse.ArgumentParser:
     scaffold_ideas.add_argument("--archive-dir", default="data/archive")
     scaffold_ideas.add_argument("--vault", default="data/vault")
     scaffold_ideas.set_defaults(handler=_scaffold_ideas)
+
+    llm_enrich = subcommands.add_parser(
+        "llm-enrich",
+        help="enrich a collection's latest captures with an OpenAI-compatible chat model",
+    )
+    llm_enrich.add_argument("--collection", required=True)
+    llm_enrich.add_argument("--archive-dir", default="data/archive")
+    llm_enrich.add_argument("--derived-dir", default="data/derived")
+    llm_enrich.add_argument("--vault", default="data/vault")
+    llm_enrich.add_argument("--limit", type=int, help="process at most N captures")
+    llm_enrich.add_argument("--refresh", action="store_true", help="ignore the cache and re-query")
+    llm_enrich.add_argument("--dry-run", action="store_true", help="report without writing")
+    llm_enrich.add_argument("--base-url")
+    llm_enrich.add_argument("--api-key")
+    llm_enrich.add_argument("--model")
+    llm_enrich.set_defaults(handler=_llm_enrich)
 
     evidence_pack = subcommands.add_parser(
         "evidence-pack",
