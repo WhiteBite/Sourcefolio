@@ -168,6 +168,46 @@ def llm_enrich(
 
 
 @server.tool()
+def llm_catalog(
+    collection: str,
+    archive_dir: str = "data/archive",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+    limit: int | None = None,
+    refresh: bool = False,
+    dry_run: bool = False,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> str:
+    """Build a deduplicated catalog of works from a collection's latest captures."""
+    arguments = [
+        "llm-catalog",
+        "--collection",
+        collection,
+        "--archive-dir",
+        archive_dir,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+    ]
+    if limit is not None:
+        arguments += ["--limit", str(limit)]
+    if refresh:
+        arguments.append("--refresh")
+    if dry_run:
+        arguments.append("--dry-run")
+    if base_url is not None:
+        arguments += ["--base-url", base_url]
+    if api_key is not None:
+        arguments += ["--api-key", api_key]
+    if model is not None:
+        arguments += ["--model", model]
+    return _run(arguments)
+
+
+@server.tool()
 def archive_audit(archive_dir: str = "data/archive", verify_bytes: bool = False) -> str:
     """Verify artifact references and optionally hash all archived bytes."""
     arguments = ["archive-audit", "--archive-dir", archive_dir]

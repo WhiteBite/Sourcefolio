@@ -55,6 +55,7 @@ from evidence_vault.application.evidence_pack_integrity import (
     EvidencePackIntegrityReport,
     EvidencePackVerifier,
 )
+from evidence_vault.application.llm_catalog import LlmCatalogQuery, LlmCatalogRunner
 from evidence_vault.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
 from evidence_vault.application.obsidian_views import ObsidianOverviewProjection
 from evidence_vault.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
@@ -771,6 +772,67 @@ def _llm_enrich(args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def _llm_catalog(args: argparse.Namespace) -> int:
+    config = resolve_llm_config(
+        base_url=args.base_url,
+        api_key=args.api_key,
+        model=args.model,
+    )
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "evidence-vault"
+    report = LlmCatalogRunner(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        client=OpenAIChatClient(
+            OpenAIChatConfig(
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model=config.model,
+            )
+        ),
+        cache=FileSystemLlmCache(derived_root, namespace=LlmCatalogRunner.NAMESPACE),
+        model=config.model,
+        generated_prefix=generated_root.relative_to(vault_root).as_posix(),
+    ).run(
+        LlmCatalogQuery(
+            collection=args.collection,
+            limit=args.limit,
+            refresh=args.refresh,
+            dry_run=args.dry_run,
+        )
+    )
+    note_path: str | None = None
+    if report.note is not None:
+        FileSystemProjectionStore(generated_root).replace_namespace(
+            LlmCatalogRunner.NAMESPACE,
+            [report.note],
+        )
+        note_path = str(generated_root / LlmCatalogRunner.NAMESPACE / report.note.path)
+    output = {
+        "collection": report.collection,
+        "model": report.model,
+        "processed": report.processed,
+        "skipped_cached": report.skipped_cached,
+        "unresolved": report.unresolved,
+        "failed": report.failed,
+        "catalog_size": report.catalog_size,
+        "dry_run": report.dry_run,
+        "note_path": note_path,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "status": item.status,
+                "error": item.error,
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
+
+
 def _evidence_pack(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     artifacts = FileSystemArtifactStore(archive_root)
@@ -1153,6 +1215,22 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_enrich.add_argument("--api-key")
     llm_enrich.add_argument("--model")
     llm_enrich.set_defaults(handler=_llm_enrich)
+
+    llm_catalog = subcommands.add_parser(
+        "llm-catalog",
+        help="build a deduplicated catalog of works from a collection's latest captures",
+    )
+    llm_catalog.add_argument("--collection", required=True)
+    llm_catalog.add_argument("--archive-dir", default="data/archive")
+    llm_catalog.add_argument("--derived-dir", default="data/derived")
+    llm_catalog.add_argument("--vault", default="data/vault")
+    llm_catalog.add_argument("--limit", type=int, help="process at most N captures")
+    llm_catalog.add_argument("--refresh", action="store_true", help="ignore the cache and re-query")
+    llm_catalog.add_argument("--dry-run", action="store_true", help="report without writing")
+    llm_catalog.add_argument("--base-url")
+    llm_catalog.add_argument("--api-key")
+    llm_catalog.add_argument("--model")
+    llm_catalog.set_defaults(handler=_llm_catalog)
 
     evidence_pack = subcommands.add_parser(
         "evidence-pack",

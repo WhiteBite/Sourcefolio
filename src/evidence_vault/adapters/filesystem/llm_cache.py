@@ -10,8 +10,8 @@ from evidence_vault.adapters.filesystem.atomic import write_atomic_bytes
 
 
 class FileSystemLlmCache:
-    def __init__(self, derived_root: Path) -> None:
-        self._root = derived_root / "llm"
+    def __init__(self, derived_root: Path, namespace: str = "llm") -> None:
+        self._root = derived_root / namespace
 
     def _path(self, key: str) -> Path:
         return self._root / f"{key}.json"
