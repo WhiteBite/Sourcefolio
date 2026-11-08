@@ -254,6 +254,19 @@ def test_repo_nodes_project_link_matches_written_brief_on_slug_collision(tmp_pat
     assert project_link_target(content, "midas2") == brief.path.removesuffix(".md")
 
 
+def test_repo_nodes_project_link_uses_persisted_slug_map(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc="https://github.com/owner/repo")
+    write_cache(tmp_path, "owner/repo")
+    store = FakeStore()
+    payload = fit_payload(packet, "pi")
+    payload["project_slugs"] = {"pi": "proyecto-ilimitado"}
+
+    projection(tmp_path, store, fit=FakeFitIndex(payload)).rebuild()
+
+    content = store.documents[0].content
+    assert "[[_generated/evidence-vault/projects/proyecto-ilimitado|pi]]" in content
+
+
 def test_repo_nodes_project_link_matches_written_brief_without_projects(tmp_path: Path) -> None:
     add_packet(tmp_path, "one", desc="https://github.com/owner/repo")
     write_cache(tmp_path, "owner/repo")

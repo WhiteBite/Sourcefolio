@@ -17,6 +17,7 @@ from evidence_vault.application.project_fit import (
     Project,
     ProjectFitIndexEntry,
     ProjectFitIndexStore,
+    index_project_slugs,
     parse_index,
     project_slugs,
 )
@@ -75,8 +76,10 @@ class RepoNodeProjection:
         self._clock = clock
 
     def rebuild(self) -> int:
-        fit = parse_index(self._project_fit_index.load())
-        documents = [self._render(ref, packets, fit) for ref, packets in self._collect()]
+        payload = self._project_fit_index.load()
+        fit = parse_index(payload)
+        slugs = index_project_slugs(payload)
+        documents = [self._render(ref, packets, fit, slugs) for ref, packets in self._collect()]
         return self._store.replace_namespace(self.NAMESPACE, documents)
 
     def _collect(self) -> list[tuple[RepoRef, tuple[SourcePacket, ...]]]:
@@ -117,8 +120,8 @@ class RepoNodeProjection:
             ids.update(match.project_id for match in entry.matches if match.project_id)
         return sorted(ids)
 
-    def _project_link(self, project_id: str) -> str:
-        slug = self._project_slugs.get(project_id, slugify(project_id))
+    def _project_link(self, project_id: str, slugs: Mapping[str, str]) -> str:
+        slug = slugs.get(project_id) or self._project_slugs.get(project_id) or slugify(project_id)
         target = f"{self._generated_prefix}/projects/{slug}"
         return f"[[{target}|{wikilink_alias(project_id)}]]"
 
@@ -127,6 +130,7 @@ class RepoNodeProjection:
         ref: RepoRef,
         packets: tuple[SourcePacket, ...],
         fit: Mapping[str, ProjectFitIndexEntry],
+        slugs: Mapping[str, str],
     ) -> GeneratedDocument:
         metadata = self._metadata(ref)
         project_ids = self._project_ids(packets, fit)
@@ -184,7 +188,7 @@ class RepoNodeProjection:
         lines.append("")
         lines.extend([f"## Projects ({len(project_ids)})", ""])
         if project_ids:
-            lines.extend(f"- {self._project_link(project_id)}" for project_id in project_ids)
+            lines.extend(f"- {self._project_link(project_id, slugs)}" for project_id in project_ids)
         else:
             lines.append("None.")
         lines.append("")
