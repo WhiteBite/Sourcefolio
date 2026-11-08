@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import html
 from collections.abc import Mapping
 
@@ -57,3 +58,23 @@ def generated_frontmatter(
 
 def generated_callout(text: str) -> list[str]:
     return ["> [!note] Generated view", f"> {text}"]
+
+
+def mermaid_id(kind: str, key: str) -> str:
+    safe_kind = "".join(
+        character if character.isascii() and (character.isalnum() or character == "_") else "_"
+        for character in kind
+    )
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return f"{safe_kind}_{digest}"
+
+
+def mermaid_label(value: str) -> str:
+    cleaned = " ".join(value.split())
+    for character in ('"', "[", "]"):
+        cleaned = cleaned.replace(character, "")
+    return cleaned
+
+
+def note_tags(kind: str) -> list[str]:
+    return ["evidence-vault", f"evidence-vault/{kind}"]

@@ -7,6 +7,9 @@ from evidence_vault.application.markdown import (
     escape,
     generated_callout,
     generated_frontmatter,
+    mermaid_id,
+    mermaid_label,
+    note_tags,
     wikilink_alias,
 )
 from evidence_vault.domain.common import ActorKind, Provenance
@@ -99,3 +102,29 @@ def test_generated_callout_returns_note_lines() -> None:
         "> [!note] Generated view",
         "> Rebuildable.",
     ]
+
+
+def test_mermaid_id_is_sanitized() -> None:
+    node_id = mermaid_id("repo", "owner/name.py")
+
+    assert node_id.startswith("repo_")
+    for character in ("/", " ", ".", ":", "-"):
+        assert character not in node_id
+
+
+def test_mermaid_id_is_deterministic_and_distinct() -> None:
+    assert mermaid_id("repo", "owner/name.py") == mermaid_id("repo", "owner/name.py")
+    assert mermaid_id("repo", "owner/name.py") != mermaid_id("repo", "owner/other.py")
+    assert mermaid_id("repo", "owner/name.py") != mermaid_id("entity", "owner/name.py")
+
+
+def test_mermaid_label_strips_breaking_characters() -> None:
+    label = mermaid_label('a"b]c\nd')
+
+    assert '"' not in label
+    assert "]" not in label
+    assert "\n" not in label
+
+
+def test_note_tags_returns_kind_scoped_tags() -> None:
+    assert note_tags("repo") == ["evidence-vault", "evidence-vault/repo"]
