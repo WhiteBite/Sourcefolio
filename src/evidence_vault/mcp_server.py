@@ -339,5 +339,83 @@ def schema(contract: str) -> str:
     return _run(["schema", contract])
 
 
+@server.tool()
+def context(
+    vault: str = "data/vault",
+    derived_dir: str = "data/derived",
+    archive_dir: str = "data/archive",
+    projects: str = "data/projects.json",
+    format: str = "json",
+) -> str:
+    """Build a session context brief from projects, matches, and decisions."""
+    return _run(
+        [
+            "context",
+            "--vault",
+            vault,
+            "--derived-dir",
+            derived_dir,
+            "--archive-dir",
+            archive_dir,
+            "--projects",
+            projects,
+            "--format",
+            format,
+        ]
+    )
+
+
+@server.tool()
+def scaffold_projects(vault: str = "data/vault", projects: str = "data/projects.json") -> str:
+    """Create missing human project profile notes under <vault>/projects."""
+    return _run(["scaffold-projects", "--vault", vault, "--projects", projects])
+
+
+@server.tool()
+def decision_new(
+    vault: str = "data/vault",
+    title: str = "",
+    problem: str = "",
+    options: list[str] | None = None,
+    chosen: str = "",
+    rationale: str = "",
+    follow_ups: list[str] | None = None,
+    projects_: list[str] | None = None,
+    tags: list[str] | None = None,
+    date: str = "",
+) -> str:
+    """Create a human decision note under <vault>/decisions without overwriting."""
+    arguments = [
+        "decision-new",
+        "--vault",
+        vault,
+        "--title",
+        title,
+        "--problem",
+        problem,
+        "--chosen",
+        chosen,
+        "--rationale",
+        rationale,
+    ]
+    for option in options or []:
+        arguments += ["--option", option]
+    for follow_up in follow_ups or []:
+        arguments += ["--follow-up", follow_up]
+    for project in projects_ or []:
+        arguments += ["--project", project]
+    for tag in tags or []:
+        arguments += ["--tag", tag]
+    if date:
+        arguments += ["--date", date]
+    return _run(arguments)
+
+
+@server.tool()
+def decision_search(query: str, vault: str = "data/vault", limit: int = 20) -> str:
+    """Search human decision notes by terms."""
+    return _run(["decision-search", query, "--vault", vault, "--limit", str(limit)])
+
+
 def main() -> None:
     server.run()
