@@ -32,6 +32,7 @@ def test_project_obsidian_leaves_sibling_namespaces_and_human_notes_untouched(
     seeded = {
         generated / "repos" / "sentinel.md": "# repos sentinel\n",
         generated / "llm" / "sentinel.md": "# llm sentinel\n",
+        generated / "projects" / "sentinel-brief.md": "# projects sentinel\n",
         vault / "decisions" / "2026-01-01-keep.md": "# human decision\n",
         vault / "ideas" / "src_keep.md": "# human idea\n",
     }

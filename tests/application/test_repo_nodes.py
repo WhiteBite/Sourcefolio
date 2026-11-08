@@ -151,6 +151,14 @@ class FakeChatClient:
         return json.dumps(self._payload)
 
 
+def project_link_target(content: str, alias: str) -> str:
+    marker = f"|{alias}]]"
+    for line in content.splitlines():
+        if line.startswith("- [[") and "/projects/" in line and marker in line:
+            return line[len("- [[") : line.index("|")].rsplit("/", 1)[-1]
+    raise AssertionError(f"no project link for {alias}")
+
+
 def fit_payload(packet: SourcePacket, project_id: str) -> dict[str, JsonValue]:
     return {
         "version": 1,
@@ -236,12 +244,44 @@ def test_repo_nodes_project_link_matches_written_brief_on_slug_collision(tmp_pat
     written = {note.path for note in report.notes}
     assert "midasai.md" in written
     assert "midasai-midas2.md" in written
+    brief = next(note for note in report.notes if note.path == "midasai-midas2.md")
 
     store = FakeStore()
     projection(tmp_path, store, fit=index, projects=projects).rebuild()
 
     content = store.documents[0].content
     assert "[[_generated/evidence-vault/projects/midasai-midas2|midas2]]" in content
+    assert project_link_target(content, "midas2") == brief.path.removesuffix(".md")
+
+
+def test_repo_nodes_project_link_matches_written_brief_without_projects(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="https://github.com/owner/repo")
+    write_cache(tmp_path, "owner/repo")
+    projects = (Project(id="midas-ai", name="Midas AI", description="a"),)
+    index = FileSystemProjectFitIndex(tmp_path / "derived")
+    report = ProjectFitRunner(
+        packets=FileSystemSourcePacketRepository(tmp_path),
+        client=FakeChatClient(
+            {
+                "relevant": True,
+                "summary": "",
+                "matches": [{"project_id": "midas-ai", "fit": "high", "feature": "x", "why": "y"}],
+            }
+        ),
+        cache=FileSystemLlmCache(tmp_path / "derived", namespace=ProjectFitRunner.CACHE_NAMESPACE),
+        index=index,
+        model="test-model",
+        projects=projects,
+        clock=lambda: NOW,
+        sleep=lambda _: None,
+    ).run(ProjectFitQuery())
+    brief = next(note for note in report.notes if note.path == "midas-ai.md")
+
+    store = FakeStore()
+    projection(tmp_path, store, fit=index).rebuild()
+
+    content = store.documents[0].content
+    assert project_link_target(content, "midas-ai") == brief.path.removesuffix(".md")
 
 
 def test_repo_nodes_without_fit_index_has_empty_projects(tmp_path: Path) -> None:
