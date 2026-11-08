@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 
@@ -18,6 +19,22 @@ class FileSystemHumanNoteStore:
         if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
             raise ValueError("human note path escapes its root")
         return Path(*path.parts)
+
+    def iter_notes(self) -> Iterable[tuple[str, str]]:
+        if not self._root.is_dir():
+            return
+        paths = sorted(
+            self._root.rglob("*.md"),
+            key=lambda path: path.relative_to(self._root).as_posix(),
+        )
+        for path in paths:
+            yield path.relative_to(self._root).as_posix(), path.read_text(encoding="utf-8")
+
+    def read(self, relative_path: str) -> str | None:
+        path = self._root / self._relative_path(relative_path)
+        if not path.is_file():
+            return None
+        return path.read_text(encoding="utf-8")
 
     def create_if_absent(self, relative_path: str, content: str) -> bool:
         path = self._root / self._relative_path(relative_path)
