@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 from collections.abc import Callable, Mapping
@@ -206,6 +207,11 @@ def _build_user_prompt(packet: SourcePacket) -> str:
     return "\n".join(lines)
 
 
+def _cache_key(packet: SourcePacket, user_prompt: str) -> str:
+    digest = hashlib.sha256(user_prompt.encode("utf-8")).hexdigest()[:16]
+    return f"{packet.source_id}__{digest}"
+
+
 def _card_link(packet: SourcePacket) -> str:
     target = f"_generated/evidence-vault/source-cards/{packet.source_id}/{packet.capture_id}"
     alias = _wikilink_alias(packet.title or packet.source.external_id or packet.source_id)
@@ -325,7 +331,9 @@ class LlmEnrichRunner:
         entries: list[tuple[SourcePacket, LlmEnrichment]] = []
         failures: list[tuple[SourcePacket, str]] = []
         for packet in selected:
-            cached = None if query.refresh else self._cache.load(packet.capture_id)
+            user_prompt = _build_user_prompt(packet)
+            key = _cache_key(packet, user_prompt)
+            cached = None if query.refresh else self._cache.load(key)
             if cached is not None:
                 entries.append((packet, LlmEnrichment.from_payload(cached)))
                 results.append(self._result(packet, "skipped_cached"))
@@ -334,14 +342,14 @@ class LlmEnrichRunner:
                 results.append(self._result(packet, "processed"))
                 continue
             try:
-                text = self._client.complete(SYSTEM_PROMPT, _build_user_prompt(packet))
+                text = self._client.complete(SYSTEM_PROMPT, user_prompt)
                 enrichment = LlmEnrichment.from_text(text)
             except Exception as exc:
                 message = str(exc) or type(exc).__name__
                 failures.append((packet, message))
                 results.append(self._result(packet, "failed", error=message))
                 continue
-            self._cache.save(packet.capture_id, enrichment.to_payload())
+            self._cache.save(key, enrichment.to_payload())
             entries.append((packet, enrichment))
             results.append(self._result(packet, "processed"))
 

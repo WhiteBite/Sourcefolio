@@ -5,8 +5,6 @@ from typing import Protocol
 
 from pydantic import JsonValue
 
-from evidence_vault.domain.source import CaptureId
-
 
 class ChatClient(Protocol):
     def complete(self, system_prompt: str, user_prompt: str) -> str:
@@ -15,10 +13,10 @@ class ChatClient(Protocol):
 
 
 class LlmCacheStore(Protocol):
-    def load(self, capture_id: CaptureId) -> Mapping[str, JsonValue] | None:
-        """Return the cached enrichment for a capture, or None when absent."""
+    def load(self, key: str) -> Mapping[str, JsonValue] | None:
+        """Return the cached enrichment for a content key, or None when absent."""
         ...
 
-    def save(self, capture_id: CaptureId, payload: Mapping[str, JsonValue]) -> None:
-        """Persist the enrichment for a capture, replacing any previous entry."""
+    def save(self, key: str, payload: Mapping[str, JsonValue]) -> None:
+        """Persist the enrichment for a content key, replacing any previous entry."""
         ...

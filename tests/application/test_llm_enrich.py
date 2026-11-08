@@ -17,6 +17,8 @@ from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactP
 from evidence_vault.application.llm_enrich import (
     LlmEnrichQuery,
     LlmEnrichRunner,
+    _build_user_prompt,
+    _cache_key,
     extract_json_object,
 )
 from evidence_vault.domain.common import ActorKind, Provenance
@@ -123,7 +125,8 @@ def test_llm_enrich_writes_cache_and_deduplicated_note(tmp_path: Path) -> None:
 
     cache_root = tmp_path / "derived" / "llm"
     for packet in (first, second):
-        payload = json.loads((cache_root / f"{packet.capture_id}.json").read_text("utf-8"))
+        key = _cache_key(packet, _build_user_prompt(packet))
+        payload = json.loads((cache_root / f"{key}.json").read_text("utf-8"))
         assert set(payload) == {"title", "summary", "category", "entities", "links", "tags"}
         assert payload["entities"] == [{"type": "tool", "value": "PyTorch"}]
 
@@ -153,8 +156,50 @@ def test_llm_enrich_skips_cached_items_on_rerun(tmp_path: Path) -> None:
     assert "Title 1" in report.note.content
 
 
-def test_llm_enrich_refresh_requeries_and_overwrites_cache(tmp_path: Path) -> None:
+def test_llm_enrich_skips_recaptured_source_by_content(tmp_path: Path) -> None:
+    first = add_packet(tmp_path, "one")
+    client = FakeChatClient()
+    report = runner(tmp_path, client).run(LlmEnrichQuery(collection="Нейронки"))
+    assert (report.processed, report.skipped_cached, report.failed) == (1, 0, 0)
+    assert client.calls == 1
+
+    recapture = add_packet(tmp_path, "one", captured_at=NOW.replace(hour=13))
+    assert recapture.source_id == first.source_id
+    assert recapture.capture_id != first.capture_id
+
+    second_client = FakeChatClient()
+    report = runner(tmp_path, second_client).run(LlmEnrichQuery(collection="Нейронки"))
+
+    assert (report.processed, report.skipped_cached, report.failed) == (0, 1, 0)
+    assert second_client.calls == 0
+
+
+def test_llm_enrich_reprocesses_when_content_changes(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="первый")
+    runner(tmp_path, FakeChatClient()).run(LlmEnrichQuery(collection="Нейронки"))
+
+    add_packet(tmp_path, "one", desc="второй", captured_at=NOW.replace(hour=13))
+    client = FakeChatClient()
+    report = runner(tmp_path, client).run(LlmEnrichQuery(collection="Нейронки"))
+
+    assert (report.processed, report.skipped_cached, report.failed) == (1, 0, 0)
+    assert client.calls == 1
+
+
+def test_llm_enrich_processes_new_source(tmp_path: Path) -> None:
     add_packet(tmp_path, "one")
+    runner(tmp_path, FakeChatClient()).run(LlmEnrichQuery(collection="Нейронки"))
+
+    add_packet(tmp_path, "two")
+    client = FakeChatClient()
+    report = runner(tmp_path, client).run(LlmEnrichQuery(collection="Нейронки"))
+
+    assert (report.processed, report.skipped_cached, report.failed) == (1, 1, 0)
+    assert client.calls == 1
+
+
+def test_llm_enrich_refresh_requeries_and_overwrites_cache(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one")
     runner(tmp_path, FakeChatClient()).run(LlmEnrichQuery(collection="Нейронки"))
 
     client = FakeChatClient()
@@ -162,6 +207,11 @@ def test_llm_enrich_refresh_requeries_and_overwrites_cache(tmp_path: Path) -> No
 
     assert (report.processed, report.skipped_cached, report.failed) == (1, 0, 0)
     assert client.calls == 1
+    cache_root = tmp_path / "derived" / "llm"
+    assert len(list(cache_root.glob("*.json"))) == 1
+    key = _cache_key(packet, _build_user_prompt(packet))
+    payload = json.loads((cache_root / f"{key}.json").read_text("utf-8"))
+    assert payload["title"] == "Title 1"
 
 
 def test_llm_enrich_dry_run_writes_nothing(tmp_path: Path) -> None:
