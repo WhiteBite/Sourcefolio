@@ -8,6 +8,7 @@ import yaml
 from pydantic import JsonValue
 
 from evidence_vault.application.knowledge_graph import KnowledgeGraphProjection
+from evidence_vault.application.markdown import mermaid_id
 from evidence_vault.application.projection_types import GeneratedDocument
 from evidence_vault.domain.common import ActorKind, Provenance
 from evidence_vault.domain.source import (
@@ -86,8 +87,12 @@ def _packet(
 
 
 def _index_for(pairs: list[tuple[SourcePacket, str]]) -> dict[str, JsonValue]:
+    return _index_for_fits([(packet, project_id, "high") for packet, project_id in pairs])
+
+
+def _index_for_fits(pairs: list[tuple[SourcePacket, str, str]]) -> dict[str, JsonValue]:
     items: dict[str, JsonValue] = {}
-    for packet, project_id in pairs:
+    for packet, project_id, fit in pairs:
         items[packet.source_id] = {
             "source_id": packet.source_id,
             "capture_id": packet.capture_id,
@@ -95,7 +100,7 @@ def _index_for(pairs: list[tuple[SourcePacket, str]]) -> dict[str, JsonValue]:
             "title": packet.title or "",
             "relevant": True,
             "summary": "",
-            "matches": [{"project_id": project_id, "fit": "high", "feature": "f", "why": "w"}],
+            "matches": [{"project_id": project_id, "fit": fit, "feature": "f", "why": "w"}],
             "projects_key": "key",
             "updated_at": NOW.isoformat(),
         }
@@ -182,8 +187,60 @@ def test_knowledge_graph_caps_ideas_per_project() -> None:
 
     content = _render(packets, index)
 
+    project_edges = re.findall(
+        r"^    project_[0-9a-f]+ --> (idea_[0-9a-f]+)$", content, re.MULTILINE
+    )
+    assert len(project_edges) == 8
     idea_ids = re.findall(r"^    (idea_[0-9a-f]+)\[", content, re.MULTILINE)
-    assert len(idea_ids) == 8
+    assert len(idea_ids) == 12
+    properties = yaml.safe_load(content.split("---", 2)[1])
+    assert properties["idea_total"] == 12
+    assert properties["idea_truncated"] is True
+
+
+def test_knowledge_graph_includes_unmatched_capture_entities() -> None:
+    matched = _packet(
+        "1",
+        collections=("Нейронки",),
+        desc="https://github.com/owner/repo",
+        title="Idea",
+    )
+    unmatched = _packet(
+        "2",
+        collections=("Прочее",),
+        desc="https://github.com/other/thing",
+        title="Other",
+    )
+
+    content = _render([matched, unmatched], _index_for([(matched, "midas")]))
+
+    idea_ids = re.findall(r"^    (idea_[0-9a-f]+)\[", content, re.MULTILINE)
+    assert len(idea_ids) == 2
+    assert "Прочее" in content
+    assert "other/thing" in content
+    properties = yaml.safe_load(content.split("---", 2)[1])
+    assert properties["idea_total"] == 2
+    assert properties["idea_shown"] == 1
+    assert properties["idea_truncated"] is False
+
+
+def test_knowledge_graph_keeps_high_fit_under_cap_pressure() -> None:
+    high = _packet("high", title="High")
+    low = _packet("low", title="Low")
+    fillers = [_packet(f"f{number}", title=f"Filler {number}") for number in range(8)]
+    index = _index_for_fits(
+        [(high, "midas", "high"), (low, "midas", "low")]
+        + [(packet, "midas", "medium") for packet in fillers]
+    )
+
+    content = _render([high, low, *fillers], index)
+
+    project_edges = re.findall(
+        r"^    project_[0-9a-f]+ --> (idea_[0-9a-f]+)$", content, re.MULTILINE
+    )
+    assert len(project_edges) == 8
+    assert mermaid_id("idea", high.source_id) in project_edges
+    assert mermaid_id("idea", low.source_id) not in project_edges
 
 
 def test_knowledge_graph_frontmatter_reports_counts() -> None:
@@ -202,6 +259,9 @@ def test_knowledge_graph_frontmatter_reports_counts() -> None:
     assert properties["tags"] == ["evidence-vault", "evidence-vault/graph"]
     assert properties["project_count"] == 1
     assert properties["idea_count"] == 1
+    assert properties["idea_shown"] == 1
+    assert properties["idea_total"] == 1
+    assert properties["idea_truncated"] is False
     assert properties["collection_count"] == 1
     assert properties["repo_count"] == 1
     assert properties["edge_count"] == 3

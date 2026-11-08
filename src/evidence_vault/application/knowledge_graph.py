@@ -19,8 +19,11 @@ from evidence_vault.application.markdown import (
 )
 from evidence_vault.application.ports import SourcePacketRepository
 from evidence_vault.application.project_fit import (
+    FIT_RANK,
     ProjectFitIndexEntry,
     ProjectFitIndexStore,
+    entry_title,
+    parse_index,
 )
 from evidence_vault.application.projection_ports import ProjectionStore
 from evidence_vault.application.projection_types import GeneratedDocument
@@ -39,34 +42,12 @@ class _Graph:
     collections: tuple[tuple[str, str], ...]
     repos: tuple[tuple[str, str, str], ...]
     edges: tuple[tuple[str, str, str], ...]
+    idea_shown: int
+    idea_truncated: bool
 
 
-def _load_entries(store: ProjectFitIndexStore) -> dict[str, ProjectFitIndexEntry]:
-    try:
-        payload = store.load()
-    except Exception:
-        return {}
-    if not isinstance(payload, Mapping):
-        return {}
-    items = payload.get("items")
-    if not isinstance(items, dict):
-        return {}
-    entries: dict[str, ProjectFitIndexEntry] = {}
-    for value in items.values():
-        if not isinstance(value, dict):
-            continue
-        entry = ProjectFitIndexEntry.from_payload(value)
-        if entry.source_id:
-            entries[entry.source_id] = entry
-    return entries
-
-
-def _idea_title(entry: ProjectFitIndexEntry) -> str:
-    if entry.summary:
-        first_line = entry.summary.splitlines()[0].strip()
-        if first_line:
-            return first_line
-    return entry.title or entry.source_id
+def _packet_title(packet: SourcePacket) -> str:
+    return packet.title or packet.source.external_id or packet.source_id
 
 
 def _repositories(packet: SourcePacket) -> tuple[str, ...]:
@@ -86,50 +67,60 @@ def _build_graph(
     entries: Mapping[str, ProjectFitIndexEntry],
     packets: Mapping[str, SourcePacket],
 ) -> _Graph:
-    by_project: dict[str, list[ProjectFitIndexEntry]] = defaultdict(list)
-    for source_id in sorted(entries):
-        entry = entries[source_id]
-        for match in entry.matches:
-            by_project[match.project_id].append(entry)
-
     projects: dict[str, str] = {}
     ideas: dict[str, tuple[str, str, str, str]] = {}
     collections: dict[str, str] = {}
     repos: dict[str, tuple[str, str, str]] = {}
     edges: set[tuple[str, str, str]] = set()
 
+    for source_id in sorted(packets):
+        packet = packets[source_id]
+        idea_node = mermaid_id("idea", source_id)
+        entry = entries.get(source_id)
+        label = entry_title(entry) if entry is not None else _packet_title(packet)
+        ideas[source_id] = (source_id, packet.capture_id, idea_node, label)
+        for collection in packet.collections:
+            collection_node = mermaid_id("collection", collection.name)
+            collections[collection.name] = collection_node
+            edges.add((idea_node, "-->", collection_node))
+        for url in _repositories(packet):
+            repo_node = mermaid_id("repo", url)
+            repos[url] = (url, repo_node, _repo_label(url))
+            edges.add((idea_node, "<-->", repo_node))
+
+    by_project: dict[str, list[tuple[ProjectFitIndexEntry, str]]] = defaultdict(list)
+    for source_id in sorted(entries):
+        entry = entries[source_id]
+        if source_id not in ideas:
+            continue
+        for match in entry.matches:
+            by_project[match.project_id].append((entry, match.fit))
+
+    shown: set[str] = set()
+    truncated = False
     for project_id in sorted(by_project):
-        project_node = mermaid_id("project", project_id)
-        projects[project_id] = project_node
+        ranked = sorted(
+            by_project[project_id],
+            key=lambda item: (FIT_RANK[item[1]], item[0].updated_at, item[0].source_id),
+            reverse=True,
+        )
+        distinct: list[ProjectFitIndexEntry] = []
         seen: set[str] = set()
-        selected: list[ProjectFitIndexEntry] = []
-        for entry in by_project[project_id]:
+        for entry, _fit in ranked:
             if entry.source_id in seen:
                 continue
             seen.add(entry.source_id)
-            selected.append(entry)
-            if len(selected) >= _MAX_IDEAS_PER_PROJECT:
-                break
+            distinct.append(entry)
+        selected = distinct[:_MAX_IDEAS_PER_PROJECT]
+        if len(distinct) > len(selected):
+            truncated = True
+        if not selected:
+            continue
+        project_node = mermaid_id("project", project_id)
+        projects[project_id] = project_node
         for entry in selected:
-            idea_node = mermaid_id("idea", entry.source_id)
-            ideas[entry.source_id] = (
-                entry.source_id,
-                entry.capture_id,
-                idea_node,
-                _idea_title(entry),
-            )
-            edges.add((project_node, "-->", idea_node))
-            packet = packets.get(entry.source_id)
-            if packet is None:
-                continue
-            for collection in packet.collections:
-                collection_node = mermaid_id("collection", collection.name)
-                collections[collection.name] = collection_node
-                edges.add((idea_node, "-->", collection_node))
-            for url in _repositories(packet):
-                repo_node = mermaid_id("repo", url)
-                repos[url] = (url, repo_node, _repo_label(url))
-                edges.add((idea_node, "<-->", repo_node))
+            shown.add(entry.source_id)
+            edges.add((project_node, "-->", ideas[entry.source_id][2]))
 
     return _Graph(
         projects=tuple((key, projects[key]) for key in sorted(projects)),
@@ -137,6 +128,8 @@ def _build_graph(
         collections=tuple((key, collections[key]) for key in sorted(collections)),
         repos=tuple(repos[key] for key in sorted(repos)),
         edges=tuple(sorted(edges)),
+        idea_shown=len(shown),
+        idea_truncated=truncated,
     )
 
 
@@ -147,6 +140,9 @@ def _render(graph: _Graph, *, generated_prefix: str, generated_at: datetime) -> 
             "tags": note_tags("graph"),
             "project_count": len(graph.projects),
             "idea_count": len(graph.ideas),
+            "idea_shown": graph.idea_shown,
+            "idea_total": len(graph.ideas),
+            "idea_truncated": graph.idea_truncated,
             "collection_count": len(graph.collections),
             "repo_count": len(graph.repos),
             "edge_count": len(graph.edges),
@@ -235,7 +231,7 @@ class KnowledgeGraphProjection:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def rebuild(self) -> int:
-        entries = _load_entries(self._project_fit_index)
+        entries = parse_index(self._project_fit_index.load())
         packets = latest_capture_per_source(self._packets.iter_packets())
         graph = _build_graph(entries, packets)
         document = _render(
