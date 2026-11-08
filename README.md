@@ -45,6 +45,7 @@
 26. `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
 27. MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 28. `project-fit`: сопоставление latest captures с проектами пользователя через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
+29. Knowledge-base surfaces: human `ideas/`/`projects/`/`decisions/`, generated `entities/` (repo nodes), `graph/` (Mermaid), `decisions/` index и `projects/` briefs; команды `scaffold-projects`, `decision-new`, `decision-search`, `context` и `project-fit --profiles`.
 
 ## Быстрый старт
 
@@ -238,7 +239,7 @@ evidence-vault scaffold-ideas \
   --vault data/vault
 ```
 
-`project-obsidian` дополнительно строит per-collection indexes в `<vault>/_generated/evidence-vault/collections/`: для каждой коллекции `<slug>.md` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags, плюс `index.md`. Triage dashboards лежат в `.../dashboards/` (`inbox`, `keep`, `drop`, `done`) и используют Dataview-запросы над `ideas/`, поэтому **нужен плагин Obsidian Dataview**. `--scaffold-ideas` создаёт отсутствующие human notes в `<vault>/ideas/<source_id>.md` (frontmatter `status: inbox`) и не перезаписывает существующие; `scaffold-ideas` делает то же без пересборки generated views.
+`project-obsidian` дополнительно строит per-collection indexes в `<vault>/_generated/evidence-vault/collections/`: для каждой коллекции `<slug>.md` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags, плюс `index.md`. Triage dashboards лежат в `.../dashboards/` (`inbox`, `keep`, `drop`, `done`) и используют Dataview-запросы над `ideas/`, поэтому **нужен плагин Obsidian Dataview**. `--scaffold-ideas` создаёт отсутствующие human notes в `<vault>/ideas/<source_id>.md` (frontmatter `status: inbox`) и не перезаписывает существующие; `scaffold-ideas` делает то же без пересборки generated views. `project-obsidian` также пересобирает `entities/`, `graph/` и `decisions/` (см. раздел «База знаний: human и generated зоны»).
 
 Per-collection LLM digest:
 
@@ -280,6 +281,64 @@ evidence-vault project-fit \
 
 `--collection` можно повторять; без него сканируется latest capture каждого источника в архиве (это может быть много). Совпадения накапливаются в `<derived-dir>/project-fit/index.json`: повторный запуск с другой коллекцией не затирает прежние briefs, а пересобирает все заметки из индекса. `--refresh` перезапрашивает модель и перезаписывает записи обработанных элементов; без него ответы берутся из кэша. `--max-ocr-kb` (по умолчанию 20) ограничивает объединяемый OCR-текст на элемент. `--dry-run` печатает план и первые промпты в stderr, ничего не записывая. Конфигурация модели резолвится так же, как у `llm-enrich`.
 
+## База знаний: human и generated зоны
+
+Vault делится на две зоны. Human-зона хранит канонические заметки, которые пишет пользователь. Generated-зона пересобирается командами и никогда не перезаписывает human-заметки.
+
+Human-зона:
+
+- `<vault>/ideas/`: заметки по сохранённым источникам (`<source_id>.md`, frontmatter `status: inbox`). Создаются `scaffold-ideas` или `project-obsidian --scaffold-ideas`.
+- `<vault>/projects/`: профили проектов (`<project.id>.md`, frontmatter `type: project`, `status: draft`). Создаются `scaffold-projects`.
+- `<vault>/decisions/`: решения (`<date>-<slug>.md`, frontmatter `type: decision`, `status: open`, `projects`, `tags`). Создаются `decision-new`.
+
+Generated-зона `<vault>/_generated/evidence-vault/`:
+
+- `source-cards/`, `overview/`, `collections/`, `dashboards/`, `llm/`, `repos/`: как описано выше.
+- `entities/`: по одной заметке на GitHub-репозиторий (`<owner>__<repo>.md`, `type: repo`, `provenance: external_observation`). Метаданные берутся из кэша `repo-catalog`, плюс число упомянувших источников и связанные проекты.
+- `graph/index.md`: knowledge graph на Mermaid (`type: graph`) с проектами, идеями, коллекциями и репозиториями. Рендерится без плагинов.
+- `decisions/index.md`: индекс human-решений (`decision-index/v1`) со ссылками на заметки в `decisions/`.
+- `projects/`: per-project briefs `project-fit/v1` и `index.md`.
+
+`project-obsidian` пересобирает source cards, overview, collection indexes, dashboards, а также `entities/`, `graph/` и `decisions/`. Mermaid-граф рендерится без плагинов; triage dashboards по-прежнему требуют плагин Dataview.
+
+Команды:
+
+```bash
+evidence-vault scaffold-projects \
+  --vault data/vault \
+  --projects data/projects.json
+
+evidence-vault decision-new \
+  --vault data/vault \
+  --title "Выбрать gallery-dl для слайдшоу" \
+  --problem "Нужен надёжный resolver для photo posts" \
+  --option "yt-dlp" \
+  --option "gallery-dl" \
+  --chosen "gallery-dl" \
+  --rationale "Отдельный slideshow path с inventory checks" \
+  --project evidence-vault \
+  --tag ingestion
+
+evidence-vault decision-search "gallery-dl" --vault data/vault
+
+evidence-vault context \
+  --vault data/vault \
+  --derived-dir data/derived \
+  --archive-dir data/archive \
+  --projects data/projects.json \
+  --format markdown
+
+evidence-vault project-fit \
+  --collection Нейронки \
+  --projects data/projects.json \
+  --profiles data/vault/projects \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault
+```
+
+`scaffold-projects` создаёт отсутствующие профили в `<vault>/projects/<project.id>.md` и не перезаписывает существующие. `decision-new` создаёт заметку решения в `<vault>/decisions/` (тоже без перезаписи); `decision-search` ищет по терминам (AND, casefold) и возвращает path/title/date/status. `context` собирает session brief из проектов, накопленных совпадений `project-fit` и решений; `--format markdown` печатает человекочитаемый вид, по умолчанию JSON. `project-fit --profiles <dir>` подмешивает в промпт тело профиля `<project.id>.md` из указанной директории.
+
 ## MCP-сервер
 
 Установить extra и запустить сервер:
@@ -289,7 +348,7 @@ python -m pip install -e ".[mcp]"
 evidence-vault-mcp
 ```
 
-Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
 
 Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
 
