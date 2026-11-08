@@ -208,6 +208,40 @@ def llm_catalog(
 
 
 @server.tool()
+def repo_catalog(
+    collection: str,
+    archive_dir: str = "data/archive",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+    limit: int | None = None,
+    refresh: bool = False,
+    dry_run: bool = False,
+    token: str | None = None,
+) -> str:
+    """Build a live GitHub repository catalog for one collection."""
+    arguments = [
+        "repo-catalog",
+        "--collection",
+        collection,
+        "--archive-dir",
+        archive_dir,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+    ]
+    if limit is not None:
+        arguments += ["--limit", str(limit)]
+    if refresh:
+        arguments.append("--refresh")
+    if dry_run:
+        arguments.append("--dry-run")
+    if token is not None:
+        arguments += ["--token", token]
+    return _run(arguments)
+
+
+@server.tool()
 def archive_audit(archive_dir: str = "data/archive", verify_bytes: bool = False) -> str:
     """Verify artifact references and optionally hash all archived bytes."""
     arguments = ["archive-audit", "--archive-dir", archive_dir]

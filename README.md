@@ -252,6 +252,18 @@ evidence-vault llm-enrich \
 
 `llm-enrich` прогоняет latest captures коллекции через OpenAI-compatible chat model и пишет `llm-digest/v1` в `<vault>/_generated/evidence-vault/llm/<slug>.md`. Digest помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`. Конфигурация резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults. Ответы кэшируются в `data/derived/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет.
 
+Каталог репозиториев коллекции:
+
+```bash
+evidence-vault repo-catalog \
+  --collection Нейронки \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault
+```
+
+`repo-catalog` извлекает ссылки на репозитории из latest captures коллекции (desc + комментарии), дедуплицирует по нормализованному `owner/repo` и обогащает GitHub-репозитории через REST API (`GET https://api.github.com/repos/{owner}/{repo}`): stars, language, license, archived, last push, topics. Результат — note `repo-catalog/v1` в `<vault>/_generated/evidence-vault/repos/<slug>.md` с `provenance: external_observation`: таблица репозиториев плюс число видео и wikilinks на упомянувшие их source cards. GitLab-ссылки подсчитываются, но не обогащаются (v1 — только GitHub). Токен берётся из `--token` или env `GITHUB_TOKEN`; без токена лимит API — 60 запросов/час, а 403/429/404 изолируются как ошибка отдельного репозитория, прогон продолжается. Метаданные кэшируются в `data/derived/repos/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет и не запрашивает.
+
 ## MCP-сервер
 
 Установить extra и запустить сервер:
@@ -261,7 +273,7 @@ python -m pip install -e ".[mcp]"
 evidence-vault-mcp
 ```
 
-Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `archive_audit`, `capture_report`, `schema`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `repo_catalog`, `archive_audit`, `capture_report`, `schema`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
 
 Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
 

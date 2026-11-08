@@ -21,6 +21,7 @@ from evidence_vault.adapters.filesystem.atomic import ImmutableStoreConflict, wr
 from evidence_vault.adapters.filesystem.extractions import FileSystemExtractionRepository
 from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
 from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
+from evidence_vault.adapters.github import GitHubRepoClient, GitHubRepoConfig
 from evidence_vault.adapters.llm import OpenAIChatClient, OpenAIChatConfig
 from evidence_vault.adapters.metadata_only import MetadataOnlyCaptureAdapter
 from evidence_vault.adapters.ocr.tesseract import TesseractConfig, TesseractOcrAdapter
@@ -68,6 +69,7 @@ from evidence_vault.application.ocr_evaluation import (
     OcrEvaluationSet,
     OcrEvaluator,
 )
+from evidence_vault.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
 from evidence_vault.application.search import SearchIndexBuilder
 from evidence_vault.application.search_evaluation import SearchEvaluationSet, SearchEvaluator
 from evidence_vault.application.source_cards import SourceCardProjection
@@ -833,6 +835,55 @@ def _llm_catalog(args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def _repo_catalog(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "evidence-vault"
+    token = args.token or os.environ.get("GITHUB_TOKEN")
+    report = RepoCatalogRunner(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        fetcher=GitHubRepoClient(GitHubRepoConfig(token=token)),
+        cache=FileSystemLlmCache(derived_root, namespace=RepoCatalogRunner.NAMESPACE),
+        generated_prefix=generated_root.relative_to(vault_root).as_posix(),
+    ).run(
+        RepoCatalogQuery(
+            collection=args.collection,
+            limit=args.limit,
+            refresh=args.refresh,
+            dry_run=args.dry_run,
+        )
+    )
+    note_path: str | None = None
+    if report.note is not None:
+        FileSystemProjectionStore(generated_root).replace_namespace(
+            RepoCatalogRunner.NAMESPACE,
+            [report.note],
+        )
+        note_path = str(generated_root / RepoCatalogRunner.NAMESPACE / report.note.path)
+    output = {
+        "collection": report.collection,
+        "repos_found": report.repos_found,
+        "fetched": report.fetched,
+        "skipped_cached": report.skipped_cached,
+        "failed": report.failed,
+        "skipped_non_github": report.skipped_non_github,
+        "dry_run": report.dry_run,
+        "note_path": note_path,
+        "results": [
+            {
+                "repository": item.repository,
+                "url": item.url,
+                "status": item.status,
+                "error": item.error,
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
+
+
 def _evidence_pack(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     artifacts = FileSystemArtifactStore(archive_root)
@@ -1231,6 +1282,24 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_catalog.add_argument("--api-key")
     llm_catalog.add_argument("--model")
     llm_catalog.set_defaults(handler=_llm_catalog)
+
+    repo_catalog = subcommands.add_parser(
+        "repo-catalog",
+        help="build a live GitHub repository catalog for one collection",
+    )
+    repo_catalog.add_argument("--collection", required=True)
+    repo_catalog.add_argument("--archive-dir", default="data/archive")
+    repo_catalog.add_argument("--derived-dir", default="data/derived")
+    repo_catalog.add_argument("--vault", default="data/vault")
+    repo_catalog.add_argument("--limit", type=int, help="process at most N captures")
+    repo_catalog.add_argument(
+        "--refresh",
+        action="store_true",
+        help="ignore the cache and re-fetch repository metadata",
+    )
+    repo_catalog.add_argument("--dry-run", action="store_true", help="report without writing")
+    repo_catalog.add_argument("--token", help="GitHub API token; defaults to env GITHUB_TOKEN")
+    repo_catalog.set_defaults(handler=_repo_catalog)
 
     evidence_pack = subcommands.add_parser(
         "evidence-pack",
