@@ -126,5 +126,12 @@ def test_mermaid_label_strips_breaking_characters() -> None:
     assert "\n" not in label
 
 
+def test_mermaid_label_neutralizes_mermaid_significant_characters() -> None:
+    label = mermaid_label('a;b`c#d%e<f>g(h)i"j]k\nl')
+
+    for character in (";", "`", "#", "%", "<", ">", "(", ")", '"', "]", "\n"):
+        assert character not in label
+
+
 def test_note_tags_returns_kind_scoped_tags() -> None:
     assert note_tags("repo") == ["evidence-vault", "evidence-vault/repo"]
