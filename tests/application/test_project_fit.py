@@ -9,6 +9,7 @@ import pytest
 
 from evidence_vault.adapters.filesystem import (
     FileSystemArtifactStore,
+    FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
 from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
@@ -52,6 +53,19 @@ MATCH_MIDAS = {
     ],
 }
 
+MATCH_MAFIIN = {
+    "relevant": True,
+    "summary": "party idea",
+    "matches": [
+        {
+            "project_id": "mafiin",
+            "fit": "high",
+            "feature": "party mode",
+            "why": "matches party game",
+        }
+    ],
+}
+
 
 class FakeChatClient:
     def __init__(
@@ -61,11 +75,13 @@ class FakeChatClient:
         fail_on: str | None = None,
     ) -> None:
         self.calls = 0
+        self.prompts: list[str] = []
         self._responses = responses or {}
         self._fail_on = fail_on
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         self.calls += 1
+        self.prompts.append(user_prompt)
         if self._fail_on is not None and self._fail_on in user_prompt:
             raise RuntimeError("boom")
         for marker, payload in self._responses.items():
@@ -142,10 +158,12 @@ def runner(
         packets=FileSystemSourcePacketRepository(root),
         client=client,
         cache=FileSystemLlmCache(root / "derived", namespace=ProjectFitRunner.CACHE_NAMESPACE),
+        index=FileSystemProjectFitIndex(root / "derived"),
         model="test-model",
         projects=projects,
         extractions=extractions,
         clock=lambda: NOW,
+        sleep=lambda _: None,
     )
 
 
@@ -160,14 +178,14 @@ def test_project_fit_matches_one_project_and_marks_other_unmatched(tmp_path: Pat
     assert report.unmatched == 0
     assert report.per_project == {"midas": 1, "mafiin": 0}
     notes = {note.path: note.content for note in report.notes}
-    assert set(notes) == {"midasai.md", "mafiin.md"}
+    assert set(notes) == {"midasai.md", "mafiin.md", "index.md"}
     midas = notes["midasai.md"]
     assert "backtest engine" in midas
     assert "Fit: high" in midas
     assert "provenance: agent_inference" in midas
     assert "[[_generated/evidence-vault/source-cards/" in midas
     mafiin = notes["mafiin.md"]
-    assert "## Unmatched / not relevant (1)" in mafiin
+    assert "## Mentioned but not for Mafiin (1)" in mafiin
     assert "[[_generated/evidence-vault/source-cards/" in mafiin
 
 
@@ -179,8 +197,12 @@ def test_project_fit_irrelevant_item_is_unmatched_and_absent(tmp_path: Path) -> 
 
     assert report.unmatched == 1
     assert report.per_project == {"midas": 0, "mafiin": 0}
-    for note in report.notes:
-        assert "[[_generated/evidence-vault/source-cards/" not in note.content
+    notes = {note.path: note.content for note in report.notes}
+    for path, content in notes.items():
+        if path == "index.md":
+            continue
+        assert "[[_generated/evidence-vault/source-cards/" not in content
+    assert "## Globally irrelevant (1)" in notes["index.md"]
 
 
 def test_project_fit_ignores_unknown_project_ids(tmp_path: Path) -> None:
@@ -256,8 +278,13 @@ def test_project_fit_isolates_failures(tmp_path: Path) -> None:
 
     assert (report.processed, report.skipped_cached, report.failed) == (1, 0, 1)
     assert report.per_project == {"midas": 1, "mafiin": 0}
-    assert len(report.notes) == 2
-    assert len(list((tmp_path / "derived" / "project-fit").glob("*.json"))) == 1
+    assert len(report.notes) == 3
+    cache_files = [
+        path
+        for path in (tmp_path / "derived" / "project-fit").glob("*.json")
+        if path.name != "index.json"
+    ]
+    assert len(cache_files) == 1
 
 
 def test_project_fit_dry_run_writes_nothing(tmp_path: Path) -> None:
@@ -391,3 +418,111 @@ def test_parse_projects_validates_shape() -> None:
 
     projects = parse_projects({"projects": [{"id": "a", "name": "A", "description": "d"}]})
     assert projects == (Project(id="a", name="A", description="d"),)
+
+
+def test_project_fit_accumulates_across_collections(tmp_path: Path) -> None:
+    first = add_packet(tmp_path, "one", collection="A", desc="trading bot idea")
+    second = add_packet(tmp_path, "two", collection="B", desc="party game idea")
+    client = FakeChatClient({"trading bot idea": MATCH_MIDAS, "party game idea": MATCH_MAFIIN})
+
+    runner(tmp_path, client).run(ProjectFitQuery(collections=("A",)))
+    report = runner(tmp_path, client).run(ProjectFitQuery(collections=("B",)))
+
+    assert report.per_project == {"midas": 1, "mafiin": 1}
+    notes = {note.path: note.content for note in report.notes}
+    assert "backtest engine" in notes["midasai.md"]
+    assert "party mode" in notes["mafiin.md"]
+    index = json.loads((tmp_path / "derived" / "project-fit" / "index.json").read_text("utf-8"))
+    assert set(index["items"]) == {first.source_id, second.source_id}
+
+
+def test_project_fit_rerun_keeps_index_unchanged(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="trading bot idea")
+    runner(tmp_path, FakeChatClient({"trading bot idea": MATCH_MIDAS})).run(
+        ProjectFitQuery(collections=("Нейронки",))
+    )
+    index_path = tmp_path / "derived" / "project-fit" / "index.json"
+    before = index_path.read_bytes()
+
+    second = FakeChatClient({"trading bot idea": MATCH_MIDAS})
+    report = runner(tmp_path, second).run(ProjectFitQuery(collections=("Нейронки",)))
+
+    assert (report.processed, report.skipped_cached, report.failed) == (0, 1, 0)
+    assert second.calls == 0
+    assert index_path.read_bytes() == before
+
+
+def test_project_fit_scans_all_collections_when_omitted(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", collection="A", desc="trading bot idea")
+    add_packet(tmp_path, "two", collection="B", desc="trading bot idea")
+    client = FakeChatClient({"trading bot idea": MATCH_MIDAS})
+
+    report = runner(tmp_path, client).run(ProjectFitQuery())
+
+    assert report.all_collections is True
+    assert report.items_scanned == 2
+    assert report.per_project == {"midas": 2, "mafiin": 0}
+
+
+def test_project_fit_truncates_ocr_text(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="trading bot idea")
+    client = FakeChatClient({"trading bot idea": MATCH_MIDAS})
+
+    runner(tmp_path, client, extractions=FakeExtractions(["A" * 5000 + "ZZZEND"])).run(
+        ProjectFitQuery(collections=("Нейронки",), max_ocr_kb=1)
+    )
+
+    assert "ZZZEND" not in client.prompts[0]
+    assert "A" * 100 in client.prompts[0]
+
+
+def test_project_fit_refresh_overwrites_index_entry(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc="trading bot idea")
+    runner(tmp_path, FakeChatClient({"trading bot idea": MATCH_MIDAS})).run(
+        ProjectFitQuery(collections=("Нейронки",))
+    )
+    index_path = tmp_path / "derived" / "project-fit" / "index.json"
+    first = json.loads(index_path.read_text("utf-8"))["items"][packet.source_id]
+    assert first["matches"][0]["feature"] == "backtest engine"
+
+    changed = {
+        "relevant": True,
+        "summary": "changed",
+        "matches": [
+            {"project_id": "midas", "fit": "low", "feature": "new feature", "why": "changed"}
+        ],
+    }
+    runner(tmp_path, FakeChatClient({"trading bot idea": changed})).run(
+        ProjectFitQuery(collections=("Нейронки",), refresh=True)
+    )
+
+    second = json.loads(index_path.read_text("utf-8"))["items"][packet.source_id]
+    assert second["matches"][0]["feature"] == "new feature"
+    assert second["summary"] == "changed"
+
+
+def test_project_fit_note_heading_uses_summary(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc="trading bot idea")
+    client = FakeChatClient(
+        {
+            "trading bot idea": {
+                "relevant": True,
+                "summary": "Great backtest idea\nmore detail",
+                "matches": [
+                    {
+                        "project_id": "midas",
+                        "fit": "high",
+                        "feature": "backtest engine",
+                        "why": "trading",
+                    }
+                ],
+            }
+        }
+    )
+
+    report = runner(tmp_path, client).run(ProjectFitQuery(collections=("Нейронки",)))
+
+    notes = {note.path: note.content for note in report.notes}
+    assert "### Great backtest idea" in notes["midasai.md"]
+    assert "index.md" in notes
+    assert "## Globally irrelevant (0)" in notes["index.md"]

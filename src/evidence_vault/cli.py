@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field, JsonValue, ValidationError
 from evidence_vault.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
+    FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
 from evidence_vault.adapters.filesystem.atomic import ImmutableStoreConflict, write_immutable_bytes
@@ -948,6 +950,10 @@ def _repo_catalog(args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def _project_fit_progress(position: int, total: int, status: str) -> None:
+    print(f"[{position}/{total}] {status}", file=sys.stderr)
+
+
 def _project_fit(args: argparse.Namespace) -> int:
     projects = _load_projects(Path(args.projects))
     config = resolve_llm_config(
@@ -959,6 +965,12 @@ def _project_fit(args: argparse.Namespace) -> int:
     derived_root = Path(args.derived_dir).resolve()
     vault_root = Path(args.vault).resolve()
     generated_root = vault_root / "_generated" / "evidence-vault"
+    collections = tuple(args.collection or ())
+    if not collections:
+        print(
+            "no --collection given: scanning the latest capture of every source; this can be large",
+            file=sys.stderr,
+        )
     report = ProjectFitRunner(
         packets=FileSystemSourcePacketRepository(archive_root),
         client=OpenAIChatClient(
@@ -969,16 +981,19 @@ def _project_fit(args: argparse.Namespace) -> int:
             )
         ),
         cache=FileSystemLlmCache(derived_root, namespace=ProjectFitRunner.CACHE_NAMESPACE),
+        index=FileSystemProjectFitIndex(derived_root),
         model=config.model,
         projects=projects,
         extractions=FileSystemExtractionRepository(derived_root),
         generated_prefix=generated_root.relative_to(vault_root).as_posix(),
+        progress=_project_fit_progress,
     ).run(
         ProjectFitQuery(
-            collections=tuple(args.collection),
+            collections=collections,
             limit=args.limit,
             refresh=args.refresh,
             dry_run=args.dry_run,
+            max_ocr_kb=args.max_ocr_kb,
         )
     )
     note_paths: list[str] = []
@@ -990,8 +1005,16 @@ def _project_fit(args: argparse.Namespace) -> int:
         note_paths = [
             str(generated_root / ProjectFitRunner.NAMESPACE / note.path) for note in report.notes
         ]
+    if report.dry_run:
+        print(f"dry-run: {report.items_scanned} item(s) planned", file=sys.stderr)
+        for position, (system_prompt, user_prompt) in enumerate(report.previews, start=1):
+            print(f"--- preview {position} system ---", file=sys.stderr)
+            print(system_prompt, file=sys.stderr)
+            print(f"--- preview {position} user ---", file=sys.stderr)
+            print(user_prompt, file=sys.stderr)
     output = {
         "collections": list(report.collections),
+        "all_collections": report.all_collections,
         "model": report.model,
         "items_scanned": report.items_scanned,
         "processed": report.processed,
@@ -1000,6 +1023,7 @@ def _project_fit(args: argparse.Namespace) -> int:
         "unmatched": report.unmatched,
         "per_project": dict(report.per_project),
         "dry_run": report.dry_run,
+        "index_path": str(derived_root / "project-fit" / "index.json"),
         "note_paths": note_paths,
         "results": [
             {
@@ -1461,14 +1485,19 @@ def _build_parser() -> argparse.ArgumentParser:
     project_fit.add_argument(
         "--collection",
         action="append",
-        required=True,
-        help="collection name; repeat to scan several collections",
+        help="collection name; repeat to scan several; omit to scan every source",
     )
     project_fit.add_argument("--projects", default="data/projects.json")
     project_fit.add_argument("--archive-dir", default="data/archive")
     project_fit.add_argument("--derived-dir", default="data/derived")
     project_fit.add_argument("--vault", default="data/vault")
     project_fit.add_argument("--limit", type=int, help="process at most N captures")
+    project_fit.add_argument(
+        "--max-ocr-kb",
+        type=int,
+        default=20,
+        help="cap concatenated OCR text per item in KB",
+    )
     project_fit.add_argument("--refresh", action="store_true", help="ignore the cache and re-query")
     project_fit.add_argument("--dry-run", action="store_true", help="report without writing")
     project_fit.add_argument("--base-url")

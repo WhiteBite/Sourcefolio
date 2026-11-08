@@ -24,11 +24,19 @@ def wikilink_alias(value: str) -> str:
     return " ".join(cleaned.split()) or "source"
 
 
-def card_link(generated_prefix: str, packet: SourcePacket) -> str:
+def card_link_ids(generated_prefix: str, source_id: str, capture_id: str, alias: str) -> str:
     prefix = generated_prefix.strip("/")
-    target = f"{prefix}/source-cards/{packet.source_id}/{packet.capture_id}"
-    alias = wikilink_alias(packet.title or packet.source.external_id or packet.source_id)
-    return f"[[{target}|{alias}]]"
+    target = f"{prefix}/source-cards/{source_id}/{capture_id}"
+    return f"[[{target}|{wikilink_alias(alias)}]]"
+
+
+def card_link(generated_prefix: str, packet: SourcePacket) -> str:
+    return card_link_ids(
+        generated_prefix,
+        packet.source_id,
+        packet.capture_id,
+        packet.title or packet.source.external_id or packet.source_id,
+    )
 
 
 def generated_frontmatter(

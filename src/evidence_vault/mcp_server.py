@@ -271,19 +271,20 @@ def repo_catalog(
 
 @server.tool()
 def project_fit(
-    collection: list[str],
+    collection: list[str] | None = None,
     projects: str = "data/projects.json",
     archive_dir: str = "data/archive",
     derived_dir: str = "data/derived",
     vault: str = "data/vault",
     limit: int | None = None,
+    max_ocr_kb: int = 20,
     refresh: bool = False,
     dry_run: bool = False,
     base_url: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
 ) -> str:
-    """Match a collection's items to the user's projects and write per-project briefs."""
+    """Match saved items to the user's projects and write per-project briefs."""
     arguments = [
         "project-fit",
         "--projects",
@@ -294,8 +295,10 @@ def project_fit(
         derived_dir,
         "--vault",
         vault,
+        "--max-ocr-kb",
+        str(max_ocr_kb),
     ]
-    for name in collection:
+    for name in collection or []:
         arguments += ["--collection", name]
     if limit is not None:
         arguments += ["--limit", str(limit)]

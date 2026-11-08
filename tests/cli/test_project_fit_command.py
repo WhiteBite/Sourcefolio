@@ -123,8 +123,13 @@ def test_project_fit_cli_writes_notes(tmp_path: Path, capsys, monkeypatch) -> No
     assert (first["processed"], first["skipped_cached"], first["failed"]) == (1, 0, 0)
     assert first["unmatched"] == 0
     assert first["per_project"] == {"midas": 1, "mafiin": 0}
-    assert len(first["note_paths"]) == 2
-    assert len(list((tmp_path / "derived" / "project-fit").glob("*.json"))) == 1
+    assert len(first["note_paths"]) == 3
+    cache_files = [
+        path
+        for path in (tmp_path / "derived" / "project-fit").glob("*.json")
+        if path.name != "index.json"
+    ]
+    assert len(cache_files) == 1
 
     note = tmp_path / "vault" / "_generated" / "evidence-vault" / "projects" / "midasai.md"
     assert note.is_file()

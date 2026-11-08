@@ -44,6 +44,7 @@
 25. Triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
 26. `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
 27. MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
+28. `project-fit`: сопоставление latest captures с проектами пользователя через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 
 ## Быстрый старт
 
@@ -264,6 +265,21 @@ evidence-vault repo-catalog \
 
 `repo-catalog` извлекает ссылки на репозитории из latest captures коллекции (desc + комментарии), дедуплицирует по нормализованному `owner/repo` и обогащает GitHub-репозитории через REST API (`GET https://api.github.com/repos/{owner}/{repo}`): stars, language, license, archived, last push, topics. Результат — note `repo-catalog/v1` в `<vault>/_generated/evidence-vault/repos/<slug>.md` с `provenance: external_observation`: таблица репозиториев плюс число видео и wikilinks на упомянувшие их source cards. GitLab-ссылки подсчитываются, но не обогащаются (v1 — только GitHub). Токен берётся из `--token` или env `GITHUB_TOKEN`; без токена лимит API — 60 запросов/час, а 403/429/404 изолируются как ошибка отдельного репозитория, прогон продолжается. Метаданные кэшируются в `data/derived/repos/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет и не запрашивает.
 
+Сопоставление сохранённого с проектами:
+
+```bash
+evidence-vault project-fit \
+  --collection Нейронки \
+  --projects data/projects.json \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault
+```
+
+`project-fit` прогоняет latest captures коллекции через OpenAI-compatible chat model и сопоставляет каждый элемент с проектами из `--projects` (JSON `{"projects": [{"id", "name", "description"}]}`). Результат — per-project briefs `project-fit/v1` в `<vault>/_generated/evidence-vault/projects/<slug>.md` плюс `projects/index.md` со списком проектов и числом глобально нерелевантных элементов. Каждый brief помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`.
+
+`--collection` можно повторять; без него сканируется latest capture каждого источника в архиве (это может быть много). Совпадения накапливаются в `<derived-dir>/project-fit/index.json`: повторный запуск с другой коллекцией не затирает прежние briefs, а пересобирает все заметки из индекса. `--refresh` перезапрашивает модель и перезаписывает записи обработанных элементов; без него ответы берутся из кэша. `--max-ocr-kb` (по умолчанию 20) ограничивает объединяемый OCR-текст на элемент. `--dry-run` печатает план и первые промпты в stderr, ничего не записывая. Конфигурация модели резолвится так же, как у `llm-enrich`.
+
 ## MCP-сервер
 
 Установить extra и запустить сервер:
@@ -273,7 +289,7 @@ python -m pip install -e ".[mcp]"
 evidence-vault-mcp
 ```
 
-Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `repo_catalog`, `archive_audit`, `capture_report`, `schema`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
 
 Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
 
