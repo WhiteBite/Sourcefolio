@@ -18,6 +18,7 @@ from evidence_vault.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
     FileSystemProjectFitIndex,
+    FileSystemRepoReader,
     FileSystemSourcePacketRepository,
 )
 from evidence_vault.adapters.filesystem.atomic import ImmutableStoreConflict, write_immutable_bytes
@@ -91,6 +92,7 @@ from evidence_vault.application.ocr_evaluation import (
     OcrEvaluationSet,
     OcrEvaluator,
 )
+from evidence_vault.application.profile_draft import ProfileDrafter, ProfileDraftResult
 from evidence_vault.application.project_fit import (
     Project,
     ProjectFitQuery,
@@ -835,6 +837,34 @@ def _scaffold_projects(args: argparse.Namespace) -> int:
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
+
+
+def _profile_draft(args: argparse.Namespace) -> int:
+    vault_root = Path(args.vault).resolve()
+    drafter = ProfileDrafter(
+        reader=FileSystemRepoReader(),
+        notes=FileSystemHumanNoteStore(vault_root / "projects"),
+    )
+    selected: tuple[Project, ...]
+    if args.repo:
+        if not args.id:
+            raise ValueError("--id is required when --repo is given")
+        selected = (Project(id=args.id, name=args.id, description="", repo_path=args.repo),)
+    else:
+        projects = _load_projects(Path(args.projects))
+        selected = tuple(project for project in projects if project.repo_path.strip())
+        if args.limit is not None:
+            selected = selected[: args.limit]
+    result = ProfileDraftResult(outcomes=tuple(drafter.draft(project) for project in selected))
+    output = {
+        "created": result.created,
+        "skipped": result.skipped,
+        "created_paths": list(result.created_paths),
+        "projects_root": str(vault_root / "projects"),
+        "errors": list(result.errors),
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if result.errors else 0
 
 
 def _decision_new(args: argparse.Namespace) -> int:
@@ -1656,6 +1686,24 @@ def _build_parser() -> argparse.ArgumentParser:
     scaffold_projects.add_argument("--vault", default="data/vault")
     scaffold_projects.add_argument("--projects", default="data/projects.json")
     scaffold_projects.set_defaults(handler=_scaffold_projects)
+
+    profile_draft = subcommands.add_parser(
+        "profile-draft",
+        help="draft human project profiles from each project's own repository (README + manifest)",
+    )
+    profile_draft.add_argument("--projects", default="data/projects.json")
+    profile_draft.add_argument("--vault", default="data/vault")
+    profile_draft.add_argument(
+        "--repo",
+        help="draft one project from an explicit repository path; requires --id",
+    )
+    profile_draft.add_argument("--id", help="project id to use with --repo")
+    profile_draft.add_argument(
+        "--limit",
+        type=int,
+        help="draft at most N projects that declare repo_path",
+    )
+    profile_draft.set_defaults(handler=_profile_draft)
 
     decision_new = subcommands.add_parser(
         "decision-new",
