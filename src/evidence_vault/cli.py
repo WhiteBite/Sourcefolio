@@ -42,6 +42,7 @@ from evidence_vault.adapters.tiktok.slides_images import (
 )
 from evidence_vault.adapters.tiktok.yt_dlp import YtDlpConfig, YtDlpTikTokAdapter
 from evidence_vault.application.archive_capture import ArchiveCapture
+from evidence_vault.application.ask import AskQuery, AskRunner, ask_to_dict, render_ask_note
 from evidence_vault.application.audit import ArchiveAudit
 from evidence_vault.application.capture_batch import CaptureBatchRunner
 from evidence_vault.application.capture_ports import CaptureAdapter
@@ -1211,6 +1212,84 @@ def _evidence_pack(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ask(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    artifacts = FileSystemArtifactStore(archive_root)
+    builder = EvidencePackBuilder(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        artifacts=artifacts,
+        artifact_locator=artifacts,
+        extractions=FileSystemExtractionRepository(derived_root),
+        max_text_artifact_bytes=args.max_text_kb * 1024,
+    )
+    project_context: str | None = None
+    if args.project:
+        projects = _with_profiles(_load_projects(Path(args.projects)), vault_root / "projects")
+        match = next((p for p in projects if p.id == args.project), None)
+        if match is None:
+            raise ValueError(f"unknown project: {args.project}")
+        project_context = f"{match.name} ({match.id}): {match.description}"
+        if match.profile.strip():
+            project_context += f"\n{match.profile.strip()}"
+    client = None
+    llm_error: str | None = None
+    model = DEFAULT_LLM_MODEL
+    if not args.no_llm:
+        try:
+            config = resolve_llm_config(
+                base_url=args.base_url, api_key=args.api_key, model=args.model
+            )
+            model = config.model
+            client = OpenAIChatClient(
+                OpenAIChatConfig(
+                    base_url=config.base_url,
+                    api_key=config.api_key,
+                    model=config.model,
+                )
+            )
+        except ValueError as exc:
+            llm_error = str(exc)
+    runner = AskRunner(
+        pack_builder=builder,
+        client=client,
+        cache=FileSystemLlmCache(derived_root, namespace=AskRunner.CACHE_NAMESPACE),
+        model=model,
+    )
+    query = AskQuery(
+        query=args.query,
+        project=args.project,
+        limit=args.limit,
+        excerpt_limit=args.excerpt_limit,
+        no_llm=args.no_llm,
+        collection=args.collection,
+        kind=SourceKind(args.kind) if args.kind else None,
+        status=CaptureStatus(args.status) if args.status else None,
+    )
+    report = runner.run(query, project_context=project_context)
+    if llm_error is not None:
+        report = replace(
+            report,
+            status="degraded",
+            limitations=(
+                *report.limitations,
+                f"LLM synthesis failed: {llm_error}; retrieval excerpt list returned instead.",
+            ),
+        )
+    document = render_ask_note(report)
+    answers_root = vault_root / "_generated" / "evidence-vault" / "answers"
+    note_path = answers_root / document.path
+    write_immutable_bytes(note_path, document.content.encode("utf-8"))
+    if args.ask_format == "markdown":
+        print(document.content)
+    else:
+        output = ask_to_dict(report)
+        output["note_path"] = str(note_path)
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.status == "degraded" else 0
+
+
 def _evidence_pack_verify(args: argparse.Namespace) -> int:
     pack = EvidencePackDocument.model_validate_json(Path(args.pack).read_bytes())
     report = EvidencePackVerifier(
@@ -1720,6 +1799,32 @@ def _build_parser() -> argparse.ArgumentParser:
     evidence_pack.add_argument("--status", choices=tuple(item.value for item in CaptureStatus))
     evidence_pack.add_argument("--max-text-kb", type=int, default=1024)
     evidence_pack.set_defaults(handler=_evidence_pack)
+
+    ask = subcommands.add_parser(
+        "ask",
+        help="answer a question from retrieved evidence, optionally with a grounded LLM synthesis",
+    )
+    ask.add_argument("query")
+    ask.add_argument(
+        "--project",
+        help="inject this project's context into the answer prompt and label the note",
+    )
+    ask.add_argument("--projects", default="data/projects.json")
+    ask.add_argument("--no-llm", action="store_true", help="retrieval only; never calls a model")
+    ask.add_argument("--format", dest="ask_format", choices=("json", "markdown"), default="json")
+    ask.add_argument("--limit", type=int, default=10)
+    ask.add_argument("--excerpt-limit", type=int, default=3)
+    ask.add_argument("--archive-dir", default="data/archive")
+    ask.add_argument("--derived-dir", default="data/derived")
+    ask.add_argument("--vault", default="data/vault")
+    ask.add_argument("--collection")
+    ask.add_argument("--kind", choices=tuple(item.value for item in SourceKind))
+    ask.add_argument("--status", choices=tuple(item.value for item in CaptureStatus))
+    ask.add_argument("--max-text-kb", type=int, default=1024)
+    ask.add_argument("--base-url")
+    ask.add_argument("--api-key")
+    ask.add_argument("--model")
+    ask.set_defaults(handler=_ask)
 
     verify_pack = subcommands.add_parser(
         "evidence-pack-verify",
