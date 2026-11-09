@@ -125,6 +125,20 @@ Fake `gallery-dl` + fake Tesseract, два слайда, два OCR workers: sli
 
 [Real Tesseract на synthetic golden](pilots/synthetic-ocr/README.md): 6 PNG, Tesseract 5.5.0, `eng+rus`, 2 workers. Первый run 6 created за 1.156 s, resume 6 skipped за 0.299 s; request IDs и derived bytes совпали. Evaluation с двумя immutable reports: 5/6 exact, mean CER 0.0042735, 0 failed/missing; pack integrity проверил 6 artifacts. Маленький synthetic run не заменяет real-user OCR quality или throughput/RSS gate.
 
+## project-fit на масштабе (runbook)
+
+`project-fit` прогоняет latest captures коллекции через chat model: один запрос на элемент, порядка секунд на элемент и платно. Команда не запускает daemon и не сканирует backlog в фоне — полный прогон инициирует пользователь.
+
+Безопасный порядок на больших коллекциях (например «Нейронки» ~503, «Фильмы» ~581 элементов):
+
+- сначала бесплатный план: `project-fit --collection <name> --dry-run --limit 20` печатает первые промпты в stderr и ничего не записывает;
+- затем ограниченные батчи: `project-fit --collection <name> --limit 50`; без `--refresh` ответы берутся из кэша `data/derived/project-fit/`, повторный запуск продолжает с необработанных и не затирает прежние briefs — совпадения накапливаются в `data/derived/project-fit/index.json`;
+- `--refresh` перезапрашивает модель для уже обработанных элементов, поэтому применяется точечно.
+
+Память и лимиты: `--max-ocr-kb` (по умолчанию 20) ограничивает OCR-текст на элемент; запросы последовательные, concurrent pool не создаётся. Ориентир по стоимости: полный прогон двух коллекций — около 1000+ запросов модели.
+
+Bounded smoke на реальном локальном архиве и оговорки — в [project-fit scale pilot](pilots/project-fit-scale/README.md). Полный прогон 503/581 — операция пользователя, не CI: живая модель в тестах не вызывается, regression-слой использует fake chat client.
+
 ## Следующие performance gates
 
 1. 1000+ реальных saved items: wall time, peak RSS, open FD count и resume after interruption.
