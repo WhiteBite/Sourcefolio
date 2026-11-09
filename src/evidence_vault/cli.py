@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import json
 import os
 import sys
-from collections.abc import Mapping, Sequence
-from contextlib import ExitStack
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import ExitStack, redirect_stdout
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1211,6 +1212,80 @@ def _project_fit(args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def _refresh(args: argparse.Namespace) -> int:
+    plan: list[tuple[str, Callable[[argparse.Namespace], int], argparse.Namespace]] = []
+    if args.capture:
+        plan.append(
+            (
+                "import-collections",
+                _import_collections,
+                argparse.Namespace(
+                    file=args.capture,
+                    limit=None,
+                    archive_dir=args.archive_dir,
+                    control_db=args.control_db,
+                    concurrency=args.concurrency,
+                ),
+            )
+        )
+    plan.append(
+        (
+            "project-obsidian",
+            _project_obsidian,
+            argparse.Namespace(
+                archive_dir=args.archive_dir,
+                derived_dir=args.derived_dir,
+                vault=args.vault,
+                projects=args.projects,
+                scaffold_ideas=args.scaffold_ideas,
+            ),
+        )
+    )
+    if args.fit:
+        plan.append(
+            (
+                "project-fit",
+                _project_fit,
+                argparse.Namespace(
+                    projects=args.projects,
+                    profiles=args.profiles,
+                    base_url=args.base_url,
+                    api_key=args.api_key,
+                    model=args.model,
+                    archive_dir=args.archive_dir,
+                    derived_dir=args.derived_dir,
+                    vault=args.vault,
+                    collection=args.collection,
+                    limit=args.limit,
+                    max_ocr_kb=args.max_ocr_kb,
+                    refresh=args.refresh,
+                    dry_run=args.dry_run,
+                ),
+            )
+        )
+    steps: list[dict[str, object]] = []
+    failed = False
+    for name, handler, namespace in plan:
+        buffer = io.StringIO()
+        try:
+            with redirect_stdout(buffer):
+                code = handler(namespace)
+        except (OSError, ValueError, ValidationError, ImmutableStoreConflict) as exc:
+            steps.append({"step": name, "error": str(exc)})
+            failed = True
+            continue
+        captured = buffer.getvalue()
+        try:
+            parsed = json.loads(captured) if captured.strip() else None
+        except json.JSONDecodeError:
+            parsed = None
+        steps.append({"step": name, "exit": code, "output": parsed})
+        if code != 0:
+            failed = True
+    print(json.dumps({"steps": steps}, ensure_ascii=False, indent=2))
+    return 1 if failed else 0
+
+
 def _evidence_pack(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     artifacts = FileSystemArtifactStore(archive_root)
@@ -1826,6 +1901,34 @@ def _build_parser() -> argparse.ArgumentParser:
     project_fit.add_argument("--api-key")
     project_fit.add_argument("--model")
     project_fit.set_defaults(handler=_project_fit)
+
+    refresh = subcommands.add_parser(
+        "refresh",
+        help="re-import a new capture and rebuild generated views, optionally matching projects",
+    )
+    refresh.add_argument("--capture", help="collection-capture/v1 JSON to import first")
+    refresh.add_argument("--archive-dir", default="data/archive")
+    refresh.add_argument("--control-db", default="data/control/capture.sqlite3")
+    refresh.add_argument("--derived-dir", default="data/derived")
+    refresh.add_argument("--vault", default="data/vault")
+    refresh.add_argument("--projects", default="data/projects.json")
+    refresh.add_argument("--profiles", help="directory of per-project profile notes")
+    refresh.add_argument("--scaffold-ideas", action="store_true")
+    refresh.add_argument("--concurrency", type=int, default=4)
+    refresh.add_argument(
+        "--fit", action="store_true", help="also run project-fit over --collection"
+    )
+    refresh.add_argument(
+        "--collection", action="append", help="collection for project-fit; repeatable"
+    )
+    refresh.add_argument("--limit", type=int, help="cap captures for project-fit")
+    refresh.add_argument("--max-ocr-kb", type=int, default=20)
+    refresh.add_argument("--refresh", action="store_true", help="ignore the project-fit cache")
+    refresh.add_argument("--dry-run", action="store_true")
+    refresh.add_argument("--base-url")
+    refresh.add_argument("--api-key")
+    refresh.add_argument("--model")
+    refresh.set_defaults(handler=_refresh)
 
     evidence_pack = subcommands.add_parser(
         "evidence-pack",
