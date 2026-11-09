@@ -20,7 +20,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-Ожидаемый baseline: pytest **125 passed**, mypy strict **50 source files**, ruff без замечаний. Smoke CLI:
+Ожидаемый baseline: ruff без замечаний, mypy strict **80 source files**, pytest — весь набор зелёный (лёгкие предупреждения от тестов `warnings` допустимы). Smoke CLI:
 
 ```powershell
 .\.venv\Scripts\evidence-vault.exe archive-capture examples/manual-capture/manifest.json --archive-dir data/archive
@@ -83,6 +83,10 @@ data/            # локальные данные (gitignored): archive, derive
 - Убийство подпроцессов: posix — `os.killpg(SIGKILL)` при spawn с `start_new_session=True`; win32 — `taskkill /F /T /PID` (иначе сироты держат хэндлы логов и temp dir не удаляется).
 - `zoneinfo` на win32 требует pip-пакет `tzdata` — уже в зависимостях с маркером `sys_platform == "win32"`.
 - Платформенное сужение для mypy — только `sys.platform != "win32"` (typeshed-условия), не `os.name`.
+
+## Session start
+
+Чтобы вспомнить контекст в начале сессии: прочитай `data/vault/_generated/evidence-vault/context/index.md` (machine-версия — `context.json`), либо выполни `evidence-vault context`. Бриф собирается из профилей проектов (`data/vault/projects/`), накопленных совпадений `project-fit` и решений (`data/vault/decisions/`). MCP-инструмент `context` делает то же, но требует перезапуска opencode после изменения `opencode.json`.
 
 ## Handoff-контекст
 

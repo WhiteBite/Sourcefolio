@@ -295,7 +295,7 @@ Generated-зона `<vault>/_generated/evidence-vault/`:
 
 - `source-cards/`, `overview/`, `collections/`, `dashboards/`, `llm/`, `repos/`: как описано выше.
 - `entities/`: по одной заметке на GitHub-репозиторий (`<owner>__<repo>.md`, `type: repo`, `provenance: external_observation`). Метаданные берутся из кэша `repo-catalog`, плюс число упомянувших источников и связанные проекты.
-- `graph/index.md`: knowledge graph на Mermaid (`type: graph`) с проектами, идеями, коллекциями и репозиториями. Рендерится без плагинов.
+- `graph/index.md`: knowledge graph на Mermaid (`type: graph`) с проектами, идеями, коллекциями и репозиториями. Строится из всех последних захватов (project→collection→idea→repo), а не только из совпадений `project-fit`; рёбра project→idea упорядочены по релевантности и ограничены; frontmatter сообщает `idea_shown` / `idea_total` / `idea_truncated`. Рендерится без плагинов.
 - `decisions/index.md`: индекс human-решений (`decision-index/v1`) со ссылками на заметки в `decisions/`.
 - `projects/`: per-project briefs `project-fit/v1` и `index.md`.
 
@@ -337,7 +337,7 @@ evidence-vault project-fit \
   --vault data/vault
 ```
 
-`scaffold-projects` создаёт отсутствующие профили в `<vault>/projects/<project.id>.md` и не перезаписывает существующие. `decision-new` создаёт заметку решения в `<vault>/decisions/` (тоже без перезаписи); `decision-search` ищет по терминам (AND, casefold) и возвращает path/title/date/status. `context` собирает session brief из проектов, накопленных совпадений `project-fit` и решений; `--format markdown` печатает человекочитаемый вид, по умолчанию JSON. `project-fit --profiles <dir>` подмешивает в промпт тело профиля `<project.id>.md` из указанной директории.
+`scaffold-projects` создаёт отсутствующие профили в `<vault>/projects/<project.id>.md` и не перезаписывает существующие. `decision-new` создаёт заметку решения в `<vault>/decisions/` (тоже без перезаписи); `decision-search` ищет по терминам (AND, casefold) и возвращает path/title/date/status. `context` собирает session brief из проектов, накопленных совпадений `project-fit` и решений; `--format markdown` печатает человекочитаемый вид, по умолчанию JSON, и дополнительно пишет бриф в `<vault>/_generated/evidence-vault/context/index.md` (+ `context.json`). Отсутствие файла `--projects` не роняет команду. `project-fit --profiles <dir>` подмешивает в промпт тело профиля `<project.id>.md` (без frontmatter) из указанной директории. `id` проекта обязан соответствовать `^[a-z0-9][a-z0-9-]*$`.
 
 ## MCP-сервер
 
@@ -348,7 +348,7 @@ python -m pip install -e ".[mcp]"
 evidence-vault-mcp
 ```
 
-Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`.
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`. Инструменты помечены read/write (`read_only_hint`, `destructive_hint`, `open_world_hint`); `decision_new` требует непустой `title`; список проектов передаётся параметром `project_ids`.
 
 Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
 
