@@ -98,3 +98,65 @@ def test_tool_annotations_expose_read_only_hints() -> None:
     assert search.read_only_hint is True
     assert decision_new.read_only_hint is False
     assert "title" in tools["decision_new"].input_schema["required"]
+
+
+def test_ask_tool_annotations() -> None:
+    pytest.importorskip("mcp")
+    import asyncio
+
+    from evidence_vault import mcp_server
+
+    tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
+
+    annotations = tools["ask"].annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is False
+    assert annotations.open_world_hint is True
+
+
+def test_profile_draft_tool_annotations() -> None:
+    pytest.importorskip("mcp")
+    import asyncio
+
+    from evidence_vault import mcp_server
+
+    tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
+
+    annotations = tools["profile_draft"].annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is False
+
+
+def test_profile_draft_tool_runs_on_repo(tmp_path: Path) -> None:
+    pytest.importorskip("mcp")
+    from evidence_vault import mcp_server
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("# Alpha\n\nA demo project.\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "alpha"\ndependencies = ["pydantic"]\n',
+        encoding="utf-8",
+    )
+
+    output = mcp_server.profile_draft(vault=str(tmp_path / "vault"), repo=str(repo), id="alpha")
+
+    assert '"created": 1' in output
+    assert '"error"' not in output
+
+
+def test_ask_tool_no_llm_on_empty_archive(tmp_path: Path) -> None:
+    pytest.importorskip("mcp")
+    from evidence_vault import mcp_server
+
+    output = mcp_server.ask(
+        query="x",
+        no_llm=True,
+        archive_dir=str(tmp_path / "archive"),
+        derived_dir=str(tmp_path / "derived"),
+        vault=str(tmp_path / "vault"),
+    )
+
+    assert output
+    assert '"status"' in output
+    assert not output.startswith("error")

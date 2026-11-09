@@ -432,5 +432,78 @@ def decision_search(query: str, vault: str = "data/vault", limit: int = 20) -> s
     return _run(["decision-search", query, "--vault", vault, "--limit", str(limit)])
 
 
+@server.tool(annotations=_annotations("Ask archive", read_only=False, open_world=True))
+def ask(
+    query: str,
+    project: str | None = None,
+    no_llm: bool = False,
+    format: str = "json",
+    limit: int = 10,
+    excerpt_limit: int = 3,
+    archive_dir: str = "data/archive",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+    collection: str | None = None,
+    kind: str | None = None,
+    status: str | None = None,
+    projects: str = "data/projects.json",
+    base_url: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> str:
+    """Answer a question from retrieved evidence, optionally with a grounded LLM synthesis."""
+    arguments = [
+        "ask",
+        query,
+        "--format",
+        format,
+        "--limit",
+        str(limit),
+        "--excerpt-limit",
+        str(excerpt_limit),
+        "--archive-dir",
+        archive_dir,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+        "--projects",
+        projects,
+    ]
+    if project is not None:
+        arguments += ["--project", project]
+    if no_llm:
+        arguments.append("--no-llm")
+    if collection is not None:
+        arguments += ["--collection", collection]
+    if kind is not None:
+        arguments += ["--kind", kind]
+    if status is not None:
+        arguments += ["--status", status]
+    if base_url is not None:
+        arguments += ["--base-url", base_url]
+    if api_key is not None:
+        arguments += ["--api-key", api_key]
+    if model is not None:
+        arguments += ["--model", model]
+    return _run(arguments)
+
+
+@server.tool(annotations=_annotations("Draft project profile", read_only=False))
+def profile_draft(
+    projects: str = "data/projects.json",
+    vault: str = "data/vault",
+    repo: str | None = None,
+    id: str | None = None,
+) -> str:
+    """Draft human project profiles from each project's own repository."""
+    arguments = ["profile-draft", "--projects", projects, "--vault", vault]
+    if repo is not None:
+        arguments += ["--repo", repo]
+    if id is not None:
+        arguments += ["--id", id]
+    return _run(arguments)
+
+
 def main() -> None:
     server.run()
