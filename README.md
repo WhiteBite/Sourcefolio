@@ -445,6 +445,30 @@ examples/          # только synthetic-примеры
 tests/             # домен, вертикальный срез, CLI и architecture fitness
 ```
 
+## Кому это нужно / Who is it for
+
+- Для тех, кто сохраняет много коротких видео и слайдшоу и хочет архив доказательств, а не свалку саммари.
+- Для исследователей и knowledge workers, которым нужны провенанс, типизированные локаторы и проверяемая выдача.
+- Для разработчиков, которым нужен local-first, contract-driven pipeline с возможностью добавить собственные extractor'ы.
+
+## Сценарии использования / Use cases
+
+- Архивировать сохранённые TikTok-видео, слайдшоу и коллекции как неизменяемые content-addressed captures.
+- Извлекать OCR-текст из слайдов и искать по нему лексически с провенансом.
+- Собирать evidence packs по вопросу с ранжированными источниками, сниппетами и типизированными локаторами.
+- Генерировать Obsidian vault с карточками источников, индексами коллекций и triage-дашбордами.
+- Сопоставлять сохранённое с собственными проектами и вести историю решений.
+
+## Почему выбрать это / Why choose this
+
+- Неизменяемые content-addressed captures со стабильным `source_id` и content-derived `capture_id`.
+- Строгие evidence-контракты: `creator_claim`, `agent_inference`, `external_observation` и `user_outcome` не смешиваются.
+- Local-first: архив, ID, контракты и решения принадлежат пользователю.
+
+## Статус / Status
+
+Ядро evidence, resumable ingestion, OCR-пайплайн, лексический поиск и его оценка, evidence packs с проверкой целостности, TikTok-collections pipeline, Obsidian-проекция, LLM-digest и MCP-сервер реализованы и покрыты тестами. Открытые этапы — пилот на реальном export, human-reviewed OCR golden set и ASR/keyframes — перечислены в [дорожной карте](docs/ROADMAP.md).
+
 ## Документы
 
 - [Продуктовая рамка](docs/PRODUCT.md)

@@ -1,0 +1,39 @@
+<!-- rdk:generated:start -->
+# Sourcefolio
+
+> Local-first evidence archive and personal knowledge system for saved TikTok videos, slideshows and other media.
+
+Evidence Vault: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith.
+
+This file follows the llms.txt convention: a short, LLM-friendly index of the project.
+
+## Docs
+
+- [Documentation](https://github.com/WhiteBite/Sourcefolio/tree/main/docs): setup, configuration and scoring reference
+- [Homepage](https://github.com/WhiteBite/Sourcefolio#readme): project landing page
+- [Issues](https://github.com/WhiteBite/Sourcefolio/issues): roadmap and known gaps
+- [README.md](./README.md): install, run and test instructions
+
+## Key facts
+
+- Install: `python -m pip install -e '.[dev]'`
+- Run: `evidence-vault --help`
+- Test: `pytest`
+- Use cases: Archive saved TikTok videos, slideshows and collections as immutable, content-addressed captures; Extract OCR text from slides and search it lexically with provenance; Build query-driven evidence packs with ranked sources, snippets and typed locators; Generate an Obsidian vault with source cards, collection indexes and triage dashboards; Match saved content against your own projects and keep a decision history
+
+## Distribution tracking
+
+- Ledger: `.discoverability/submissions.json`, committed campaign state with schema `rdk-distribution/1`.
+- `rdk track` prints the live status (`--json` for the canonical object); `--adopt` pulls pre-ledger rdk/* PRs in, `--sync` rewrites recorded statuses from live probes, `--mark <target> --status <status>` overrides one row.
+- Every ledger write requires the guard chain `--apply --ack <ACK> --reason "<why>" --plan-digest <DIGEST>` (the digest of the dry-run preview).
+- Non-PR channels report live presence by probe: `crawl`, `http-search` and `registry-read`; PR channels report state via `gh`.
+
+## Optional
+
+- [llms-full.txt](./llms-full.txt): the full documentation in a single file
+- [AGENTS.md](./AGENTS.md): instructions for coding agents
+<!-- rdk:generated:end -->
+
+## Hand-written notes
+
+<!-- Everything below the end marker is preserved by `rdk fix`. Put hand-written context here; the block above is regenerated from .discoverability/project.yml. -->

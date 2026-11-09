@@ -1,0 +1,28 @@
+name: rdk-audit
+
+# Discoverability audit for humans, AI agents and search engines.
+# Audit-only: it posts a report on the pull request and never writes to the repo.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: rdk-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Discoverability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: WhiteBite/rdk-discoverability@v1
+        with:
+          min_score: ${{ vars.RDK_MIN_SCORE || 0 }}

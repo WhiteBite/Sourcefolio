@@ -1,0 +1,19 @@
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "Sourcefolio",
+  "description": "Evidence Vault: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith.",
+  "programmingLanguage": [
+    "Python",
+    "JavaScript"
+  ],
+  "runtimePlatform": "Node.js",
+  "license": "https://opensource.org/licenses/MIT",
+  "keywords": "",
+  "url": "https://github.com/WhiteBite/Sourcefolio#readme",
+  "codeRepository": "https://github.com/WhiteBite/Sourcefolio",
+  "author": "WhiteBite",
+  "sameAs": [
+    "https://github.com/WhiteBite/Sourcefolio"
+  ]
+}

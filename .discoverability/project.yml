@@ -1,0 +1,66 @@
+# Docs: https://github.com/WhiteBite/rdk-discoverability/blob/main/docs/configuration.md
+
+schema_version: 1
+
+demo_visual: not_applicable
+
+project:
+  name: "Sourcefolio"
+  one_liner: "Local-first evidence archive and personal knowledge system for saved TikTok videos, slideshows and other media."
+  description: "Evidence Vault: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith."
+  category: "app"
+  copyright_holder: "WhiteBite"
+
+audiences:
+  - "People who save large amounts of short-video content and want an evidence archive instead of a summary dump"
+  - "Researchers and knowledge workers who need provenance, typed locators and retrieval they can verify"
+  - "Developers who want a local-first, contract-driven pipeline they can extend with their own extractors"
+
+use_cases:
+  - "Archive saved TikTok videos, slideshows and collections as immutable, content-addressed captures"
+  - "Extract OCR text from slides and search it lexically with provenance"
+  - "Build query-driven evidence packs with ranked sources, snippets and typed locators"
+  - "Generate an Obsidian vault with source cards, collection indexes and triage dashboards"
+  - "Match saved content against your own projects and keep a decision history"
+
+keywords:
+  github_topics:
+    - "evidence-archive"
+    - "local-first"
+    - "knowledge-base"
+    - "personal-knowledge-management"
+    - "obsidian"
+    - "tiktok"
+    - "ocr"
+    - "sqlite"
+    - "pydantic"
+    - "retrieval"
+  npm_keywords: []
+
+links:
+  homepage: "https://github.com/WhiteBite/Sourcefolio#readme"
+  docs: "https://github.com/WhiteBite/Sourcefolio/tree/main/docs"
+  demo: ""
+  issues: "https://github.com/WhiteBite/Sourcefolio/issues"
+
+quickstart:
+  prerequisites:
+    - "Python 3.12+"
+  install: "python -m pip install -e '.[dev]'"
+  run: "evidence-vault --help"
+  test: "pytest"
+
+artifacts:
+  has_npm_package: false
+  has_docs_site: true
+  npm_published: false
+
+differentiators:
+  - "Immutable, content-addressed captures with a stable source_id and a content-derived capture_id"
+  - "Strict evidence contracts that never mix creator_claim, agent_inference, external_observation and user_outcome"
+  - "Local-first: the archive, IDs, contracts and decisions belong to the user"
+
+safety:
+  allow_autofix: false
+  require_ack_for_publish: true
+  ack: null

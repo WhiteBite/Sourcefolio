@@ -26,6 +26,16 @@ python -m venv .venv
 .\.venv\Scripts\evidence-vault.exe archive-capture examples/manual-capture/manifest.json --archive-dir data/archive
 ```
 
+## Do / Don't
+
+- Do run the full gate before every commit: `ruff format --check .`, `ruff check .`, `mypy src`, `pytest`.
+- Do keep the layer contract: `domain` never imports `application`/`adapters`; `application` never imports `adapters`.
+- Do regenerate `contracts/*.schema.json` with `evidence-vault schema <name>` after touching a pydantic model, and commit both together.
+- Do treat `data/` and `.opencode/dejavu/` as local-only: never commit them.
+- Don't add code comments; prose lives in `docs/` and commit messages.
+- Don't refactor, rename or reformat outside the scope of the task.
+- Don't bump the version, tag or publish without an explicit request.
+
 ## Структура
 
 ```text
