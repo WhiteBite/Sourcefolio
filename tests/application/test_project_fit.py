@@ -430,6 +430,16 @@ def test_parse_projects_reads_profile() -> None:
     assert projects == (Project(id="a", name="A", description="d", profile="human notes"),)
 
 
+def test_project_from_payload_reads_repo_path() -> None:
+    with_repo = Project.from_payload(
+        {"id": "a", "name": "A", "description": "d", "repo_path": "/x"}
+    )
+    without_repo = Project.from_payload({"id": "a", "name": "A", "description": "d"})
+
+    assert with_repo.repo_path == "/x"
+    assert without_repo.repo_path == ""
+
+
 def test_project_fit_prompt_includes_profile(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one", desc="trading bot idea")
     projects = (

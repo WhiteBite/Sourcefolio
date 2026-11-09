@@ -63,6 +63,7 @@ class Project:
     name: str
     description: str
     profile: str = ""
+    repo_path: str = ""
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, object]) -> Project:
@@ -71,6 +72,7 @@ class Project:
             name=_as_str(payload.get("name")),
             description=_as_str(payload.get("description")),
             profile=_as_str(payload.get("profile")),
+            repo_path=_as_str(payload.get("repo_path")),
         )
 
 
