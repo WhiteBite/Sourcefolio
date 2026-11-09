@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from evidence_vault.application.slugs import slugify, unique_slugs
+from sourcefolio.application.slugs import slugify, unique_slugs
 
 
 def test_slugify_transliterates_cyrillic_and_normalizes() -> None:

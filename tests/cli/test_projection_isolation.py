@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 EXAMPLE = Path(__file__).parents[2] / "examples" / "tiktok-export" / "user_data.json"
 
@@ -28,7 +28,7 @@ def test_project_obsidian_leaves_sibling_namespaces_and_human_notes_untouched(
     )
     capsys.readouterr()
 
-    generated = vault / "_generated" / "evidence-vault"
+    generated = vault / "_generated" / "sourcefolio"
     seeded = {
         generated / "repos" / "sentinel.md": "# repos sentinel\n",
         generated / "llm" / "sentinel.md": "# llm sentinel\n",

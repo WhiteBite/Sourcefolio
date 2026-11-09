@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from evidence_vault.application.frontmatter import Frontmatter, note_body, parse_frontmatter
+from sourcefolio.application.frontmatter import Frontmatter, note_body, parse_frontmatter
 
 
 def test_valid_frontmatter_returns_properties() -> None:

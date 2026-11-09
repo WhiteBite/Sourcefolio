@@ -1,9 +1,9 @@
 ---
 name: ev-feature
-description: Рецепт сквозной фичи в Evidence Vault — домен-контракт, application use case с портом, адаптер, CLI-команда, экспорт JSON Schema, тесты. Use when добавляешь новую команду/операцию/отчёт/контракт в evidence-vault, "добавь команду", "новый отчёт", "новая схема", "новый operational report".
+description: Рецепт сквозной фичи в Sourcefolio — домен-контракт, application use case с портом, адаптер, CLI-команда, экспорт JSON Schema, тесты. Use when добавляешь новую команду/операцию/отчёт/контракт в sourcefolio, "добавь команду", "новый отчёт", "новая схема", "новый operational report".
 ---
 
-# Сквозная фича в Evidence Vault
+# Сквозная фича в Sourcefolio
 
 Порядок шагов обязателен: пропуск ломает архитектурный тест (`tests/architecture/test_dependencies.py`) или контракт-тест (`tests/contracts/test_schemas_are_current.py`).
 
@@ -11,7 +11,7 @@ description: Рецепт сквозной фичи в Evidence Vault — дом
 2. **Application** (`application/`): use case (функция или класс); внешние эффекты — только через Protocol-порт по образцу `ports.py` / `capture_ports.py`. Ни одного import из `adapters`.
 3. **Адаптер** (`adapters/`): реализация порта. Subprocess — по образцу `ocr/tesseract.py`: таймаут, лимиты байт, sanitized metadata, kill дерева процессов.
 4. **CLI** (`cli.py`): подкоманда argparse; handler возвращает int (exit code); вывод — JSON (`ensure_ascii=False`) или markdown. Тонкий слой: без бизнес-логики.
-5. **Контракт**: `evidence-vault schema <name>` → обновить файл в `contracts/` и закоммитить вместе с моделью; тест сверяет побайтово.
+5. **Контракт**: `sourcefolio schema <name>` → обновить файл в `contracts/` и закоммитить вместе с моделью; тест сверяет побайтово.
 6. **Тесты**: unit на каждом слое + CLI-тест в `tests/cli/`. Внешние сервисы — только fake executables через `write_fake_executable` (`tests/conftest.py`).
 7. **Gate**: полный прогон (скилл ev-gate); новые тесты увеличивают baseline 125.
 

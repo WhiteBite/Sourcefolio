@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
-from evidence_vault.domain.source import (
+from sourcefolio.domain.source import (
     CaptureStatus,
     SourceIdentity,
     SourceKind,

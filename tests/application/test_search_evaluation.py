@@ -5,12 +5,12 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from evidence_vault.application.search import LexicalSearchIndex, SearchDocument
-from evidence_vault.application.search_evaluation import (
+from sourcefolio.application.search import LexicalSearchIndex, SearchDocument
+from sourcefolio.application.search_evaluation import (
     SearchEvaluationSet,
     SearchEvaluator,
 )
-from evidence_vault.domain.source import CaptureStatus, SourceKind
+from sourcefolio.domain.source import CaptureStatus, SourceKind
 
 SOURCE_A = "src_" + "1" * 64
 SOURCE_B = "src_" + "2" * 64

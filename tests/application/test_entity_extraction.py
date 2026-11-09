@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from evidence_vault.application.entity_extraction import find_hashtags, find_repositories
+from sourcefolio.application.entity_extraction import find_hashtags, find_repositories
 
 
 def test_find_repositories_normalizes_github_and_gitlab() -> None:

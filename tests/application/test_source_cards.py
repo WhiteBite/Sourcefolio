@@ -7,17 +7,17 @@ from pathlib import Path
 import pytest
 import yaml
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.projection_types import GeneratedDocument
-from evidence_vault.application.source_cards import SourceCardProjection
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.source_cards import SourceCardProjection
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -86,7 +86,7 @@ def add_packet_with_saved_index(root: Path, external_id: str, saved_index: dict)
 
 
 def _render_single_card(archive: Path, tmp_path: Path) -> str:
-    generated_root = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated_root = tmp_path / "vault" / "_generated" / "sourcefolio"
     projection = SourceCardProjection(
         packets=FileSystemSourcePacketRepository(archive),
         artifacts=FileSystemArtifactStore(archive),
@@ -174,7 +174,7 @@ def test_obsidian_projection_is_rebuildable_and_has_yaml_properties(
     add_packet(archive, "2", "Второй ролик")
     artifact_store = FileSystemArtifactStore(archive)
     packets = FileSystemSourcePacketRepository(archive)
-    generated_root = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated_root = tmp_path / "vault" / "_generated" / "sourcefolio"
     store = FileSystemProjectionStore(generated_root)
     projection = SourceCardProjection(
         packets=packets,

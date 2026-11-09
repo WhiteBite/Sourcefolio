@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from evidence_vault.application.markdown import (
+from sourcefolio.application.markdown import (
     card_link,
     escape,
     generated_callout,
@@ -12,8 +12,8 @@ from evidence_vault.application.markdown import (
     note_tags,
     wikilink_alias,
 )
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRef,
     ArtifactRole,
     SourceIdentity,
@@ -66,11 +66,10 @@ def test_wikilink_alias_strips_reserved_characters() -> None:
 def test_card_link_uses_prefix_and_title_alias() -> None:
     packet = _packet(title="My [Title]")
 
-    link = card_link("_generated/evidence-vault", packet)
+    link = card_link("_generated/sourcefolio", packet)
 
     assert link == (
-        f"[[_generated/evidence-vault/source-cards/{packet.source_id}/{packet.capture_id}"
-        "|My Title]]"
+        f"[[_generated/sourcefolio/source-cards/{packet.source_id}/{packet.capture_id}|My Title]]"
     )
 
 
@@ -158,4 +157,4 @@ def test_mermaid_label_neutralizes_remaining_significant_characters() -> None:
 
 
 def test_note_tags_returns_kind_scoped_tags() -> None:
-    assert note_tags("repo") == ["evidence-vault", "evidence-vault/repo"]
+    assert note_tags("repo") == ["sourcefolio", "sourcefolio/repo"]

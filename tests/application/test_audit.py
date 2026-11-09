@@ -5,15 +5,15 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.audit import ArchiveAudit
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import ArtifactRole, SourceIdentity, SourceKind, SourcePacket
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.audit import ArchiveAudit
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import ArtifactRole, SourceIdentity, SourceKind, SourcePacket
 
 
 def add_packet(root: Path, content: bytes = b"evidence") -> SourcePacket:

@@ -6,17 +6,17 @@ from pathlib import Path
 
 import yaml
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.collection_index import CollectionIndexProjection
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.slugs import slugify
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.collection_index import CollectionIndexProjection
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.slugs import slugify
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -85,7 +85,7 @@ def test_collection_index_builds_moc_with_extracted_entities(tmp_path: Path) -> 
     )
     add_packet(archive, "3", collections=("Идеи",), desc="без ссылок", title="Третий")
 
-    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated = tmp_path / "vault" / "_generated" / "sourcefolio"
     store = FileSystemProjectionStore(generated)
     count = CollectionIndexProjection(
         packets=FileSystemSourcePacketRepository(archive),
@@ -98,7 +98,7 @@ def test_collection_index_builds_moc_with_extracted_entities(tmp_path: Path) -> 
     assert properties["collection"] == "Нейронки"
     assert properties["video_count"] == 2
     assert "## Videos (2)" in moc
-    assert "[[_generated/evidence-vault/source-cards/" in moc
+    assert "[[_generated/sourcefolio/source-cards/" in moc
     assert "https://github.com/owner/repo" in moc
     assert "#нейронки (2)" in moc
     assert "#ai (1)" in moc
@@ -106,14 +106,14 @@ def test_collection_index_builds_moc_with_extracted_entities(tmp_path: Path) -> 
     index = (generated / "collections" / "index.md").read_text(encoding="utf-8")
     assert "Нейронки" in index
     assert "Идеи" in index
-    assert "[[_generated/evidence-vault/collections/neyronki|Нейронки]]" in index
+    assert "[[_generated/sourcefolio/collections/neyronki|Нейронки]]" in index
 
 
 def test_collection_index_reports_absence_of_entities(tmp_path: Path) -> None:
     archive = tmp_path / "archive"
     add_packet(archive, "1", collections=("Идеи",), desc="просто текст", title="Один")
 
-    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated = tmp_path / "vault" / "_generated" / "sourcefolio"
     store = FileSystemProjectionStore(generated)
     CollectionIndexProjection(
         packets=FileSystemSourcePacketRepository(archive),

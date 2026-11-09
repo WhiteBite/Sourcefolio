@@ -6,18 +6,18 @@ from pathlib import Path
 
 import yaml
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.dashboards import TriageDashboardProjection
-from evidence_vault.application.triage import IdeaScaffolder
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.dashboards import TriageDashboardProjection
+from sourcefolio.application.triage import IdeaScaffolder
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -92,7 +92,7 @@ def test_idea_scaffolder_creates_then_skips(tmp_path: Path) -> None:
 
 
 def test_triage_dashboards_generated(tmp_path: Path) -> None:
-    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated = tmp_path / "vault" / "_generated" / "sourcefolio"
     store = FileSystemProjectionStore(generated)
 
     assert TriageDashboardProjection(store=store).rebuild() == 4

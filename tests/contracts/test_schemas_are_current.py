@@ -6,16 +6,16 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from evidence_vault.adapters.tiktok.collections import CollectionCaptureDocument
-from evidence_vault.application.evidence_pack import EvidencePackDocument
-from evidence_vault.application.evidence_pack_integrity import EvidencePackIntegrityReport
-from evidence_vault.application.ocr_backlog_report import OcrBacklogReportDocument
-from evidence_vault.application.ocr_evaluation import OcrEvaluationReport, OcrEvaluationSet
-from evidence_vault.application.search_evaluation import SearchEvaluationSet
-from evidence_vault.domain.capture import CaptureTask
-from evidence_vault.domain.evidence import EvidenceItem
-from evidence_vault.domain.extraction import ExtractionRecord
-from evidence_vault.domain.source import SourcePacket
+from sourcefolio.adapters.tiktok.collections import CollectionCaptureDocument
+from sourcefolio.application.evidence_pack import EvidencePackDocument
+from sourcefolio.application.evidence_pack_integrity import EvidencePackIntegrityReport
+from sourcefolio.application.ocr_backlog_report import OcrBacklogReportDocument
+from sourcefolio.application.ocr_evaluation import OcrEvaluationReport, OcrEvaluationSet
+from sourcefolio.application.search_evaluation import SearchEvaluationSet
+from sourcefolio.domain.capture import CaptureTask
+from sourcefolio.domain.evidence import EvidenceItem
+from sourcefolio.domain.extraction import ExtractionRecord
+from sourcefolio.domain.source import SourcePacket
 
 CONTRACTS = Path(__file__).parents[2] / "contracts"
 

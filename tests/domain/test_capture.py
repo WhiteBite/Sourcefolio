@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from evidence_vault.domain.capture import CaptureTask
-from evidence_vault.domain.source import SourceIdentity, SourceKind
+from sourcefolio.domain.capture import CaptureTask
+from sourcefolio.domain.source import SourceIdentity, SourceKind
 
 
 def test_task_id_is_stable_but_operation_hash_depends_on_adapter() -> None:

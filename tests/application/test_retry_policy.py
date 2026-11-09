@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from evidence_vault.application.capture_types import RetryPolicy
+from sourcefolio.application.capture_types import RetryPolicy
 
 
 def test_backoff_is_exponential_capped_and_deterministic_without_jitter() -> None:

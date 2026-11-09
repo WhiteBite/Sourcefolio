@@ -1,4 +1,4 @@
-# AGENTS.md — Evidence Vault
+# AGENTS.md — Sourcefolio
 
 Local-first архив доказательств для сохранённых TikTok-видео и слайдшоу: immutable captures, derived OCR, lexical search, evidence packs, генерация Obsidian vault. Python 3.12+, pydantic v2, SQLite control plane, модульный монолит ports & adapters. Prose в проекте на русском; код и идентификаторы на английском.
 
@@ -23,14 +23,14 @@ python -m venv .venv
 Ожидаемый baseline: ruff без замечаний, mypy strict **80 source files**, pytest — весь набор зелёный (лёгкие предупреждения от тестов `warnings` допустимы). Smoke CLI:
 
 ```powershell
-.\.venv\Scripts\evidence-vault.exe archive-capture examples/manual-capture/manifest.json --archive-dir data/archive
+.\.venv\Scripts\sourcefolio.exe archive-capture examples/manual-capture/manifest.json --archive-dir data/archive
 ```
 
 ## Do / Don't
 
 - Do run the full gate before every commit: `ruff format --check .`, `ruff check .`, `mypy src`, `pytest`.
 - Do keep the layer contract: `domain` never imports `application`/`adapters`; `application` never imports `adapters`.
-- Do regenerate `contracts/*.schema.json` with `evidence-vault schema <name>` after touching a pydantic model, and commit both together.
+- Do regenerate `contracts/*.schema.json` with `sourcefolio schema <name>` after touching a pydantic model, and commit both together.
 - Do treat `data/` and `.opencode/dejavu/` as local-only: never commit them.
 - Don't add code comments; prose lives in `docs/` and commit messages.
 - Don't refactor, rename or reformat outside the scope of the task.
@@ -39,7 +39,7 @@ python -m venv .venv
 ## Структура
 
 ```text
-src/evidence_vault/
+src/sourcefolio/
   domain/        # контракты, ID-типы, инварианты; без инфраструктуры
   application/   # use cases + Protocol-порты; не знает адаптеров
   adapters/      # filesystem, sqlite, tiktok (export/yt-dlp/gallery-dl), ocr
@@ -69,13 +69,13 @@ data/            # локальные данные (gitignored): archive, derive
 ## Жёсткие правила
 
 - Слои: `domain` не импортирует `application`/`adapters`; `application` не импортирует `adapters`. Enforcement — AST-тест `tests/architecture/test_dependencies.py`.
-- Контракты: `model_json_schema()` pydantic-модели обязан побайтово совпадать с файлом в `contracts/`. После правки модели перегенерировать через `evidence-vault schema <name>` и закоммитить оба. Тест: `tests/contracts/test_schemas_are_current.py`.
+- Контракты: `model_json_schema()` pydantic-модели обязан побайтово совпадать с файлом в `contracts/`. После правки модели перегенерировать через `sourcefolio schema <name>` и закоммитить оба. Тест: `tests/contracts/test_schemas_are_current.py`.
 - Captures неизменяемы: `source_id` (логический источник), `capture_id` (content-derived), `artifact_id = art_<sha256>`. Повтор capture идемпотентен; новая версия не затирает прежнюю.
 - Не смешивать `creator_claim`, `agent_inference`, `external_observation`, `user_outcome`. Универсального trust score нет и не добавлять.
 - Partial capture обязан явно перечислять limitations; ошибка загрузки живёт в control plane, а не в source packet.
 - Derived (OCR/extraction records) пишутся только в `data/derived/`, raw packet не мутируется.
 - `archive-audit` и `capture-report` read-only: orphan'ы выводятся в отчёт, ничего не удаляется.
-- Obsidian: генерация только в `data/vault/_generated/evidence-vault/`; ручные заметки не перезаписываются.
+- Obsidian: генерация только в `data/vault/_generated/sourcefolio/`; ручные заметки не перезаписываются.
 - Релевантность ≠ истинность: evidence-pack собирает ссылки и excerpts, автоматический ответ не создаёт.
 - Тесты не ходят в сеть: живой TikTok и настоящий Tesseract запрещены, только fake executables.
 
@@ -96,11 +96,11 @@ data/            # локальные данные (gitignored): archive, derive
 
 ## Session start
 
-Чтобы вспомнить контекст в начале сессии: прочитай `data/vault/_generated/evidence-vault/context/index.md` (machine-версия — `context.json`), либо выполни `evidence-vault context`. Бриф собирается из профилей проектов (`data/vault/projects/`), накопленных совпадений `project-fit` и решений (`data/vault/decisions/`). MCP-инструмент `context` делает то же, но требует перезапуска opencode после изменения `opencode.json`.
+Чтобы вспомнить контекст в начале сессии: прочитай `data/vault/_generated/sourcefolio/context/index.md` (machine-версия — `context.json`), либо выполни `sourcefolio context`. Бриф собирается из профилей проектов (`data/vault/projects/`), накопленных совпадений `project-fit` и решений (`data/vault/decisions/`). MCP-инструмент `context` делает то же, но требует перезапуска opencode после изменения `opencode.json`.
 
 ## Handoff-контекст
 
-Проект привезён из облачного sandbox архивом. `HANDOFF_MANIFEST.json` — снимок 154 файлов с SHA-256 от 2026-11-03, baseline 125 tests / ruff clean / mypy strict. При переносе были повреждены `src/evidence_vault/__init__.py` и `application/metrics.py`, восстановлены по контракту потребителей (коммит 228ad34). Манифест — историческая запись, не живой чек-лист.
+Проект привезён из облачного sandbox архивом. `HANDOFF_MANIFEST.json` — снимок 154 файлов с SHA-256 от 2026-11-03, baseline 125 tests / ruff clean / mypy strict. При переносе были повреждены `src/sourcefolio/__init__.py` и `application/metrics.py`, восстановлены по контракту потребителей (коммит 228ad34). Манифест — историческая запись, не живой чек-лист.
 
 ## Следующие этапы (docs/ROADMAP.md)
 

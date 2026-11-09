@@ -5,17 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.sqlite import SQLiteCaptureState
-from evidence_vault.application.capture_report import (
+from sourcefolio.adapters.sqlite import SQLiteCaptureState
+from sourcefolio.application.capture_report import (
     CaptureReportBuilder,
     render_capture_report_markdown,
 )
-from evidence_vault.application.capture_types import (
+from sourcefolio.application.capture_types import (
     AttemptStatus,
     CaptureJobStatus,
 )
-from evidence_vault.domain.capture import CaptureTask
-from evidence_vault.domain.source import SourceIdentity, SourceKind
+from sourcefolio.domain.capture import CaptureTask
+from sourcefolio.domain.source import SourceIdentity, SourceKind
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 

@@ -5,16 +5,16 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from evidence_vault import cli
-from evidence_vault.adapters.filesystem import (
+from sourcefolio import cli
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.cli import main
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.cli import main
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -64,7 +64,7 @@ def add_packet(root: Path, external_id: str, desc: str = "trading bot idea") -> 
 
 
 def _answers(vault: Path) -> list[Path]:
-    return sorted((vault / "_generated" / "evidence-vault" / "answers").glob("*.md"))
+    return sorted((vault / "_generated" / "sourcefolio" / "answers").glob("*.md"))
 
 
 def test_ask_no_llm_retrieval_only_writes_note(tmp_path: Path, capsys, monkeypatch) -> None:

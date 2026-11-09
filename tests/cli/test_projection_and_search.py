@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 EXAMPLE = Path(__file__).parents[2] / "examples" / "tiktok-export" / "user_data.json"
 
@@ -43,9 +43,9 @@ def test_obsidian_projection_and_search_cli(tmp_path: Path, capsys) -> None:
     assert projection["repo_node_documents"] == 0
     assert projection["graph_documents"] == 1
     assert projection["decision_documents"] == 1
-    cards = list((vault / "_generated" / "evidence-vault" / "source-cards").rglob("*.md"))
+    cards = list((vault / "_generated" / "sourcefolio" / "source-cards").rglob("*.md"))
     assert len(cards) == 3
-    generated = vault / "_generated" / "evidence-vault"
+    generated = vault / "_generated" / "sourcefolio"
     assert (generated / "entities").is_dir()
     assert (generated / "graph" / "index.md").is_file()
     assert (generated / "decisions" / "index.md").is_file()

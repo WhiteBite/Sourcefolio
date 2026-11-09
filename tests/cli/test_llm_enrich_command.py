@@ -7,22 +7,22 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault import cli
-from evidence_vault.adapters.filesystem import (
+from sourcefolio import cli
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.cli import (
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.cli import (
     DEFAULT_LLM_BASE_URL,
     DEFAULT_LLM_MODEL,
     LlmConfig,
     main,
     resolve_llm_config,
 )
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -148,7 +148,7 @@ def test_llm_enrich_cli_writes_cache_and_note(tmp_path: Path, capsys, monkeypatc
     assert first["model"] == "test-model"
     assert (first["processed"], first["skipped_cached"], first["failed"]) == (2, 0, 0)
     assert len(list((derived / "llm").glob("*.json"))) == 2
-    note = vault / "_generated" / "evidence-vault" / "llm" / "neyronki.md"
+    note = vault / "_generated" / "sourcefolio" / "llm" / "neyronki.md"
     assert note.is_file()
     assert "Machine inference" in note.read_text(encoding="utf-8")
 

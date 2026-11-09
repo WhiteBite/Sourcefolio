@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.filesystem.human_notes import FileSystemHumanNoteStore
+from sourcefolio.adapters.filesystem.human_notes import FileSystemHumanNoteStore
 
 
 def test_iter_notes_yields_sorted_posix_paths(tmp_path: Path) -> None:

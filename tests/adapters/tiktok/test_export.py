@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.tiktok.export import ExportFormatError, TikTokExportParser
-from evidence_vault.domain.source import SourceKind
+from sourcefolio.adapters.tiktok.export import ExportFormatError, TikTokExportParser
+from sourcefolio.domain.source import SourceKind
 
 
 def write_json(path: Path, entries: list[dict]) -> None:

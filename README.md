@@ -1,4 +1,4 @@
-# Evidence Vault
+# Sourcefolio
 
 Рабочее название локальной системы, которая превращает сохранённые TikTok-видео, слайдшоу и другие источники не в очередную базу саммари, а в **архив доказательств, личный контекст и историю решений**.
 
@@ -43,7 +43,7 @@
 24. `project-obsidian` collection indexes: per-collection `collection-index/v1` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags.
 25. Triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
 26. `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
-27. MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
+27. MCP-сервер `sourcefolio-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 28. `project-fit`: сопоставление latest captures с проектами пользователя через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 29. Knowledge-base surfaces: human `ideas/`/`projects/`/`decisions/`, generated `entities/` (repo nodes), `graph/` (Mermaid), `decisions/` index и `projects/` briefs; команды `scaffold-projects`, `decision-new`, `decision-search`, `context` и `project-fit --profiles`.
 30. `ask`: единая точка входа — retrieval через search + evidence-pack и optional grounded LLM synthesis только по excerpts; immutable per-run note `answer/v1` в `answers/` с `provenance: agent_inference`, citations и human decision stub.
@@ -67,7 +67,7 @@ mypy src
 Импортировать synthetic-пример:
 
 ```bash
-evidence-vault archive-capture \
+sourcefolio archive-capture \
   examples/manual-capture/manifest.json \
   --archive-dir data/archive
 ```
@@ -77,11 +77,11 @@ evidence-vault archive-capture \
 Проверить TikTok export без записи, затем архивировать saved-item metadata ограниченным worker pool:
 
 ```bash
-evidence-vault tiktok-inspect \
+sourcefolio tiktok-inspect \
   examples/tiktok-export/user_data.json \
   --export-timezone Europe/Moscow
 
-evidence-vault tiktok-import \
+sourcefolio tiktok-import \
   examples/tiktok-export/user_data.json \
   --export-timezone Europe/Moscow \
   --concurrency 4
@@ -93,7 +93,7 @@ evidence-vault tiktok-import \
 
 ```bash
 python -m pip install -e '.[media]'
-evidence-vault tiktok-download /path/to/user_data.json \
+sourcefolio tiktok-download /path/to/user_data.json \
   --concurrency 4 \
   --site-limit 2 \
   --limit 10
@@ -103,7 +103,7 @@ evidence-vault tiktok-download /path/to/user_data.json \
 
 ```bash
 python -m pip install -e '.[slides]'
-evidence-vault tiktok-slides /path/to/user_data.json \
+sourcefolio tiktok-slides /path/to/user_data.json \
   --concurrency 4 \
   --site-limit 2 \
   --max-slides 50 \
@@ -115,34 +115,34 @@ Resolver отбирает только slideshow tasks и считает capture
 Пересобрать generated source cards и выполнить baseline search:
 
 ```bash
-evidence-vault project-obsidian \
+sourcefolio project-obsidian \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault
 
-evidence-vault search "нейронки агенты" \
+sourcefolio search "нейронки агенты" \
   --archive-dir data/archive \
   --collection Нейронки \
   --limit 10
 
-evidence-vault evidence-pack "нейронки агенты" \
+sourcefolio evidence-pack "нейронки агенты" \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --format markdown \
   --excerpt-limit 3
 ```
 
-Cards появляются только в `data/vault/_generated/evidence-vault/source-cards/`, а coverage dashboard — в `.../overview/index.md`; ручные заметки следует хранить вне этого machine-owned пути. Search использует AND для терминов, Unicode casefold и bounded textual artifacts. Он не выполняет OCR сам, но подхватывает уже сохранённые derived records и не присваивает источникам trust score. `evidence-pack` лишь собирает проверяемые ссылки и excerpts: relevance не является истинностью, автоматический ответ не создаётся.
+Cards появляются только в `data/vault/_generated/sourcefolio/source-cards/`, а coverage dashboard — в `.../overview/index.md`; ручные заметки следует хранить вне этого machine-owned пути. Search использует AND для терминов, Unicode casefold и bounded textual artifacts. Он не выполняет OCR сам, но подхватывает уже сохранённые derived records и не присваивает источникам trust score. `evidence-pack` лишь собирает проверяемые ссылки и excerpts: relevance не является истинностью, автоматический ответ не создаётся.
 
 После установки Tesseract с нужными language data можно извлечь OCR из слайдов одного capture. ID берётся из результата search/source card:
 
 ```bash
-evidence-vault ocr-capture cap_<64-hex> \
+sourcefolio ocr-capture cap_<64-hex> \
   --language eng+rus \
   --concurrency 2 \
   --limit 50
 
-evidence-vault search "текст со слайда"
+sourcefolio search "текст со слайда"
 ```
 
 OCR пишет только `data/derived/`, не изменяет raw SourcePacket. Повтор с тем же Tesseract version/config пропускается по request ID; смена языка или версии создаёт новую операцию. Для строгого model cache дополнительно укажите `--tessdata-dir /path/to/tessdata`: SHA-256 traineddata войдёт в request. Без него результат сохраняется с limitation `language data fingerprint unavailable`.
@@ -150,7 +150,7 @@ OCR пишет только `data/derived/`, не изменяет raw SourcePac
 Для bounded batch по backlog используйте `ocr-backlog` (по умолчанию только latest capture на source, 10 captures и 100 slides):
 
 ```bash
-evidence-vault ocr-backlog \
+sourcefolio ocr-backlog \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --collection Нейронки \
@@ -159,7 +159,7 @@ evidence-vault ocr-backlog \
   --concurrency 2 \
   --report data/reports/ocr-run-001.json
 
-evidence-vault capture-report \
+sourcefolio capture-report \
   --control-db data/control/capture.sqlite3 \
   --format markdown
 ```
@@ -169,17 +169,17 @@ evidence-vault capture-report \
 Golden OCR samples используют stable `capture_id + artifact_id + typed locator` и `expected_text`; optional `request_id` закрепляет конкретную extractor operation. ID и request IDs доступны в evidence pack/batch report. Синтетический шаблон лежит в `examples/ocr-evaluation/`; перед запуском замените zero IDs и текст на реальную human-reviewed разметку:
 
 ```bash
-evidence-vault ocr-evaluate /path/to/ocr-samples.json \
+sourcefolio ocr-evaluate /path/to/ocr-samples.json \
   --derived-dir data/derived \
   --batch-report data/reports/ocr-run-001.json \
   --output data/reports/ocr-evaluation-001.json
 
-evidence-vault evidence-pack "текст со слайда" \
+sourcefolio evidence-pack "текст со слайда" \
   --archive-dir data/archive \
   --derived-dir data/derived \
   > data/reports/evidence-pack-001.json
 
-evidence-vault evidence-pack-verify data/reports/evidence-pack-001.json \
+sourcefolio evidence-pack-verify data/reports/evidence-pack-001.json \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --verify-bytes
@@ -190,9 +190,9 @@ Evaluator возвращает exact/CER/WER и empty rate по evaluated sample
 Проверить evidence archive и прогнать judged search queries:
 
 ```bash
-evidence-vault archive-audit --verify-bytes
+sourcefolio archive-audit --verify-bytes
 
-evidence-vault search-evaluate \
+sourcefolio search-evaluate \
   examples/search-evaluation/queries.json
 ```
 
@@ -201,17 +201,17 @@ evidence-vault search-evaluate \
 Экспортировать машинный контракт:
 
 ```bash
-evidence-vault schema source-packet
-evidence-vault schema evidence-item
-evidence-vault schema capture-task
-evidence-vault schema search-evaluation
-evidence-vault schema extraction-record
-evidence-vault schema evidence-pack
-evidence-vault schema evidence-pack-integrity
-evidence-vault schema ocr-backlog-report
-evidence-vault schema ocr-evaluation
-evidence-vault schema ocr-evaluation-report
-evidence-vault schema collection-capture
+sourcefolio schema source-packet
+sourcefolio schema evidence-item
+sourcefolio schema capture-task
+sourcefolio schema search-evaluation
+sourcefolio schema extraction-record
+sourcefolio schema evidence-pack
+sourcefolio schema evidence-pack-integrity
+sourcefolio schema ocr-backlog-report
+sourcefolio schema ocr-evaluation
+sourcefolio schema ocr-evaluation-report
+sourcefolio schema collection-capture
 ```
 
 ## TikTok collections → база знаний
@@ -221,7 +221,7 @@ Tampermonkey userscript `userscripts/tiktok-collections-capture.user.js` соб�
 Архивировать metadata-only packets (медиа не скачивается):
 
 ```bash
-evidence-vault import-collections \
+sourcefolio import-collections \
   /path/to/tiktok-collections-<stamp>.json \
   --archive-dir data/archive \
   --control-db data/control/capture.sqlite3 \
@@ -231,23 +231,23 @@ evidence-vault import-collections \
 `import-collections` создаёт resumable backlog и честные partial packets; повтор той же операции идемпотентен. Затем пересобрать generated views и, при желании, создать human `ideas/`:
 
 ```bash
-evidence-vault project-obsidian \
+sourcefolio project-obsidian \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault \
   --scaffold-ideas
 
-evidence-vault scaffold-ideas \
+sourcefolio scaffold-ideas \
   --archive-dir data/archive \
   --vault data/vault
 ```
 
-`project-obsidian` дополнительно строит per-collection indexes в `<vault>/_generated/evidence-vault/collections/`: для каждой коллекции `<slug>.md` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags, плюс `index.md`. Triage dashboards лежат в `.../dashboards/` (`inbox`, `keep`, `drop`, `done`) и используют Dataview-запросы над `ideas/`, поэтому **нужен плагин Obsidian Dataview**. `--scaffold-ideas` создаёт отсутствующие human notes в `<vault>/ideas/<source_id>.md` (frontmatter `status: inbox`) и не перезаписывает существующие; `scaffold-ideas` делает то же без пересборки generated views. `project-obsidian` также пересобирает `entities/`, `graph/` и `decisions/` (см. раздел «База знаний: human и generated зоны»).
+`project-obsidian` дополнительно строит per-collection indexes в `<vault>/_generated/sourcefolio/collections/`: для каждой коллекции `<slug>.md` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags, плюс `index.md`. Triage dashboards лежат в `.../dashboards/` (`inbox`, `keep`, `drop`, `done`) и используют Dataview-запросы над `ideas/`, поэтому **нужен плагин Obsidian Dataview**. `--scaffold-ideas` создаёт отсутствующие human notes в `<vault>/ideas/<source_id>.md` (frontmatter `status: inbox`) и не перезаписывает существующие; `scaffold-ideas` делает то же без пересборки generated views. `project-obsidian` также пересобирает `entities/`, `graph/` и `decisions/` (см. раздел «База знаний: human и generated зоны»).
 
 Per-collection LLM digest:
 
 ```bash
-evidence-vault llm-enrich \
+sourcefolio llm-enrich \
   --collection Нейронки \
   --archive-dir data/archive \
   --derived-dir data/derived \
@@ -255,24 +255,24 @@ evidence-vault llm-enrich \
   --limit 20
 ```
 
-`llm-enrich` прогоняет latest captures коллекции через OpenAI-compatible chat model и пишет `llm-digest/v1` в `<vault>/_generated/evidence-vault/llm/<slug>.md`. Digest помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`. Конфигурация резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults. Ответы кэшируются в `data/derived/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет.
+`llm-enrich` прогоняет latest captures коллекции через OpenAI-compatible chat model и пишет `llm-digest/v1` в `<vault>/_generated/sourcefolio/llm/<slug>.md`. Digest помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`. Конфигурация резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults. Ответы кэшируются в `data/derived/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет.
 
 Каталог репозиториев коллекции:
 
 ```bash
-evidence-vault repo-catalog \
+sourcefolio repo-catalog \
   --collection Нейронки \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault
 ```
 
-`repo-catalog` извлекает ссылки на репозитории из latest captures коллекции (desc + комментарии), дедуплицирует по нормализованному `owner/repo` и обогащает GitHub-репозитории через REST API (endpoint `GET /repos/{owner}/{repo}` на `api.github.com`): stars, language, license, archived, last push, topics. Результат — note `repo-catalog/v1` в `<vault>/_generated/evidence-vault/repos/<slug>.md` с `provenance: external_observation`: таблица репозиториев плюс число видео и wikilinks на упомянувшие их source cards. GitLab-ссылки подсчитываются, но не обогащаются (v1 — только GitHub). Токен берётся из `--token` или env `GITHUB_TOKEN`; без токена лимит API — 60 запросов/час, а 403/429/404 изолируются как ошибка отдельного репозитория, прогон продолжается. Метаданные кэшируются в `data/derived/repos/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет и не запрашивает.
+`repo-catalog` извлекает ссылки на репозитории из latest captures коллекции (desc + комментарии), дедуплицирует по нормализованному `owner/repo` и обогащает GitHub-репозитории через REST API (endpoint `GET /repos/{owner}/{repo}` на `api.github.com`): stars, language, license, archived, last push, topics. Результат — note `repo-catalog/v1` в `<vault>/_generated/sourcefolio/repos/<slug>.md` с `provenance: external_observation`: таблица репозиториев плюс число видео и wikilinks на упомянувшие их source cards. GitLab-ссылки подсчитываются, но не обогащаются (v1 — только GitHub). Токен берётся из `--token` или env `GITHUB_TOKEN`; без токена лимит API — 60 запросов/час, а 403/429/404 изолируются как ошибка отдельного репозитория, прогон продолжается. Метаданные кэшируются в `data/derived/repos/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет и не запрашивает.
 
 Сопоставление сохранённого с проектами:
 
 ```bash
-evidence-vault project-fit \
+sourcefolio project-fit \
   --collection Нейронки \
   --projects data/projects.json \
   --archive-dir data/archive \
@@ -280,7 +280,7 @@ evidence-vault project-fit \
   --vault data/vault
 ```
 
-`project-fit` прогоняет latest captures коллекции через OpenAI-compatible chat model и сопоставляет каждый элемент с проектами из `--projects` (JSON `{"projects": [{"id", "name", "description"}]}`). Результат — per-project briefs `project-fit/v1` в `<vault>/_generated/evidence-vault/projects/<slug>.md` плюс `projects/index.md` со списком проектов и числом глобально нерелевантных элементов. Каждый brief помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`.
+`project-fit` прогоняет latest captures коллекции через OpenAI-compatible chat model и сопоставляет каждый элемент с проектами из `--projects` (JSON `{"projects": [{"id", "name", "description"}]}`). Результат — per-project briefs `project-fit/v1` в `<vault>/_generated/sourcefolio/projects/<slug>.md` плюс `projects/index.md` со списком проектов и числом глобально нерелевантных элементов. Каждый brief помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`.
 
 `--collection` можно повторять; без него сканируется latest capture каждого источника в архиве (это может быть много). Совпадения накапливаются в `<derived-dir>/project-fit/index.json`: повторный запуск с другой коллекцией не затирает прежние briefs, а пересобирает все заметки из индекса. `--refresh` перезапрашивает модель и перезаписывает записи обработанных элементов; без него ответы берутся из кэша. `--max-ocr-kb` (по умолчанию 20) ограничивает объединяемый OCR-текст на элемент. `--dry-run` печатает план и первые промпты в stderr, ничего не записывая. Конфигурация модели резолвится так же, как у `llm-enrich`.
 
@@ -294,7 +294,7 @@ Human-зона:
 - `<vault>/projects/`: профили проектов (`<project.id>.md`, frontmatter `type: project`, `status: draft`). Создаются `scaffold-projects`.
 - `<vault>/decisions/`: решения (`<date>-<slug>.md`, frontmatter `type: decision`, `status: open`, `projects`, `tags`). Создаются `decision-new`.
 
-Generated-зона `<vault>/_generated/evidence-vault/`:
+Generated-зона `<vault>/_generated/sourcefolio/`:
 
 - `source-cards/`, `overview/`, `collections/`, `dashboards/`, `llm/`, `repos/`: как описано выше.
 - `entities/`: по одной заметке на GitHub-репозиторий (`<owner>__<repo>.md`, `type: repo`, `provenance: external_observation`). Метаданные берутся из кэша `repo-catalog`, плюс число упомянувших источников и связанные проекты.
@@ -307,11 +307,11 @@ Generated-зона `<vault>/_generated/evidence-vault/`:
 Команды:
 
 ```bash
-evidence-vault scaffold-projects \
+sourcefolio scaffold-projects \
   --vault data/vault \
   --projects data/projects.json
 
-evidence-vault decision-new \
+sourcefolio decision-new \
   --vault data/vault \
   --title "Выбрать gallery-dl для слайдшоу" \
   --problem "Нужен надёжный resolver для photo posts" \
@@ -319,19 +319,19 @@ evidence-vault decision-new \
   --option "gallery-dl" \
   --chosen "gallery-dl" \
   --rationale "Отдельный slideshow path с inventory checks" \
-  --project evidence-vault \
+  --project sourcefolio \
   --tag ingestion
 
-evidence-vault decision-search "gallery-dl" --vault data/vault
+sourcefolio decision-search "gallery-dl" --vault data/vault
 
-evidence-vault context \
+sourcefolio context \
   --vault data/vault \
   --derived-dir data/derived \
   --archive-dir data/archive \
   --projects data/projects.json \
   --format markdown
 
-evidence-vault project-fit \
+sourcefolio project-fit \
   --collection Нейронки \
   --projects data/projects.json \
   --profiles data/vault/projects \
@@ -340,31 +340,31 @@ evidence-vault project-fit \
   --vault data/vault
 ```
 
-`scaffold-projects` создаёт отсутствующие профили в `<vault>/projects/<project.id>.md` и не перезаписывает существующие. `decision-new` создаёт заметку решения в `<vault>/decisions/` (тоже без перезаписи); `decision-search` ищет по терминам (AND, casefold) и возвращает path/title/date/status. `context` собирает session brief из проектов, накопленных совпадений `project-fit` и решений; `--format markdown` печатает человекочитаемый вид, по умолчанию JSON, и дополнительно пишет бриф в `<vault>/_generated/evidence-vault/context/index.md` (+ `context.json`). Отсутствие файла `--projects` не роняет команду. `project-fit --profiles <dir>` подмешивает в промпт тело профиля `<project.id>.md` (без frontmatter) из указанной директории. `id` проекта обязан соответствовать `^[a-z0-9][a-z0-9-]*$`.
+`scaffold-projects` создаёт отсутствующие профили в `<vault>/projects/<project.id>.md` и не перезаписывает существующие. `decision-new` создаёт заметку решения в `<vault>/decisions/` (тоже без перезаписи); `decision-search` ищет по терминам (AND, casefold) и возвращает path/title/date/status. `context` собирает session brief из проектов, накопленных совпадений `project-fit` и решений; `--format markdown` печатает человекочитаемый вид, по умолчанию JSON, и дополнительно пишет бриф в `<vault>/_generated/sourcefolio/context/index.md` (+ `context.json`). Отсутствие файла `--projects` не роняет команду. `project-fit --profiles <dir>` подмешивает в промпт тело профиля `<project.id>.md` (без frontmatter) из указанной директории. `id` проекта обязан соответствовать `^[a-z0-9][a-z0-9-]*$`.
 
 ## Ответы, профили и refresh
 
 `ask` — единая точка входа: retrieval через search + evidence-pack и, если доступна модель, grounded synthesis только по найденным excerpts. Без ключа или с `--no-llm` команда работает в retrieval-only режиме:
 
 ```bash
-evidence-vault ask "какие подходы к RAG описаны в сохранённом" \
+sourcefolio ask "какие подходы к RAG описаны в сохранённом" \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault \
   --format markdown
 
-evidence-vault ask "какие подходы к RAG описаны в сохранённом" \
+sourcefolio ask "какие подходы к RAG описаны в сохранённом" \
   --no-llm \
   --limit 10 \
   --excerpt-limit 3
 ```
 
-`--project <id>` подмешивает имя, описание и профиль проекта в промпт и помечает заметку, но не меняет ranking retrieval. Каждый запуск пишет новую immutable заметку `answer/v1` в `<vault>/_generated/evidence-vault/answers/<UTC-stamp>-<slug>.md` (microsecond-stamped имя, `provenance: agent_inference`, warning-callout). Заметка пишется через `write_immutable_bytes`, а не через `replace_namespace`, поэтому `project-obsidian` её никогда не затирает. В заметке и в JSON-выводе есть copy-pasteable stub `evidence-vault decision-new ...`; human-решение командой не создаётся автоматически. `status: degraded` (модель недоступна) возвращает exit code 1 и оставляет retrieval excerpts.
+`--project <id>` подмешивает имя, описание и профиль проекта в промпт и помечает заметку, но не меняет ranking retrieval. Каждый запуск пишет новую immutable заметку `answer/v1` в `<vault>/_generated/sourcefolio/answers/<UTC-stamp>-<slug>.md` (microsecond-stamped имя, `provenance: agent_inference`, warning-callout). Заметка пишется через `write_immutable_bytes`, а не через `replace_namespace`, поэтому `project-obsidian` её никогда не затирает. В заметке и в JSON-выводе есть copy-pasteable stub `sourcefolio decision-new ...`; human-решение командой не создаётся автоматически. `status: degraded` (модель недоступна) возвращает exit code 1 и оставляет retrieval excerpts.
 
 `profile-draft` черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`: name/description/dependency names/keywords). Один проект:
 
 ```bash
-evidence-vault profile-draft \
+sourcefolio profile-draft \
   --repo /path/to/repo \
   --id my-project \
   --vault data/vault
@@ -373,7 +373,7 @@ evidence-vault profile-draft \
 Batch по всем проектам, у которых в `projects.json` задан `repo_path`:
 
 ```bash
-evidence-vault profile-draft \
+sourcefolio profile-draft \
   --projects data/projects.json \
   --vault data/vault \
   --limit 10
@@ -384,13 +384,13 @@ evidence-vault profile-draft \
 `refresh` — одна команда, которая последовательно переиспользует существующие handlers: `import-collections` (только при `--capture <file>`) → `project-obsidian` (всегда) → `project-fit` (только при `--fit`). stdout каждого шага захватывается, печатается один combined JSON `{"steps": [{"step", "exit", "output"}, ...]}`; шаг с ошибкой даёт `{"step", "error"}`. Exit code ненулевой, если упал любой шаг.
 
 ```bash
-evidence-vault refresh \
+sourcefolio refresh \
   --capture /path/to/tiktok-collections-<stamp>.json \
   --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault
 
-evidence-vault refresh \
+sourcefolio refresh \
   --fit \
   --collection Нейронки \
   --projects data/projects.json \
@@ -405,7 +405,7 @@ Daemon/watcher нет: расписание ручное — запускайт�
 
 ```bash
 python -m pip install -e ".[mcp]"
-evidence-vault-mcp
+sourcefolio-mcp
 ```
 
 Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`. Инструменты помечены read/write (`read_only_hint`, `destructive_hint`, `open_world_hint`); `decision_new` требует непустой `title`; список проектов передаётся параметром `project_ids`.
@@ -416,12 +416,12 @@ evidence-vault-mcp
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "evidence-vault": {
+    "sourcefolio": {
       "type": "local",
       "command": [
         "D:/Sources/WhiteBite/Sourcefolio/.venv/Scripts/python.exe",
         "-m",
-        "evidence_vault.mcp_server"
+        "sourcefolio.mcp_server"
       ],
       "enabled": true
     }
@@ -434,7 +434,7 @@ evidence-vault-mcp
 ## Структура
 
 ```text
-src/evidence_vault/
+src/sourcefolio/
   domain/          # устойчивые контракты и инварианты; нет инфраструктуры
   application/     # use cases и порты; нет конкретных адаптеров
   adapters/        # filesystem, TikTok export + yt-dlp/gallery-dl, SQLite, OCR

@@ -76,7 +76,7 @@
 - `search-evaluation/v1` и `search-evaluate`: hit rate, MRR, recall, precision@k и per-query ranking для записанных judged questions.
 - Per-collection indexes (`collection-index/v1`) с извлечением repositories (GitHub/GitLab) и hashtags; triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
 - `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
-- MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
+- MCP-сервер `sourcefolio-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 - `project-fit`: сопоставление latest captures с проектами через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 - Generated `entities/` (repo nodes) и `graph/` (Mermaid knowledge graph) как rebuildable views.
 - `ask`: on-demand grounded answer — retrieval через search + evidence-pack и optional grounded synthesis только по excerpts; `provenance: agent_inference`, citations, immutable per-run note `answer/v1` в `answers/`; relevance не истинность, human decision stub не создаётся автоматически.

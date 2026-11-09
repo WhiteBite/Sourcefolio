@@ -3,7 +3,7 @@
 
 > Local-first evidence archive and personal knowledge system for saved TikTok videos, slideshows and other media.
 
-Evidence Vault: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith.
+Sourcefolio: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith.
 
 This file follows the llms.txt convention: a short, LLM-friendly index of the project.
 
@@ -17,7 +17,7 @@ This file follows the llms.txt convention: a short, LLM-friendly index of the pr
 ## Key facts
 
 - Install: `python -m pip install -e '.[dev]'`
-- Run: `evidence-vault --help`
+- Run: `sourcefolio --help`
 - Test: `pytest`
 - Use cases: Archive saved TikTok videos, slideshows and collections as immutable, content-addressed captures; Extract OCR text from slides and search it lexically with provenance; Build query-driven evidence packs with ranked sources, snippets and typed locators; Generate an Obsidian vault with source cards, collection indexes and triage dashboards; Match saved content against your own projects and keep a decision history
 

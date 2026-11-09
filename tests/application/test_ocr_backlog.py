@@ -7,22 +7,22 @@ from typing import BinaryIO
 
 import pytest
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.extractions import FileSystemExtractionRepository
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.extraction_types import ExtractedText, ExtractionError
-from evidence_vault.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
-from evidence_vault.application.ocr_backlog_report import (
+from sourcefolio.adapters.filesystem.extractions import FileSystemExtractionRepository
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.extraction_types import ExtractedText, ExtractionError
+from sourcefolio.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
+from sourcefolio.application.ocr_backlog_report import (
     OcrBacklogReportDocument,
     build_ocr_backlog_report,
 )
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.extraction import EvidenceLocator, ExtractionKind
-from evidence_vault.domain.source import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.extraction import EvidenceLocator, ExtractionKind
+from sourcefolio.domain.source import (
     ArtifactRef,
     ArtifactRole,
     CollectionMembership,

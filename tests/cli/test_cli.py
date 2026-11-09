@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 
 def test_manual_capture_cli_end_to_end(tmp_path: Path, capsys) -> None:

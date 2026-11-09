@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from conftest import write_fake_executable
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 
 def test_tiktok_download_command_uses_media_operation_and_resume(

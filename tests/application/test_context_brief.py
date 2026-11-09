@@ -5,19 +5,19 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
     FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.context_brief import ContextBriefBuilder, ContextBriefProjection
-from evidence_vault.application.project_fit import Project
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.context_brief import ContextBriefBuilder, ContextBriefProjection
+from sourcefolio.application.project_fit import Project
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -262,7 +262,7 @@ def test_per_project_match_cap_keeps_other_projects(tmp_path: Path) -> None:
 def test_context_projection_writes_index_and_json_deterministically(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one")
     save_fit_index(tmp_path, [fit_entry(packet)])
-    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated = tmp_path / "vault" / "_generated" / "sourcefolio"
     projection = ContextBriefProjection(FileSystemProjectionStore(generated))
 
     assert projection.rebuild(builder(tmp_path).build()) == 2

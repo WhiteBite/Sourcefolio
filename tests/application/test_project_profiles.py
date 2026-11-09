@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from evidence_vault.adapters.filesystem import FileSystemHumanNoteStore
-from evidence_vault.application.project_fit import Project
-from evidence_vault.application.project_profiles import (
+from sourcefolio.adapters.filesystem import FileSystemHumanNoteStore
+from sourcefolio.application.project_fit import Project
+from sourcefolio.application.project_profiles import (
     ProjectProfileScaffolder,
     render_draft,
 )

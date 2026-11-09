@@ -8,20 +8,20 @@ from pathlib import Path
 import pytest
 
 from conftest import write_fake_executable
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.extractions import FileSystemExtractionRepository
-from evidence_vault.adapters.ocr.tesseract import TesseractConfig, TesseractOcrAdapter
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.extract_text import ExtractText
-from evidence_vault.application.extraction_types import ExtractionError
-from evidence_vault.application.search import SearchIndexBuilder
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.extraction import EvidenceLocator, ExtractionKind, LocatorKind
-from evidence_vault.domain.source import ArtifactRole, SourceIdentity, SourceKind, SourcePacket
+from sourcefolio.adapters.filesystem.extractions import FileSystemExtractionRepository
+from sourcefolio.adapters.ocr.tesseract import TesseractConfig, TesseractOcrAdapter
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.extract_text import ExtractText
+from sourcefolio.application.extraction_types import ExtractionError
+from sourcefolio.application.search import SearchIndexBuilder
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.extraction import EvidenceLocator, ExtractionKind, LocatorKind
+from sourcefolio.domain.source import ArtifactRole, SourceIdentity, SourceKind, SourcePacket
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 

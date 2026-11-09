@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.tiktok.collections import (
+from sourcefolio.adapters.tiktok.collections import (
     CollectionCaptureFormatError,
     CollectionCaptureParser,
 )
-from evidence_vault.domain.source import SourceKind
+from sourcefolio.domain.source import SourceKind
 
 FIXTURE = Path(__file__).parents[2] / "fixtures" / "collection-capture.json"
 

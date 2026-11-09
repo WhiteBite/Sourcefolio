@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from evidence_vault.adapters.tiktok.urls import source_from_tiktok_url
-from evidence_vault.domain.source import SourceKind
+from sourcefolio.adapters.tiktok.urls import source_from_tiktok_url
+from sourcefolio.domain.source import SourceKind
 
 
 def test_video_url_extracts_stable_id_and_drops_tracking() -> None:

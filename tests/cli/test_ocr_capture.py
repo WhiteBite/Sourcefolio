@@ -6,17 +6,17 @@ from io import BytesIO
 from pathlib import Path
 
 from conftest import write_fake_executable
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.ocr_backlog_report import OcrBacklogReportDocument
-from evidence_vault.application.ocr_evaluation import OcrEvaluationReport, OcrEvaluationSet
-from evidence_vault.cli import main
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import ArtifactRole, SourceIdentity, SourceKind
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.ocr_backlog_report import OcrBacklogReportDocument
+from sourcefolio.application.ocr_evaluation import OcrEvaluationReport, OcrEvaluationSet
+from sourcefolio.cli import main
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import ArtifactRole, SourceIdentity, SourceKind
 
 
 def create_capture(

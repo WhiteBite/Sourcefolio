@@ -8,29 +8,29 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.project_fit import (
+from sourcefolio.adapters.filesystem.llm_cache import FileSystemLlmCache
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.project_fit import (
     Project,
     ProjectFitIndexStore,
     ProjectFitQuery,
     ProjectFitRunner,
 )
-from evidence_vault.application.projection_types import GeneratedDocument
-from evidence_vault.application.repo_catalog import (
+from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.repo_catalog import (
     RepoCatalogRunner,
     _cache_key,
     parse_repo_ref,
 )
-from evidence_vault.application.repo_nodes import RepoNodeProjection
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.application.repo_nodes import RepoNodeProjection
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -39,7 +39,7 @@ from evidence_vault.domain.source import (
 )
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
-PREFIX = "_generated/evidence-vault"
+PREFIX = "_generated/sourcefolio"
 
 
 class FakeStore:
@@ -190,7 +190,7 @@ def test_repo_nodes_one_note_per_repo_lists_all_sources(tmp_path: Path) -> None:
     assert store.namespace == "entities"
     assert [doc.path for doc in store.documents] == ["owner__repo.md"]
     content = store.documents[0].content
-    assert content.count("[[_generated/evidence-vault/source-cards/") == 2
+    assert content.count("[[_generated/sourcefolio/source-cards/") == 2
     assert "| 42 |" in content
     assert "| Python |" in content
     assert "type: repo" in content
@@ -212,7 +212,7 @@ def test_repo_nodes_links_matched_project(tmp_path: Path) -> None:
     ).rebuild()
 
     content = store.documents[0].content
-    assert "[[_generated/evidence-vault/projects/midasai|midas]]" in content
+    assert "[[_generated/sourcefolio/projects/midasai|midas]]" in content
     assert "## Projects (1)" in content
     assert "project_ids:\n- midas" in content
 
@@ -250,7 +250,7 @@ def test_repo_nodes_project_link_matches_written_brief_on_slug_collision(tmp_pat
     projection(tmp_path, store, fit=index, projects=projects).rebuild()
 
     content = store.documents[0].content
-    assert "[[_generated/evidence-vault/projects/midasai-midas2|midas2]]" in content
+    assert "[[_generated/sourcefolio/projects/midasai-midas2|midas2]]" in content
     assert project_link_target(content, "midas2") == brief.path.removesuffix(".md")
 
 
@@ -264,7 +264,7 @@ def test_repo_nodes_project_link_uses_persisted_slug_map(tmp_path: Path) -> None
     projection(tmp_path, store, fit=FakeFitIndex(payload)).rebuild()
 
     content = store.documents[0].content
-    assert "[[_generated/evidence-vault/projects/proyecto-ilimitado|pi]]" in content
+    assert "[[_generated/sourcefolio/projects/proyecto-ilimitado|pi]]" in content
 
 
 def test_repo_nodes_project_link_matches_written_brief_without_projects(tmp_path: Path) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "collection-capture.json"
 
@@ -35,7 +35,7 @@ def test_import_then_project_builds_knowledge_base(tmp_path: Path, capsys) -> No
     assert output["dashboard_documents"] == 4
     assert output["ideas_created"] == 0
 
-    generated = vault / "_generated" / "evidence-vault"
+    generated = vault / "_generated" / "sourcefolio"
     assert (generated / "collections" / "neyronki.md").exists()
     assert (generated / "collections" / "idei.md").exists()
     assert (generated / "collections" / "index.md").exists()
@@ -113,7 +113,7 @@ def test_project_extracts_repository_links(tmp_path: Path, capsys) -> None:
     assert main(["project-obsidian", "--archive-dir", str(archive), "--vault", str(vault)]) == 0
     capsys.readouterr()
 
-    moc = (vault / "_generated" / "evidence-vault" / "collections" / "neyronki.md").read_text(
+    moc = (vault / "_generated" / "sourcefolio" / "collections" / "neyronki.md").read_text(
         encoding="utf-8"
     )
     assert "https://github.com/owner/repo" in moc

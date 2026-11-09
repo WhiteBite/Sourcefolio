@@ -9,7 +9,7 @@ __pycache__/
 
 # Local data: archives, media, control state, and generated views
 data/
-.evidence-vault/
+.sourcefolio/
 
 # OS / editors
 .DS_Store

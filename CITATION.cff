@@ -8,5 +8,5 @@ authors:
   - name: "WhiteBite"
     # orcid / affiliation optional
 repository-code: "https://github.com/WhiteBite/Sourcefolio"
-abstract: "Evidence Vault: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith."
+abstract: "Sourcefolio: a local-first system that turns saved TikTok videos, slideshows and other sources into an archive of evidence, personal context and decision history. Python 3.12+, pydantic v2, a SQLite control plane and a ports-and-adapters modular monolith."
 keywords: []

@@ -1,4 +1,4 @@
-# Перенос Evidence Vault на другой компьютер
+# Перенос Sourcefolio на другой компьютер
 
 Архив содержит полный исходный проект, тесты, JSON Schema contracts, synthetic examples, OCR golden PNG, документацию и сохранённые pilot-reports. Он не содержит `.venv`, caches, временные archives, личный TikTok export или скачанные public media.
 
@@ -14,14 +14,14 @@
 
 ## 2. Windows PowerShell
 
-Откройте PowerShell в каталоге `evidence-vault` внутри распакованного архива:
+Откройте PowerShell в каталоге `sourcefolio` внутри распакованного архива:
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,media,slides]"
 .\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\evidence-vault.exe --help
+.\.venv\Scripts\sourcefolio.exe --help
 ```
 
 Если `py -3.12` не находит интерпретатор, установите Python 3.12/3.13 и используйте соответствующий аргумент `py -3.12` или `py -3.13`.
@@ -40,7 +40,7 @@ py -3.12 -m venv .venv
 ## 3. Linux / macOS
 
 ```bash
-cd evidence-vault
+cd sourcefolio
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e '.[dev,media,slides]'
@@ -48,7 +48,7 @@ python3.12 -m venv .venv
 .venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src
 .venv/bin/python -m pytest
-.venv/bin/evidence-vault --help
+.venv/bin/sourcefolio --help
 ```
 
 При необходимости замените `python3.12` на `python3.13`.
@@ -77,23 +77,23 @@ Linux / macOS:
 2. Сначала только разберите export без массового скачивания:
 
 ```bash
-evidence-vault tiktok-inspect data/imports/user_data.json \
+sourcefolio tiktok-inspect data/imports/user_data.json \
   --export-timezone Europe/Moscow
 
-evidence-vault tiktok-import data/imports/user_data.json \
+sourcefolio tiktok-import data/imports/user_data.json \
   --export-timezone Europe/Moscow \
   --concurrency 4
 ```
 
-На Windows без активации venv используйте `.\.venv\Scripts\evidence-vault.exe` вместо `evidence-vault`. На Linux/macOS без активации — `.venv/bin/evidence-vault`.
+На Windows без активации venv используйте `.\.venv\Scripts\sourcefolio.exe` вместо `sourcefolio`. На Linux/macOS без активации — `.venv/bin/sourcefolio`.
 
 3. Проверьте `data/archive` и `data/control`, затем начните с маленького live limit:
 
 ```bash
-evidence-vault tiktok-download data/imports/user_data.json --limit 10
-evidence-vault tiktok-slides data/imports/user_data.json --limit 10
-evidence-vault capture-report --format markdown
-evidence-vault archive-audit --verify-bytes
+sourcefolio tiktok-download data/imports/user_data.json --limit 10
+sourcefolio tiktok-slides data/imports/user_data.json --limit 10
+sourcefolio capture-report --format markdown
+sourcefolio archive-audit --verify-bytes
 ```
 
 4. Следуйте `docs/PILOT.md`: сохраняйте failure mix, повторяйте operations для resume и не начинайте массовый backfill до проверки representative cases.

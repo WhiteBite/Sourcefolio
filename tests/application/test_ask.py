@@ -4,23 +4,23 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.ask import (
+from sourcefolio.adapters.filesystem.llm_cache import FileSystemLlmCache
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.ask import (
     AskQuery,
     AskRunner,
     ask_to_dict,
     render_ask_note,
 )
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.evidence_pack import EvidencePackBuilder
-from evidence_vault.application.llm_ports import ChatClient
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.evidence_pack import EvidencePackBuilder
+from sourcefolio.application.llm_ports import ChatClient
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,

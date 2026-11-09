@@ -6,7 +6,7 @@ import urllib.request
 
 import pytest
 
-from evidence_vault.adapters.github.repos import (
+from sourcefolio.adapters.github.repos import (
     GitHubRepoClient,
     GitHubRepoConfig,
     GitHubRepoError,
@@ -80,7 +80,7 @@ def test_fetch_maps_canonical_fields(monkeypatch) -> None:
     request = captured["request"]
     assert request.full_url == "https://api.github.com/repos/owner/repo"
     headers = dict(request.header_items())
-    assert headers["User-agent"] == "evidence-vault"
+    assert headers["User-agent"] == "sourcefolio"
     assert "Authorization" not in headers
     assert captured["timeout"] == 30.0
 

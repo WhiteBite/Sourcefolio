@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 
 def make_repo(root: Path) -> Path:

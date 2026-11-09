@@ -27,4 +27,4 @@ Dry-run подтвердил, что план и промпты строятся
 
 ## Файлы
 
-Живые артефакты остаются в gitignored `data/`: `data/derived/project-fit/index.json` и `data/vault/_generated/evidence-vault/projects/`.
+Живые артефакты остаются в gitignored `data/`: `data/derived/project-fit/index.json` и `data/vault/_generated/sourcefolio/projects/`.

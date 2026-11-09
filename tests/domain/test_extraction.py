@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.extraction import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.extraction import (
     EvidenceLocator,
     ExtractionKind,
     ExtractionRecord,

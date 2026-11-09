@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemProjectFitIndex,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.project_fit import (
+from sourcefolio.adapters.filesystem.llm_cache import FileSystemLlmCache
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.project_fit import (
     Project,
     ProjectFitQuery,
     ProjectFitResult,
@@ -26,8 +26,8 @@ from evidence_vault.application.project_fit import (
     index_project_slugs,
     parse_projects,
 )
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -185,10 +185,10 @@ def test_project_fit_matches_one_project_and_marks_other_unmatched(tmp_path: Pat
     assert "backtest engine" in midas
     assert "Fit: high" in midas
     assert "provenance: agent_inference" in midas
-    assert "[[_generated/evidence-vault/source-cards/" in midas
+    assert "[[_generated/sourcefolio/source-cards/" in midas
     mafiin = notes["mafiin.md"]
     assert "## Mentioned but not for Mafiin (1)" in mafiin
-    assert "[[_generated/evidence-vault/source-cards/" in mafiin
+    assert "[[_generated/sourcefolio/source-cards/" in mafiin
 
 
 def test_project_fit_irrelevant_item_is_unmatched_and_absent(tmp_path: Path) -> None:
@@ -203,7 +203,7 @@ def test_project_fit_irrelevant_item_is_unmatched_and_absent(tmp_path: Path) -> 
     for path, content in notes.items():
         if path == "index.md":
             continue
-        assert "[[_generated/evidence-vault/source-cards/" not in content
+        assert "[[_generated/sourcefolio/source-cards/" not in content
     assert "## Globally irrelevant (1)" in notes["index.md"]
 
 

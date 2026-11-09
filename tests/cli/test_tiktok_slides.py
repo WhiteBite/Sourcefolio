@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from conftest import write_fake_executable
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 EXAMPLE = Path(__file__).parents[2] / "examples" / "tiktok-export" / "user_data.json"
 

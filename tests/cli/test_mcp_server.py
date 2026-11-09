@@ -7,7 +7,7 @@ import pytest
 
 def test_schema_tool_returns_json() -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.schema("source-packet")
 
@@ -16,7 +16,7 @@ def test_schema_tool_returns_json() -> None:
 
 def test_archive_audit_tool_runs_on_empty_archive(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.archive_audit(archive_dir=str(tmp_path))
 
@@ -25,7 +25,7 @@ def test_archive_audit_tool_runs_on_empty_archive(tmp_path: Path) -> None:
 
 def test_project_fit_tool_reports_missing_projects(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.project_fit(collection=["X"], projects=str(tmp_path / "missing.json"))
 
@@ -34,7 +34,7 @@ def test_project_fit_tool_reports_missing_projects(tmp_path: Path) -> None:
 
 def test_context_tool_runs_on_empty_vault(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     projects = tmp_path / "projects.json"
     projects.write_text(
@@ -55,7 +55,7 @@ def test_context_tool_runs_on_empty_vault(tmp_path: Path) -> None:
 
 def test_decision_search_tool_on_empty_vault(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.decision_search(query="x", vault=str(tmp_path / "vault"))
 
@@ -64,7 +64,7 @@ def test_decision_search_tool_on_empty_vault(tmp_path: Path) -> None:
 
 def test_scaffold_projects_tool_reports_missing_projects(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.scaffold_projects(
         vault=str(tmp_path / "vault"),
@@ -76,7 +76,7 @@ def test_scaffold_projects_tool_reports_missing_projects(tmp_path: Path) -> None
 
 def test_decision_new_requires_title(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.decision_new(title="", vault=str(tmp_path / "vault"))
 
@@ -87,7 +87,7 @@ def test_tool_annotations_expose_read_only_hints() -> None:
     pytest.importorskip("mcp")
     import asyncio
 
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
 
@@ -104,7 +104,7 @@ def test_ask_tool_annotations() -> None:
     pytest.importorskip("mcp")
     import asyncio
 
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
 
@@ -118,7 +118,7 @@ def test_profile_draft_tool_annotations() -> None:
     pytest.importorskip("mcp")
     import asyncio
 
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
 
@@ -129,7 +129,7 @@ def test_profile_draft_tool_annotations() -> None:
 
 def test_profile_draft_tool_runs_on_repo(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -147,7 +147,7 @@ def test_profile_draft_tool_runs_on_repo(tmp_path: Path) -> None:
 
 def test_ask_tool_no_llm_on_empty_archive(tmp_path: Path) -> None:
     pytest.importorskip("mcp")
-    from evidence_vault import mcp_server
+    from sourcefolio import mcp_server
 
     output = mcp_server.ask(
         query="x",

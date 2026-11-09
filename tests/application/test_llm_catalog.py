@@ -5,23 +5,23 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.llm_catalog import (
+from sourcefolio.adapters.filesystem.llm_cache import FileSystemLlmCache
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.llm_catalog import (
     LlmCatalogEntry,
     LlmCatalogQuery,
     LlmCatalogRunner,
     _cache_key,
     normalize_title,
 )
-from evidence_vault.application.llm_enrich import _build_user_prompt
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.application.llm_enrich import _build_user_prompt
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -125,7 +125,7 @@ def test_llm_catalog_dedupes_same_work(tmp_path: Path) -> None:
     assert report.note.path == "filmy.md"
     content = report.note.content
     assert content.count("### The Matrix (1999)") == 1
-    assert content.count("[[_generated/evidence-vault/source-cards/") == 2
+    assert content.count("[[_generated/sourcefolio/source-cards/") == 2
     assert "- Videos: 2" in content
     assert "provenance: agent_inference" in content
 

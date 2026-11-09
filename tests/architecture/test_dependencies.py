@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-PACKAGE = Path(__file__).parents[2] / "src" / "evidence_vault"
+PACKAGE = Path(__file__).parents[2] / "src" / "sourcefolio"
 
 
 def imported_modules(path: Path) -> set[str]:
@@ -20,11 +20,11 @@ def imported_modules(path: Path) -> set[str]:
 def test_domain_does_not_depend_on_outer_layers() -> None:
     for path in (PACKAGE / "domain").rglob("*.py"):
         for module in imported_modules(path):
-            assert not module.startswith("evidence_vault.application"), path
-            assert not module.startswith("evidence_vault.adapters"), path
+            assert not module.startswith("sourcefolio.application"), path
+            assert not module.startswith("sourcefolio.adapters"), path
 
 
 def test_application_does_not_depend_on_adapters() -> None:
     for path in (PACKAGE / "application").rglob("*.py"):
         for module in imported_modules(path):
-            assert not module.startswith("evidence_vault.adapters"), path
+            assert not module.startswith("sourcefolio.adapters"), path

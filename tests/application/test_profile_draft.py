@@ -6,14 +6,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-from evidence_vault.adapters.filesystem import FileSystemHumanNoteStore
-from evidence_vault.application.profile_draft import (
+from sourcefolio.adapters.filesystem import FileSystemHumanNoteStore
+from sourcefolio.application.profile_draft import (
     ProfileDrafter,
     ProfileDraftOutcome,
     ProfileDraftResult,
     render_repo_draft,
 )
-from evidence_vault.application.project_fit import Project
+from sourcefolio.application.project_fit import Project
 
 PYPROJECT = {
     "project": {

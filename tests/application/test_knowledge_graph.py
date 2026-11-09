@@ -7,11 +7,11 @@ from datetime import UTC, datetime
 import yaml
 from pydantic import JsonValue
 
-from evidence_vault.application.knowledge_graph import KnowledgeGraphProjection
-from evidence_vault.application.markdown import mermaid_id
-from evidence_vault.application.projection_types import GeneratedDocument
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.application.knowledge_graph import KnowledgeGraphProjection
+from sourcefolio.application.markdown import mermaid_id
+from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRef,
     ArtifactRole,
     CollectionMembership,
@@ -256,7 +256,7 @@ def test_knowledge_graph_frontmatter_reports_counts() -> None:
     properties = yaml.safe_load(content.split("---", 2)[1])
     assert properties["schema_version"] == "knowledge-graph/v1"
     assert properties["type"] == "graph"
-    assert properties["tags"] == ["evidence-vault", "evidence-vault/graph"]
+    assert properties["tags"] == ["sourcefolio", "sourcefolio/graph"]
     assert properties["project_count"] == 1
     assert properties["idea_count"] == 1
     assert properties["idea_shown"] == 1

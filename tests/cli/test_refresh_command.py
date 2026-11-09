@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evidence_vault import cli
-from evidence_vault.cli import main
+from sourcefolio import cli
+from sourcefolio.cli import main
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "collection-capture.json"
 
@@ -51,7 +51,7 @@ def test_refresh_runs_project_obsidian_only(tmp_path: Path, capsys) -> None:
     )
     output = json.loads(capsys.readouterr().out)
     assert [step["step"] for step in output["steps"]] == ["project-obsidian"]
-    assert (vault / "_generated" / "evidence-vault" / "source-cards").is_dir()
+    assert (vault / "_generated" / "sourcefolio" / "source-cards").is_dir()
 
 
 def test_refresh_chains_import_collections(tmp_path: Path, capsys) -> None:

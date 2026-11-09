@@ -1,9 +1,9 @@
 ---
 name: ev-gate
-description: Прогон полного quality gate проекта Evidence Vault (ruff format/check, mypy strict, pytest) и триаж падений на Windows. Use when нужно проверить репозиторий после правок, "прогони тесты", "гейт", "проверь перед коммитом", CI красный, тесты падают на Windows, mypy ругается на killpg.
+description: Прогон полного quality gate проекта Sourcefolio (ruff format/check, mypy strict, pytest) и триаж падений на Windows. Use when нужно проверить репозиторий после правок, "прогони тесты", "гейт", "проверь перед коммитом", CI красный, тесты падают на Windows, mypy ругается на killpg.
 ---
 
-# Evidence Vault: gate и триаж
+# Sourcefolio: gate и триаж
 
 ## Gate (те же шаги, что CI)
 

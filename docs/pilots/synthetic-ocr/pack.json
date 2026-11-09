@@ -1,7 +1,7 @@
 {
   "schema_version": "evidence-pack/v1",
   "pack_type": "retrieval_only",
-  "query": "Evidence Vault",
+  "query": "Sourcefolio",
   "generated_at": "2026-11-03T02:36:22.014753Z",
   "filters": {
     "collection": null,
@@ -34,7 +34,7 @@
       ],
       "captured_at": "2026-11-03T12:00:00Z",
       "relevance_score": 2,
-      "snippet": "…ewed real-user OCR corpus.\",\"synthetic\":true} ocr_text slide:6 ocr_text slide:1 Evidence Vault Synthetic OCR sample 001 ocr_text slide:5 Small gray text for error analysis ocr_text slide:2 Архив доказательств Проверка распознавания текста o…",
+      "snippet": "…ewed real-user OCR corpus.\",\"synthetic\":true} ocr_text slide:6 ocr_text slide:1 Sourcefolio Synthetic OCR sample 001 ocr_text slide:5 Small gray text for error analysis ocr_text slide:2 Архив доказательств Проверка распознавания текста o…",
       "collector": {
         "actor_kind": "tool",
         "actor_id": "synthetic-ocr-golden",
@@ -51,7 +51,7 @@
           "size_bytes": 18657,
           "sha256": "8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
           "original_filename": "slide-01.png",
-          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8b/8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d"
+          "uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/8b/8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d"
         },
         {
           "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
@@ -60,7 +60,7 @@
           "size_bytes": 17541,
           "sha256": "e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
           "original_filename": "slide-02.png",
-          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/e1/e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af"
+          "uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/e1/e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af"
         },
         {
           "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
@@ -69,7 +69,7 @@
           "size_bytes": 16819,
           "sha256": "89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
           "original_filename": "slide-03.png",
-          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/89/89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b"
+          "uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/89/89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b"
         },
         {
           "artifact_id": "art_b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
@@ -78,7 +78,7 @@
           "size_bytes": 18385,
           "sha256": "b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2",
           "original_filename": "slide-04.png",
-          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/b8/b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2"
+          "uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/b8/b83179a5834a2ca5cc94359952d5eed32884af93964ac08f13ab4580df0a6da2"
         },
         {
           "artifact_id": "art_8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
@@ -87,7 +87,7 @@
           "size_bytes": 10535,
           "sha256": "8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f",
           "original_filename": "slide-05.png",
-          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8d/8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f"
+          "uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/8d/8db73e55fb9939be5e7acd7e654a1e5f0f1b25d5b3cf8bee499747f45c903e9f"
         },
         {
           "artifact_id": "art_8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
@@ -96,7 +96,7 @@
           "size_bytes": 3629,
           "sha256": "8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd",
           "original_filename": "slide-06.png",
-          "uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8d/8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd"
+          "uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/8d/8d22522b0d574287eaa3bcc3fbf99ace038e0d17b82f1cbd168a134a56734bbd"
         }
       ],
       "excerpts": [
@@ -108,7 +108,7 @@
           "kind": "ocr_text",
           "created_at": "2026-11-03T02:36:20.537984Z",
           "artifact_id": "art_8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
-          "artifact_uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/8b/8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
+          "artifact_uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/8b/8b2e71c5277382b0f0b907ebc24bcea42ce4040bb27a76c05b958e3bd016e04d",
           "locator": {
             "kind": "slide",
             "slide": 1,
@@ -119,7 +119,7 @@
             "canonical": "slide:1"
           },
           "matched_query": true,
-          "excerpt": "Evidence Vault Synthetic OCR sample 001",
+          "excerpt": "Sourcefolio Synthetic OCR sample 001",
           "extractor": {
             "actor_kind": "tool",
             "actor_id": "tesseract",
@@ -142,7 +142,7 @@
           "kind": "ocr_text",
           "created_at": "2026-11-03T02:36:20.585258Z",
           "artifact_id": "art_e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
-          "artifact_uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/e1/e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
+          "artifact_uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/e1/e11700701c2bad19902e937e7fad085251f32868d29849476c7c6024ec05f5af",
           "locator": {
             "kind": "slide",
             "slide": 2,
@@ -176,7 +176,7 @@
           "kind": "ocr_text",
           "created_at": "2026-11-03T02:36:20.758005Z",
           "artifact_id": "art_89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
-          "artifact_uri": "file:///tmp/evidence-vault-real-ocr-final-jfbvvsed/archive/artifacts/89/89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
+          "artifact_uri": "file:///tmp/sourcefolio-real-ocr-final-jfbvvsed/archive/artifacts/89/89a342d8055784620881b30877b8212d2ff0c3d606231358ca52e1841186d40b",
           "locator": {
             "kind": "slide",
             "slide": 3,

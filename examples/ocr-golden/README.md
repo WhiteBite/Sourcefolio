@@ -22,11 +22,11 @@ BASE=data/pilots/ocr-golden
 TESSDATA=/usr/share/tesseract-ocr/5/tessdata
 mkdir -p "$BASE/reports"
 
-evidence-vault archive-capture \
+sourcefolio archive-capture \
   examples/ocr-golden/manifest.json \
   --archive-dir "$BASE/archive"
 
-evidence-vault ocr-backlog \
+sourcefolio ocr-backlog \
   --archive-dir "$BASE/archive" \
   --derived-dir "$BASE/derived" \
   --executable /usr/bin/tesseract \
@@ -37,7 +37,7 @@ evidence-vault ocr-backlog \
   --report "$BASE/reports/run-001.json"
 
 # Resume: новый immutable report, тот же extractor/config и те же request IDs.
-evidence-vault ocr-backlog \
+sourcefolio ocr-backlog \
   --archive-dir "$BASE/archive" \
   --derived-dir "$BASE/derived" \
   --executable /usr/bin/tesseract \
@@ -47,17 +47,17 @@ evidence-vault ocr-backlog \
   --capture-limit 1 --slide-limit 6 \
   --report "$BASE/reports/run-002.json"
 
-evidence-vault ocr-evaluate examples/ocr-golden/samples.json \
+sourcefolio ocr-evaluate examples/ocr-golden/samples.json \
   --derived-dir "$BASE/derived" \
   --batch-report "$BASE/reports/run-001.json" \
   --batch-report "$BASE/reports/run-002.json" \
   --output "$BASE/reports/evaluation.json"
 
-evidence-vault evidence-pack "Evidence Vault" \
+sourcefolio evidence-pack "Sourcefolio" \
   --archive-dir "$BASE/archive" --derived-dir "$BASE/derived" \
   > "$BASE/reports/pack.json"
 
-evidence-vault evidence-pack-verify "$BASE/reports/pack.json" \
+sourcefolio evidence-pack-verify "$BASE/reports/pack.json" \
   --archive-dir "$BASE/archive" --derived-dir "$BASE/derived" \
   --verify-bytes --output "$BASE/reports/integrity.json"
 ```

@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from evidence_vault.domain.common import ActorKind, Approval, Provenance
-from evidence_vault.domain.evidence import EvidenceItem, EvidenceKind
-from evidence_vault.domain.source import SourceRef
+from sourcefolio.domain.common import ActorKind, Approval, Provenance
+from sourcefolio.domain.evidence import EvidenceItem, EvidenceKind
+from sourcefolio.domain.source import SourceRef
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 SOURCE_REF = SourceRef(

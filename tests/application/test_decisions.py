@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from evidence_vault.adapters.filesystem import FileSystemHumanNoteStore
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.decisions import (
+from sourcefolio.adapters.filesystem import FileSystemHumanNoteStore
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.decisions import (
     DecisionDraft,
     DecisionIndexProjection,
     DecisionScaffolder,
@@ -24,7 +24,7 @@ def make_draft(
     chosen: str = "SQLite",
     rationale: str = "Transactional resume.",
     follow_ups: tuple[str, ...] = ("Add migrations",),
-    projects: tuple[str, ...] = ("evidence-vault",),
+    projects: tuple[str, ...] = ("sourcefolio",),
     tags: tuple[str, ...] = ("storage",),
 ) -> DecisionDraft:
     return DecisionDraft(
@@ -55,7 +55,7 @@ def test_scaffold_creates_then_preserves(tmp_path: Path) -> None:
     assert properties["title"] == "Adopt SQLite control plane"
     assert properties["status"] == "open"
     assert properties["type"] == "decision"
-    assert properties["projects"] == ["evidence-vault"]
+    assert properties["projects"] == ["sourcefolio"]
     assert properties["tags"] == ["storage"]
     for section in (
         "## Problem",
@@ -77,7 +77,7 @@ def test_index_lists_decisions_with_wikilinks(tmp_path: Path) -> None:
     scaffolder.scaffold(make_draft(title="Adopt SQLite control plane", date="2026-11-08"))
     scaffolder.scaffold(make_draft(title="Drop JSON store", date="2026-11-07"))
 
-    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    store = FileSystemProjectionStore(vault / "_generated" / "sourcefolio")
     count = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault),
         store=store,
@@ -85,7 +85,7 @@ def test_index_lists_decisions_with_wikilinks(tmp_path: Path) -> None:
     ).rebuild()
 
     assert count == 1
-    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+    index = (vault / "_generated" / "sourcefolio" / "decisions" / "index.md").read_text(
         encoding="utf-8"
     )
     assert "[[decisions/2026-11-08-adopt-sqlite-control-plane|Adopt SQLite control plane]]" in index
@@ -106,7 +106,7 @@ def test_index_ignores_stray_top_level_note_when_root_is_vault(tmp_path: Path) -
         encoding="utf-8",
     )
 
-    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    store = FileSystemProjectionStore(vault / "_generated" / "sourcefolio")
     count = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault),
         store=store,
@@ -114,7 +114,7 @@ def test_index_ignores_stray_top_level_note_when_root_is_vault(tmp_path: Path) -
     ).rebuild()
 
     assert count == 1
-    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+    index = (vault / "_generated" / "sourcefolio" / "decisions" / "index.md").read_text(
         encoding="utf-8"
     )
     assert "Real" in index
@@ -152,7 +152,7 @@ def test_index_and_search_tolerate_broken_and_fence_frontmatter(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    store = FileSystemProjectionStore(vault / "_generated" / "sourcefolio")
     count = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault),
         store=store,
@@ -160,7 +160,7 @@ def test_index_and_search_tolerate_broken_and_fence_frontmatter(tmp_path: Path) 
     ).rebuild()
 
     assert count == 1
-    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+    index = (vault / "_generated" / "sourcefolio" / "decisions" / "index.md").read_text(
         encoding="utf-8"
     )
     assert "A --- B" in index
@@ -178,7 +178,7 @@ def test_index_preserves_nested_wikilink_path(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    store = FileSystemProjectionStore(vault / "_generated" / "evidence-vault")
+    store = FileSystemProjectionStore(vault / "_generated" / "sourcefolio")
     count = DecisionIndexProjection(
         notes=FileSystemHumanNoteStore(vault),
         store=store,
@@ -186,7 +186,7 @@ def test_index_preserves_nested_wikilink_path(tmp_path: Path) -> None:
     ).rebuild()
 
     assert count == 1
-    index = (vault / "_generated" / "evidence-vault" / "decisions" / "index.md").read_text(
+    index = (vault / "_generated" / "sourcefolio" / "decisions" / "index.md").read_text(
         encoding="utf-8"
     )
     assert "[[decisions/2026/sub/x|Nested]]" in index

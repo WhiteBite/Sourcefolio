@@ -6,25 +6,25 @@ from pathlib import Path
 
 import yaml
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.extractions import FileSystemExtractionRepository
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.obsidian_views import ObsidianOverviewProjection
-from evidence_vault.application.source_cards import SourceCardProjection
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.extraction import (
+from sourcefolio.adapters.filesystem.extractions import FileSystemExtractionRepository
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.obsidian_views import ObsidianOverviewProjection
+from sourcefolio.application.source_cards import SourceCardProjection
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.extraction import (
     EvidenceLocator,
     ExtractionKind,
     ExtractionRecord,
     ExtractionRequest,
     LocatorKind,
 )
-from evidence_vault.domain.source import (
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -83,7 +83,7 @@ def test_obsidian_views_include_derived_text_and_coverage(tmp_path: Path) -> Non
         limitations=("synthetic OCR",),
     )
     extractions.save(record)
-    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated = tmp_path / "vault" / "_generated" / "sourcefolio"
     store = FileSystemProjectionStore(generated)
 
     card = SourceCardProjection(

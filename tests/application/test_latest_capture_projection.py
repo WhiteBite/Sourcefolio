@@ -4,18 +4,18 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.projections import FileSystemProjectionStore
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.collection_index import CollectionIndexProjection
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.obsidian_views import ObsidianOverviewProjection
-from evidence_vault.application.source_cards import SourceCardProjection
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.collection_index import CollectionIndexProjection
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.obsidian_views import ObsidianOverviewProjection
+from sourcefolio.application.source_cards import SourceCardProjection
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -68,7 +68,7 @@ def test_projections_render_only_latest_capture_per_source(tmp_path: Path) -> No
     packets = FileSystemSourcePacketRepository(archive)
     assert len(list(packets.iter_packets())) == 2
 
-    generated = tmp_path / "vault" / "_generated" / "evidence-vault"
+    generated = tmp_path / "vault" / "_generated" / "sourcefolio"
     store = FileSystemProjectionStore(generated)
 
     assert (
@@ -86,7 +86,7 @@ def test_projections_render_only_latest_capture_per_source(tmp_path: Path) -> No
 
     assert CollectionIndexProjection(packets=packets, store=store).rebuild() == 2
     moc = (generated / "collections" / "neyronki.md").read_text(encoding="utf-8")
-    assert moc.count("[[_generated/evidence-vault/source-cards/") == 1
+    assert moc.count("[[_generated/sourcefolio/source-cards/") == 1
     assert "## Videos (1)" in moc
     assert newer.capture_id in moc
     assert older.capture_id not in moc

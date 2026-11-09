@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         TikTok Collections Capture
-// @namespace    evidence-vault
+// @namespace    sourcefolio
 // @version      2.0.0
 // @match        https://www.tiktok.com/*
 // @grant        GM_setValue

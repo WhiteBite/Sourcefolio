@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRef,
     ArtifactRole,
     SourceIdentity,

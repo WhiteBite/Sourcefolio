@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from evidence_vault.cli import main
+from sourcefolio.cli import main
 
 
 def test_decision_new_and_search(tmp_path: Path, capsys) -> None:

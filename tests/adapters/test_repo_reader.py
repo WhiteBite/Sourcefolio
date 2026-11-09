@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evidence_vault.adapters.filesystem.repo_reader import FileSystemRepoReader
+from sourcefolio.adapters.filesystem.repo_reader import FileSystemRepoReader
 
 _MAX_README_BYTES = 256 * 1024
 _MAX_MANIFEST_BYTES = 128 * 1024

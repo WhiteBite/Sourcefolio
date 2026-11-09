@@ -7,22 +7,22 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.llm_cache import FileSystemLlmCache
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.llm_enrich import (
+from sourcefolio.adapters.filesystem.llm_cache import FileSystemLlmCache
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.llm_enrich import (
     LlmEnrichQuery,
     LlmEnrichRunner,
     _build_user_prompt,
     _cache_key,
     extract_json_object,
 )
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
     SourceIdentity,
@@ -139,7 +139,7 @@ def test_llm_enrich_writes_cache_and_deduplicated_note(tmp_path: Path) -> None:
     assert content.count("| tool | PyTorch |") == 1
     assert first.source.canonical_url in content
     assert second.source.canonical_url in content
-    assert "[[_generated/evidence-vault/source-cards/" in content
+    assert "[[_generated/sourcefolio/source-cards/" in content
 
 
 def test_llm_enrich_skips_cached_items_on_rerun(tmp_path: Path) -> None:

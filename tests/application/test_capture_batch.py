@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.metadata_only import MetadataOnlyCaptureAdapter
-from evidence_vault.adapters.sqlite import SQLiteCaptureState
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.capture_batch import CaptureBatchRunner
-from evidence_vault.application.capture_types import (
+from sourcefolio.adapters.metadata_only import MetadataOnlyCaptureAdapter
+from sourcefolio.adapters.sqlite import SQLiteCaptureState
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.capture_batch import CaptureBatchRunner
+from sourcefolio.application.capture_types import (
     AdapterCapture,
     AttemptStatus,
     BatchItemStatus,
@@ -23,10 +23,10 @@ from evidence_vault.application.capture_types import (
     CaptureJobStatus,
     RetryPolicy,
 )
-from evidence_vault.application.commands import ArtifactPayload
-from evidence_vault.domain.capture import CaptureTask
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.source import (
+from sourcefolio.application.commands import ArtifactPayload
+from sourcefolio.domain.capture import CaptureTask
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.source import (
     ArtifactRole,
     CaptureStatus,
     SourceIdentity,

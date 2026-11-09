@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from evidence_vault.adapters.filesystem import (
+from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
 )
-from evidence_vault.adapters.filesystem.extractions import FileSystemExtractionRepository
-from evidence_vault.application.archive_capture import ArchiveCapture
-from evidence_vault.application.commands import ArchiveCaptureCommand, ArtifactPayload
-from evidence_vault.application.ocr_backlog_report import (
+from sourcefolio.adapters.filesystem.extractions import FileSystemExtractionRepository
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.ocr_backlog_report import (
     OcrBacklogCountsDocument,
     OcrBacklogItemDocument,
     OcrBacklogQueryDocument,
@@ -21,20 +21,20 @@ from evidence_vault.application.ocr_backlog_report import (
     OcrBacklogSelectionDocument,
     OcrDurationDocument,
 )
-from evidence_vault.application.ocr_evaluation import (
+from sourcefolio.application.ocr_evaluation import (
     OcrEvaluationSample,
     OcrEvaluationSet,
     OcrEvaluator,
 )
-from evidence_vault.domain.common import ActorKind, Provenance
-from evidence_vault.domain.extraction import (
+from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.extraction import (
     EvidenceLocator,
     ExtractionKind,
     ExtractionRecord,
     ExtractionRequest,
     LocatorKind,
 )
-from evidence_vault.domain.source import (
+from sourcefolio.domain.source import (
     ArtifactRole,
     SourceIdentity,
     SourceKind,

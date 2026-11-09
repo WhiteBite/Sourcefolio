@@ -12,7 +12,7 @@
 1. `capture-report` читает существующие SQLite `capture_jobs`, `capture_attempts` и `task_json` без миграции схемы. Это read-only operational projection с retries, finished-attempt p50/p95, stale candidates и sanitized recent errors.
 2. Общий application `OcrBacklogRunner` обслуживает `ocr-capture` и `ocr-backlog`. Batch selection поддерживает filters, latest-per-source по умолчанию, capture/slide limits; execution использует bounded chunks/workers, failure isolation и request-ID resume. Persistent OCR queue и multiprocess leases не вводятся без отдельного gate.
 3. `evidence-pack` — rebuildable retrieval-only JSON/Markdown. Он содержит ranked captures, snippets, raw artifact links, derived excerpts, extraction/request IDs, typed locators, provenance и limitations, но не automatic answer, verification или новые canonical claims.
-4. `project-obsidian` создаёт OCR-enriched source cards и overview только внутри `_generated/evidence-vault/`. Human-owned notes и immutable raw packets не изменяются.
+4. `project-obsidian` создаёт OCR-enriched source cards и overview только внутри `_generated/sourcefolio/`. Human-owned notes и immutable raw packets не изменяются.
 
 ## Последствия
 
