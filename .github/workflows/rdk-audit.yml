@@ -25,4 +25,4 @@ jobs:
 
       - uses: WhiteBite/rdk-discoverability@v1
         with:
-          min_score: ${{ vars.RDK_MIN_SCORE || 0 }}
+          min_score: ${{ vars.RDK_MIN_SCORE || 95 }}
