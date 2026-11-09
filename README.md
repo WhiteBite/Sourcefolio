@@ -2,7 +2,7 @@
 
 Рабочее название локальной системы, которая превращает сохранённые TikTok-видео, слайдшоу и другие источники не в очередную базу саммари, а в **архив доказательств, личный контекст и историю решений**.
 
-> Реализованы evidence-ядро, resumable ingestion, `yt-dlp` video path, отдельный `gallery-dl` slideshow resolver, archive audit, operational capture report, bounded OCR backlog + saved reports, OCR quality evaluation, generated Obsidian cards/overview, lexical search + evaluation, retrieval-only evidence packs + integrity verification и versioned OCR records. Добавлены TikTok-collections pipeline (userscript → `import-collections` → collection indexes, triage dashboards и human `ideas/`), per-collection LLM digest (`llm-enrich`) и MCP-сервер. Дополнительно выполнены live public surrogate ingest (1 video + 1 slideshow) и real Tesseract на 6 synthetic golden slides. Это не заменяет пилот личного export и human-reviewed качество. ASR/keyframes, on-demand LLM answers и wiki-compilers остаются следующими этапами.
+> Реализованы evidence-ядро, resumable ingestion, `yt-dlp` video path, отдельный `gallery-dl` slideshow resolver, archive audit, operational capture report, bounded OCR backlog + saved reports, OCR quality evaluation, generated Obsidian cards/overview, lexical search + evaluation, retrieval-only evidence packs + integrity verification и versioned OCR records. Добавлены TikTok-collections pipeline (userscript → `import-collections` → collection indexes, triage dashboards и human `ideas/`), per-collection LLM digest (`llm-enrich`) и MCP-сервер. Дополнительно выполнены live public surrogate ingest (1 video + 1 slideshow) и real Tesseract на 6 synthetic golden slides. Это не заменяет пилот личного export и human-reviewed качество. ASR/keyframes и wiki-compilers остаются следующими этапами.
 
 ## Главная идея
 
@@ -46,6 +46,9 @@
 27. MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 28. `project-fit`: сопоставление latest captures с проектами пользователя через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 29. Knowledge-base surfaces: human `ideas/`/`projects/`/`decisions/`, generated `entities/` (repo nodes), `graph/` (Mermaid), `decisions/` index и `projects/` briefs; команды `scaffold-projects`, `decision-new`, `decision-search`, `context` и `project-fit --profiles`.
+30. `ask`: единая точка входа — retrieval через search + evidence-pack и optional grounded LLM synthesis только по excerpts; immutable per-run note `answer/v1` в `answers/` с `provenance: agent_inference`, citations и human decision stub.
+31. `profile-draft`: черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`) с `create_if_absent` и без перезаписи.
+32. `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-obsidian` → `project-fit` (при `--fit`) с одним combined JSON; без daemon, расписание ручное.
 
 ## Быстрый старт
 
@@ -338,6 +341,63 @@ evidence-vault project-fit \
 ```
 
 `scaffold-projects` создаёт отсутствующие профили в `<vault>/projects/<project.id>.md` и не перезаписывает существующие. `decision-new` создаёт заметку решения в `<vault>/decisions/` (тоже без перезаписи); `decision-search` ищет по терминам (AND, casefold) и возвращает path/title/date/status. `context` собирает session brief из проектов, накопленных совпадений `project-fit` и решений; `--format markdown` печатает человекочитаемый вид, по умолчанию JSON, и дополнительно пишет бриф в `<vault>/_generated/evidence-vault/context/index.md` (+ `context.json`). Отсутствие файла `--projects` не роняет команду. `project-fit --profiles <dir>` подмешивает в промпт тело профиля `<project.id>.md` (без frontmatter) из указанной директории. `id` проекта обязан соответствовать `^[a-z0-9][a-z0-9-]*$`.
+
+## Ответы, профили и refresh
+
+`ask` — единая точка входа: retrieval через search + evidence-pack и, если доступна модель, grounded synthesis только по найденным excerpts. Без ключа или с `--no-llm` команда работает в retrieval-only режиме:
+
+```bash
+evidence-vault ask "какие подходы к RAG описаны в сохранённом" \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault \
+  --format markdown
+
+evidence-vault ask "какие подходы к RAG описаны в сохранённом" \
+  --no-llm \
+  --limit 10 \
+  --excerpt-limit 3
+```
+
+`--project <id>` подмешивает имя, описание и профиль проекта в промпт и помечает заметку, но не меняет ranking retrieval. Каждый запуск пишет новую immutable заметку `answer/v1` в `<vault>/_generated/evidence-vault/answers/<UTC-stamp>-<slug>.md` (microsecond-stamped имя, `provenance: agent_inference`, warning-callout). Заметка пишется через `write_immutable_bytes`, а не через `replace_namespace`, поэтому `project-obsidian` её никогда не затирает. В заметке и в JSON-выводе есть copy-pasteable stub `evidence-vault decision-new ...`; human-решение командой не создаётся автоматически. `status: degraded` (модель недоступна) возвращает exit code 1 и оставляет retrieval excerpts.
+
+`profile-draft` черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`: name/description/dependency names/keywords). Один проект:
+
+```bash
+evidence-vault profile-draft \
+  --repo /path/to/repo \
+  --id my-project \
+  --vault data/vault
+```
+
+Batch по всем проектам, у которых в `projects.json` задан `repo_path`:
+
+```bash
+evidence-vault profile-draft \
+  --projects data/projects.json \
+  --vault data/vault \
+  --limit 10
+```
+
+Заметка пишется в `<vault>/projects/<id>.md` через `create_if_absent` и никогда не перезаписывает human-заметку. JSON-вывод: `{created, skipped, created_paths, projects_root, errors}`; нечитаемый репозиторий даёт exit code 1.
+
+`refresh` — одна команда, которая последовательно переиспользует существующие handlers: `import-collections` (только при `--capture <file>`) → `project-obsidian` (всегда) → `project-fit` (только при `--fit`). stdout каждого шага захватывается, печатается один combined JSON `{"steps": [{"step", "exit", "output"}, ...]}`; шаг с ошибкой даёт `{"step", "error"}`. Exit code ненулевой, если упал любой шаг.
+
+```bash
+evidence-vault refresh \
+  --capture /path/to/tiktok-collections-<stamp>.json \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault
+
+evidence-vault refresh \
+  --fit \
+  --collection Нейронки \
+  --projects data/projects.json \
+  --vault data/vault
+```
+
+Daemon/watcher нет: расписание ручное — запускайте команду вручную или из планировщика с новым capture-файлом.
 
 ## MCP-сервер
 

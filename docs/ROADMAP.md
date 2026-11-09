@@ -28,6 +28,7 @@
 - Отдельный `gallery-dl` slideshow resolver и `tiktok-slides`: только photo tasks, ordered images, slide/total limits, inventory/completeness checks и честный partial при непроверяемом числе слайдов. На одном live public photo post получено 3 ordered images и complete packet; это ещё не representative пользовательский corpus.
 - Read-only `capture-report` из существующего SQLite: status/kind counts, attempts/retries, finished-attempt p50/p95, stale running candidates и recent partial/failed errors без миграции схемы.
 - `collection-capture/v1` path: Tampermonkey userscript собирает коллекции из залогиненной веб-сессии (full/incremental, optional top-20 comments), `import-collections` архивирует metadata-only packets с resumable bounded workers. Это отдельный discovery-путь, не заменяющий официальный export.
+- `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-obsidian` → `project-fit` (при `--fit`) с одним combined JSON; переиспользует существующие handlers, без daemon — расписание ручное.
 
 **Осталось проверить на реальных данных**
 
@@ -78,6 +79,7 @@
 - MCP-сервер `evidence-vault-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 - `project-fit`: сопоставление latest captures с проектами через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 - Generated `entities/` (repo nodes) и `graph/` (Mermaid knowledge graph) как rebuildable views.
+- `ask`: on-demand grounded answer — retrieval через search + evidence-pack и optional grounded synthesis только по excerpts; `provenance: agent_inference`, citations, immutable per-run note `answer/v1` в `answers/`; relevance не истинность, human decision stub не создаётся автоматически.
 
 **Ещё не доказано на реальном корпусе**
 
@@ -95,6 +97,7 @@
 - `context`: session brief из проектов, накопленных совпадений `project-fit` и решений; JSON или Markdown.
 - Human `projects/` profiles: `scaffold-projects` создаёт черновики, `project-fit --profiles` подмешивает профиль в промпт.
 - Generated `decisions/index.md` как rebuildable view.
+- `profile-draft`: repo-seeded черновик human-профиля проекта (README + `pyproject.toml`/`package.json`) с `create_if_absent`, без перезаписи human-заметки.
 
 **Осталось**
 
