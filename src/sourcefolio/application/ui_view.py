@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 
 from pydantic import JsonValue
 
+from sourcefolio.application.entity_extraction import find_hashtags
 from sourcefolio.application.extraction_ports import ExtractionRepository
 from sourcefolio.application.frontmatter import note_body, parse_frontmatter
 from sourcefolio.application.latest_captures import latest_capture_per_source
@@ -18,11 +20,12 @@ from sourcefolio.domain.extraction import ExtractionRecord
 from sourcefolio.domain.source import ArtifactRef, CaptureStatus, SourcePacket
 
 _SCHEMA_VERSION = "sourcefolio-ui/v1"
-_GENERATOR_VERSION = "2"
+_GENERATOR_VERSION = "3"
 _MAX_TITLE_CHARS = 80
 _NOTE_PREVIEW_CHARS = 120
 _MEDIA_NOT_REQUESTED = "media capture was not requested"
 _NOTE_HEADING = "## Заметки"
+_HASHTAG_TOKEN = re.compile(r"(?<!\w)#\w+", re.UNICODE)
 
 _EMPTY_ANNOTATION: dict[str, str | None] = {
     "my_title": None,
@@ -82,6 +85,10 @@ def _clip_title(text: str) -> str:
     return f"{head}…" if head else f"{clipped.rstrip()}…"
 
 
+def _is_hashtag_only(text: str) -> bool:
+    return not _HASHTAG_TOKEN.sub("", text).strip()
+
+
 def _display_title(
     my_title: str | None,
     packet_title: str | None,
@@ -96,31 +103,40 @@ def _display_title(
     if description:
         for line in description.splitlines():
             stripped = line.strip()
-            if stripped:
+            if stripped and not _is_hashtag_only(stripped):
                 return _clip_title(stripped)
     if author:
         return f"@{author}"
     return f"{packet.source.kind.value} {packet.source.external_id or packet.source_id[:12]}"
 
 
-def _media_state(packet: SourcePacket) -> str:
-    if packet.status is CaptureStatus.COMPLETE:
-        return "complete"
-    if any(_MEDIA_NOT_REQUESTED in limitation for limitation in packet.limitations):
-        return "metadata_only"
-    return "partial"
+def _snippet_for(title: str, description: str | None) -> str | None:
+    if description is None or not description.strip():
+        return None
+    lines = description.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped == title or _clip_title(stripped) == title:
+            rest = "\n".join(lines[index + 1 :]).strip()
+            return rest or None
+        break
+    return description
 
 
-def _stats_view(saved: Mapping[str, JsonValue]) -> dict[str, int]:
-    value = saved.get("stats")
-    if not isinstance(value, dict):
-        return {}
-    stats: dict[str, int] = {}
-    for key in ("plays", "likes", "comments", "shares"):
-        number = saved_int(value, key)
-        if number is not None:
-            stats[key] = number
-    return stats
+def _marker(collections: list[str], author: str | None, kind: str) -> str:
+    if collections:
+        return collections[0][:1].upper()
+    if author:
+        return author[:1].upper()
+    return kind[:1].upper()
+
+
+def _hashtags_for(description: str | None) -> list[str]:
+    if not description:
+        return []
+    return list(find_hashtags(description))
 
 
 def _annotation_view(properties: Mapping[str, object], body: str) -> dict[str, str | None]:
@@ -142,6 +158,26 @@ def _annotation_view(properties: Mapping[str, object], body: str) -> dict[str, s
         "status": prop("status"),
         "note_preview": preview,
     }
+
+
+def _stats_view(saved: Mapping[str, JsonValue]) -> dict[str, int]:
+    value = saved.get("stats")
+    if not isinstance(value, dict):
+        return {}
+    stats: dict[str, int] = {}
+    for key in ("plays", "likes", "comments", "shares"):
+        number = saved_int(value, key)
+        if number is not None:
+            stats[key] = number
+    return stats
+
+
+def _media_state(packet: SourcePacket) -> str:
+    if packet.status is CaptureStatus.COMPLETE:
+        return "complete"
+    if any(_MEDIA_NOT_REQUESTED in limitation for limitation in packet.limitations):
+        return "metadata_only"
+    return "partial"
 
 
 class UiViewProjection:
@@ -201,13 +237,18 @@ class UiViewProjection:
         saved = saved_index(packet)
         description = saved_str(saved, "desc")
         author = saved_str(saved, "author")
+        collections = [collection.name for collection in packet.collections]
+        display_title = _display_title(
+            annotation["my_title"], packet.title, description, author, packet
+        )
         return {
             "source_id": packet.source_id,
             "capture_id": packet.capture_id,
             "title": packet.title,
-            "display_title": _display_title(
-                annotation["my_title"], packet.title, description, author, packet
-            ),
+            "display_title": display_title,
+            "snippet": _snippet_for(display_title, description),
+            "marker": _marker(collections, author, packet.source.kind.value),
+            "hashtags": _hashtags_for(description),
             "platform": packet.source.platform,
             "kind": packet.source.kind.value,
             "external_id": packet.source.external_id,
@@ -215,7 +256,7 @@ class UiViewProjection:
             "captured_at": packet.captured_at.isoformat(),
             "status": packet.status.value,
             "media_state": _media_state(packet),
-            "collections": [collection.name for collection in packet.collections],
+            "collections": collections,
             "author": author,
             "video_type": saved_str(saved, "type"),
             "post_created_at": saved_str(saved, "post_created_at"),
@@ -293,25 +334,33 @@ _HTML_TEMPLATE = """<!doctype html>
 <title>Sourcefolio — архив источников</title>
 <style>
 :root {
-  --bg: #f6f6f4;
+  --bg: #f5f5f2;
   --surface: #ffffff;
-  --surface-2: #f0f0ec;
-  --border: #e3e3dd;
-  --border-strong: #d0d0c8;
-  --text: #1b1b19;
-  --text-muted: #6d6d66;
-  --text-faint: #9a9a92;
-  --accent: #1e40af;
-  --accent-soft: #eaeefb;
+  --surface-2: #f0f0eb;
+  --border: #e6e6df;
+  --border-strong: #d4d4cb;
+  --text: #1a1a17;
+  --text-muted: #61615a;
+  --text-faint: #94948b;
+  --accent: #4f46e5;
+  --accent-soft: #edecfd;
   --complete: #15803d;
   --complete-soft: #e3f4e8;
   --partial: #b45309;
   --partial-soft: #fbeed6;
   --drop: #b91c1c;
   --drop-soft: #fdeaea;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(20,20,18,.04), 0 4px 16px rgba(20,20,18,.05);
+  --c0: #4f46e5;
+  --c1: #0d9488;
+  --c2: #b45309;
+  --c3: #be185d;
+  --c4: #7c3aed;
+  --c5: #047857;
+  --c6: #0369a1;
+  --c7: #a16207;
+  --r-sm: 8px;
+  --r: 12px;
+  --shadow: 0 1px 2px rgba(20,20,18,.04), 0 4px 14px rgba(20,20,18,.05);
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -319,23 +368,31 @@ _HTML_TEMPLATE = """<!doctype html>
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131311;
-    --surface: #1c1c19;
+    --bg: #121210;
+    --surface: #1b1b18;
     --surface-2: #232320;
-    --border: #2e2e29;
-    --border-strong: #3d3d36;
-    --text: #ecece6;
-    --text-muted: #a3a39a;
-    --text-faint: #75756c;
-    --accent: #8aa4ff;
-    --accent-soft: #1e2540;
+    --border: #2d2d28;
+    --border-strong: #3e3e37;
+    --text: #ecece5;
+    --text-muted: #a4a49a;
+    --text-faint: #77776d;
+    --accent: #8f96ff;
+    --accent-soft: #1e2140;
     --complete: #6ee7a0;
     --complete-soft: #16301f;
     --partial: #f0b866;
     --partial-soft: #33260f;
     --drop: #f28b8b;
     --drop-soft: #3a1212;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    --c0: #8f96ff;
+    --c1: #2dd4bf;
+    --c2: #f0b866;
+    --c3: #f472b6;
+    --c4: #a78bfa;
+    --c5: #34d399;
+    --c6: #38bdf8;
+    --c7: #facc15;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.4);
   }
 }
 * { box-sizing: border-box; }
@@ -349,31 +406,35 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
-.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 0 20px; }
 .topbar {
-  position: sticky; top: 0; z-index: 10;
+  position: sticky; top: 0; z-index: 20;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
-.topbar .wrap {
-  display: flex; align-items: center; gap: 24px;
-  padding-top: 14px; padding-bottom: 14px; flex-wrap: wrap;
+.topbar-inner {
+  display: flex; align-items: center; gap: 20px;
+  padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap;
 }
-.brand { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .brand-mark {
-  width: 38px; height: 38px; border-radius: 10px;
+  width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
   background: var(--text); color: var(--bg);
   display: grid; place-items: center;
-  font-weight: 700; font-size: 14px; letter-spacing: .02em;
+  font-weight: 700; font-size: 13px; letter-spacing: .02em;
 }
 h1 {
-  font-family: var(--serif); font-size: 20px; margin: 0;
-  font-weight: 600; letter-spacing: -.01em;
+  font-family: var(--serif); font-size: 18px; margin: 0;
+  font-weight: 600; letter-spacing: -.01em; white-space: nowrap;
 }
-.sub { margin: 2px 0 0; color: var(--text-muted); font-size: 12.5px; }
-.search { flex: 1 1 260px; }
+.sub { margin: 1px 0 0; color: var(--text-muted); font-size: 12px; }
+.search { position: relative; flex: 1 1 240px; min-width: 180px; }
+.search svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px; color: var(--text-faint); pointer-events: none;
+}
 .search input {
-  width: 100%; padding: 10px 14px; font: inherit; font-size: 14px;
+  width: 100%; padding: 9px 14px 9px 34px; font: inherit; font-size: 14px;
   border: 1px solid var(--border-strong); border-radius: 10px;
   background: var(--surface); color: var(--text);
 }
@@ -381,55 +442,88 @@ h1 {
   outline: 2px solid var(--accent); outline-offset: 1px;
   border-color: var(--accent);
 }
-main.wrap { padding-top: 20px; padding-bottom: 64px; }
+main.wrap { padding-top: 14px; padding-bottom: 72px; }
+.chipbar {
+  display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 14px;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-muted); font-size: 12.5px; white-space: nowrap;
+  cursor: pointer; font-family: inherit;
+}
+.chip:hover { border-color: var(--border-strong); color: var(--text); }
+.chip[aria-pressed="true"] {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--text);
+}
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.chip .n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .filters {
-  display: flex; align-items: center; gap: 16px;
-  flex-wrap: wrap; margin-bottom: 18px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 .filters label {
   display: flex; align-items: center; gap: 6px;
   font-size: 12.5px; color: var(--text-muted);
 }
 .filters select {
-  font: inherit; font-size: 13px; padding: 6px 10px;
+  font: inherit; font-size: 13px; padding: 6px 9px;
   border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface); color: var(--text);
 }
 .result-count { margin-left: auto; font-size: 12.5px; color: var(--text-faint); }
-.list { display: flex; flex-direction: column; gap: 10px; }
+.list { display: flex; flex-direction: column; gap: 8px; }
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  cursor: pointer;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); transition: border-color .15s ease, box-shadow .15s ease;
 }
 .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card:focus-within { border-color: var(--border-strong); }
 .card.open { border-color: var(--border-strong); box-shadow: var(--shadow); }
-.title-row {
-  display: flex; align-items: baseline; gap: 12px;
-  justify-content: space-between; flex-wrap: wrap;
+.card-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 12px 12px 14px;
 }
+.card-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.avatar {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 16px; line-height: 1;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.card-main { flex: 1 1 auto; min-width: 0; }
+.titleline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .title {
-  font-size: 15.5px; font-weight: 600; margin: 0;
-  letter-spacing: -.005em; min-width: 0; overflow-wrap: anywhere;
+  font-size: 15px; font-weight: 600; margin: 0;
+  letter-spacing: -.005em; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.badges { display: flex; gap: 6px; flex-shrink: 0; }
-.badge {
-  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
-  letter-spacing: .01em; white-space: nowrap;
+.pill {
+  font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+  white-space: nowrap; letter-spacing: .01em; flex-shrink: 0;
 }
-.badge-kind { background: var(--surface-2); color: var(--text-muted); }
-.badge-complete { background: var(--complete-soft); color: var(--complete); }
-.badge-partial { background: var(--partial-soft); color: var(--partial); }
-.badge-metadata { background: var(--surface-2); color: var(--text-faint); }
+.pill-kind { background: var(--surface-2); color: var(--text-faint); }
+.pill-partial { background: var(--partial-soft); color: var(--partial); }
 .badge-inbox { background: var(--surface-2); color: var(--text-muted); }
 .badge-keep { background: var(--complete-soft); color: var(--complete); }
 .badge-done { background: var(--accent-soft); color: var(--accent); }
 .badge-drop { background: var(--drop-soft); color: var(--drop); }
-.from { margin: 6px 0 0; font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+.meta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 3px; font-size: 12.5px; color: var(--text-muted);
+}
+.meta-item { display: inline-flex; align-items: center; gap: 4px; }
+.meta-item svg { width: 13px; height: 13px; color: var(--text-faint); flex-shrink: 0; }
+.meta-item.author { font-weight: 500; color: var(--text-muted); }
+.stat { font-variant-numeric: tabular-nums; }
+.tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.tag {
+  font-size: 11px; padding: 1px 7px; border-radius: 6px;
+  background: var(--surface-2); color: var(--text-muted);
+}
 .snippet {
   margin: 6px 0 0; font-size: 13px; color: var(--text-muted);
   white-space: pre-line;
@@ -437,63 +531,66 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
   overflow: hidden;
 }
 .why {
-  margin: 6px 0 0; font-size: 12.5px; padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft); color: var(--accent);
-  overflow-wrap: anywhere;
+  margin: 6px 0 0; font-size: 12.5px; padding: 5px 10px; border-radius: var(--r-sm);
+  background: var(--accent-soft); color: var(--accent); overflow-wrap: anywhere;
 }
-.unknown { margin: 6px 0 0; font-size: 12.5px; color: var(--text-faint); font-style: italic; }
-.src-line {
-  margin: 8px 0 0; font-size: 12.5px;
-  display: flex; gap: 16px; flex-wrap: wrap;
+.note-line { margin: 5px 0 0; font-size: 12.5px; color: var(--text-muted); }
+.card-side { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.icon-btn {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--text-faint); text-decoration: none; cursor: pointer;
 }
-.src-line a { color: var(--accent); }
-.details {
-  display: none; margin-top: 14px; padding-top: 14px;
-  border-top: 1px solid var(--border);
+.icon-btn:hover { background: var(--surface-2); color: var(--accent); }
+.icon-btn svg { width: 16px; height: 16px; }
+.chevron {
+  width: 26px; height: 30px; display: grid; place-items: center;
+  color: var(--text-faint); cursor: pointer;
 }
+.chevron svg { width: 16px; height: 16px; transition: transform .18s ease; }
+.card.open .chevron svg { transform: rotate(180deg); }
+.details { display: none; padding: 0 14px 14px 64px; }
 .card.open .details { display: block; }
-.block { margin-bottom: 16px; }
+.block { margin-bottom: 14px; }
 .block:last-child { margin-bottom: 0; }
 .block h3 {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--text-faint); margin: 0 0 8px; font-weight: 700;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-faint); margin: 0 0 6px; font-weight: 700;
 }
 .kv {
-  display: grid; grid-template-columns: minmax(0, 130px) minmax(0, 1fr);
-  gap: 4px 12px; margin: 0; font-size: 13px;
+  display: grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  gap: 3px 12px; margin: 0; font-size: 13px;
 }
 .kv dt { color: var(--text-faint); }
 .kv dd { margin: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
 .kv dd a { color: var(--accent); }
-.desc { margin: 0; font-size: 13.5px; white-space: pre-wrap; }
+.desc { margin: 0; font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hint { margin: 0; font-size: 12.5px; color: var(--text-faint); }
 .limitations { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-muted); }
 .artifacts {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 10px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px;
 }
 .artifact {
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
   overflow: hidden; background: var(--surface-2);
 }
-.art-media { display: block; width: 100%; max-height: 220px; object-fit: cover; background: #000; }
-.art-meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.art-media { display: block; width: 100%; max-height: 200px; object-fit: cover; background: #000; }
+.art-meta { padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; }
 .art-role { font-size: 12px; font-weight: 600; }
 .art-sub { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
 .art-link { font-size: 12px; color: var(--accent); margin-top: 2px; }
 .excerpt {
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 10px 12px; margin-bottom: 8px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 9px 11px; margin-bottom: 7px; background: var(--surface-2);
 }
 .excerpt-head {
   display: flex; gap: 10px; font-size: 11px; color: var(--text-faint);
-  font-family: var(--mono); margin-bottom: 6px; flex-wrap: wrap;
+  font-family: var(--mono); margin-bottom: 5px; flex-wrap: wrap;
 }
 .excerpt-kind { color: var(--accent); font-weight: 600; }
 .excerpt-text { margin: 0; font-size: 13px; white-space: pre-wrap; }
-.empty { color: var(--text-faint); text-align: center; padding: 40px 0; }
+.empty { color: var(--text-faint); text-align: center; padding: 48px 0; }
 .show-more {
-  display: block; margin: 18px auto 0; padding: 9px 18px;
+  display: block; margin: 16px auto 0; padding: 9px 18px;
   font: inherit; font-size: 13.5px;
   border: 1px solid var(--border-strong); border-radius: 10px;
   background: var(--surface); color: var(--text); cursor: pointer;
@@ -501,14 +598,15 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
 .show-more:hover { border-color: var(--accent); }
 @media (max-width: 560px) {
   .kv { grid-template-columns: 1fr; gap: 0; }
-  .kv dt { margin-top: 8px; }
-  .kv dd { margin-bottom: 2px; }
+  .kv dt { margin-top: 7px; }
+  .details { padding-left: 14px; }
+  h1 { font-size: 16px; }
 }
 </style>
 </head>
 <body>
 <header class="topbar">
-  <div class="wrap">
+  <div class="wrap topbar-inner">
     <div class="brand">
       <span class="brand-mark">SF</span>
       <div>
@@ -517,12 +615,18 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
       </div>
     </div>
     <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="M21 21l-4.3-4.3"></path>
+      </svg>
       <input id="q" type="search" autocomplete="off"
         placeholder="Поиск по названию, автору, коллекции, подписи…">
     </div>
   </div>
 </header>
 <main class="wrap">
+  <nav class="chipbar" id="chipbar" aria-label="Коллекции"></nav>
   <div class="filters">
     <label>Коллекция
       <select id="f-collection"><option value="">Любые</option></select>
@@ -533,8 +637,8 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     <label>Статус
       <select id="f-status">
         <option value="">Любые</option>
-        <option value="complete">complete</option>
-        <option value="partial">partial</option>
+        <option value="complete">полные</option>
+        <option value="partial">частичные</option>
       </select>
     </label>
     <label>Мой статус
@@ -555,11 +659,13 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('sourcefolio-data').textContent);
+  var NS = 'http://www.w3.org/2000/svg';
   var CHUNK = 100;
   var STEP = 200;
   var shown = CHUNK;
   var list = document.getElementById('list');
   var q = document.getElementById('q');
+  var chipbar = document.getElementById('chipbar');
   var fCollection = document.getElementById('f-collection');
   var fKind = document.getElementById('f-kind');
   var fStatus = document.getElementById('f-status');
@@ -568,30 +674,32 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
   var showMore = document.getElementById('show-more');
   var summary = document.getElementById('summary');
 
-  var annotated = 0;
-  data.items.forEach(function (it) {
-    var a = it.annotation || {};
-    if (a.my_title || a.why_saved || a.note_preview) { annotated++; }
-  });
+  var PATHS = {
+    user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8z',
+    calendar: 'M8 2v4M16 2v4M3 10h18' +
+      'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+    play: 'M7 4v16l12-8z',
+    heart: 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1' +
+      'a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z',
+    external: 'M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
+    share: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13',
+    chevron: 'M6 9l6 6 6-6'
+  };
 
-  summary.textContent = data.counts.sources + ' источников · ' +
-    data.counts.complete + ' complete · ' + data.counts.partial + ' partial · ' +
-    annotated + ' подписано';
-
-  data.collections.forEach(function (c) {
-    var o = document.createElement('option');
-    o.value = c.name;
-    o.textContent = c.name + ' (' + c.count + ')';
-    fCollection.appendChild(o);
-  });
-  var kinds = {};
-  data.items.forEach(function (it) { kinds[it.kind] = true; });
-  Object.keys(kinds).sort().forEach(function (k) {
-    var o = document.createElement('option');
-    o.value = k;
-    o.textContent = k;
-    fKind.appendChild(o);
-  });
+  function icon(name) {
+    var s = document.createElementNS(NS, 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.setAttribute('fill', 'none');
+    s.setAttribute('stroke', 'currentColor');
+    s.setAttribute('stroke-width', '2');
+    s.setAttribute('stroke-linecap', 'round');
+    s.setAttribute('stroke-linejoin', 'round');
+    s.setAttribute('aria-hidden', 'true');
+    var p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', PATHS[name]);
+    s.appendChild(p);
+    return s;
+  }
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -600,7 +708,7 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     return n;
   }
 
-  function badge(text, cls) { return el('span', 'badge ' + cls, text); }
+  function pill(text, cls) { return el('span', 'pill ' + cls, text); }
 
   function fmtDate(iso) {
     if (!iso) { return ''; }
@@ -623,6 +731,23 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     return String(n);
   }
 
+  function accentKey(item) {
+    return (item.collections && item.collections[0]) || item.author || item.kind || '';
+  }
+
+  function accentVar(key) {
+    var h = 0;
+    for (var i = 0; i < key.length; i++) { h = (h * 31 + key.charCodeAt(i)) >>> 0; }
+    return 'var(--c' + (h % 8) + ')';
+  }
+
+  function metaItem(name, text, cls) {
+    var n = el('span', 'meta-item' + (cls ? ' ' + cls : ''));
+    n.appendChild(icon(name));
+    n.appendChild(el('span', 'stat', text));
+    return n;
+  }
+
   function addKV(dl, key, value) {
     dl.appendChild(el('dt', null, key));
     dl.appendChild(el('dd', null, value));
@@ -639,61 +764,76 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     dl.appendChild(dd);
   }
 
-  function mediaBadge(state) {
-    if (state === 'complete') { return badge('complete', 'badge-complete'); }
-    if (state === 'metadata_only') { return badge('без медиа', 'badge-metadata'); }
-    return badge('partial', 'badge-partial');
-  }
-
   function buildCard(item) {
     var ann = item.annotation || {};
     var card = el('article', 'card');
-    card.tabIndex = 0;
+    card.style.setProperty('--accent', accentVar(accentKey(item)));
 
-    var titleRow = el('div', 'title-row');
-    titleRow.appendChild(el('h2', 'title', item.display_title));
-    var badges = el('div', 'badges');
-    badges.appendChild(badge(item.platform + ' · ' + item.kind, 'badge-kind'));
-    badges.appendChild(mediaBadge(item.media_state));
-    if (ann.status) { badges.appendChild(badge(ann.status, 'badge-' + ann.status)); }
-    titleRow.appendChild(badges);
-    card.appendChild(titleRow);
+    var row = el('div', 'card-row');
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-expanded', 'false');
+    row.appendChild(el('span', 'avatar', item.marker));
 
-    var meta = [];
-    if (item.author) { meta.push('@' + item.author); }
-    if (item.post_created_at) { meta.push(fmtDate(item.post_created_at)); }
-    if (item.stats.plays != null) { meta.push('▶ ' + fmtInt(item.stats.plays)); }
-    if (item.stats.likes != null) { meta.push('♥ ' + fmtInt(item.stats.likes)); }
-    if (item.collections.length) { meta.push(item.collections.join(', ')); }
-    if (meta.length) { card.appendChild(el('p', 'from', meta.join(' · '))); }
-
-    if (item.description) {
-      card.appendChild(el('p', 'snippet', item.description));
-    } else if (!ann.note_preview && !item.title) {
-      card.appendChild(
-        el('p', 'unknown', 'описание недоступно — подпиши через sourcefolio note')
-      );
+    var main = el('div', 'card-main');
+    var titleline = el('div', 'titleline');
+    titleline.appendChild(el('h2', 'title', item.display_title));
+    titleline.appendChild(pill(item.kind, 'pill-kind'));
+    if (item.media_state === 'partial') { titleline.appendChild(pill('частично', 'pill-partial')); }
+    if (ann.status && ann.status !== 'inbox') {
+      titleline.appendChild(pill(ann.status, 'badge-' + ann.status));
     }
-    if (ann.why_saved) {
-      card.appendChild(el('p', 'why', 'Зачем: ' + ann.why_saved));
-    }
+    main.appendChild(titleline);
 
+    var meta = el('div', 'meta');
+    if (item.author) { meta.appendChild(metaItem('user', '@' + item.author, 'author')); }
+    if (item.post_created_at) {
+      meta.appendChild(metaItem('calendar', fmtDate(item.post_created_at)));
+    }
+    if (item.stats.plays != null) { meta.appendChild(metaItem('play', fmtInt(item.stats.plays))); }
+    if (item.stats.likes != null) { meta.appendChild(metaItem('heart', fmtInt(item.stats.likes))); }
+    if (meta.childNodes.length) { main.appendChild(meta); }
+
+    if (item.hashtags.length) {
+      var tags = el('div', 'tags');
+      item.hashtags.slice(0, 8).forEach(function (t) {
+        tags.appendChild(el('span', 'tag', '#' + t));
+      });
+      main.appendChild(tags);
+    }
+    if (ann.my_title && ann.my_title !== item.display_title) {
+      main.appendChild(el('p', 'note-line', 'моё название: ' + ann.my_title));
+    }
+    if (ann.why_saved) { main.appendChild(el('p', 'why', 'Зачем: ' + ann.why_saved)); }
+    if (item.snippet) { main.appendChild(el('p', 'snippet', item.snippet)); }
+
+    row.appendChild(main);
+
+    var side = el('div', 'card-side');
     if (item.canonical_url) {
-      var links = el('div', 'src-line');
-      var open = el('a', null, 'открыть в TikTok');
+      var open = el('a', 'icon-btn');
       open.href = item.canonical_url;
       open.target = '_blank';
       open.rel = 'noopener';
-      links.appendChild(open);
-      var share = el('a', null, 'поделиться');
+      open.title = 'открыть в TikTok';
+      open.appendChild(icon('external'));
+      side.appendChild(open);
+      var share = el('a', 'icon-btn');
       share.href = 'https://t.me/share/url?url=' +
         encodeURIComponent(item.canonical_url) + '&text=' +
         encodeURIComponent(item.display_title);
       share.target = '_blank';
       share.rel = 'noopener';
-      links.appendChild(share);
-      card.appendChild(links);
+      share.title = 'поделиться';
+      share.appendChild(icon('share'));
+      side.appendChild(share);
     }
+    var chev = el('span', 'chevron');
+    chev.appendChild(icon('chevron'));
+    side.appendChild(chev);
+    row.appendChild(side);
+
+    card.appendChild(row);
 
     var details = el('div', 'details');
 
@@ -705,12 +845,12 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     if (item.title) { addKV(dl, 'title', item.title); }
     if (item.external_id) { addKV(dl, 'external_id', item.external_id); }
     if (item.canonical_url) { addLink(dl, 'canonical_url', item.canonical_url); }
+    if (item.collections.length) { addKV(dl, 'collections', item.collections.join(', ')); }
     var collector = item.collector.actor_kind + ':' + item.collector.actor_id +
       ' · ' + item.collector.method;
     if (item.collector.version) { collector += ' · v' + item.collector.version; }
     addKV(dl, 'collector', collector);
     addKV(dl, 'захвачено', fmtDate(item.captured_at));
-    if (item.author) { addKV(dl, 'author', item.author); }
     if (item.video_type) { addKV(dl, 'type', item.video_type); }
     if (item.post_created_at) { addKV(dl, 'posted', item.post_created_at); }
     prov.appendChild(dl);
@@ -735,7 +875,12 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
       details.appendChild(desc);
     }
 
-    if (item.limitations.length && item.media_state === 'partial') {
+    if (item.media_state === 'metadata_only') {
+      var med = el('section', 'block');
+      med.appendChild(el('h3', null, 'Медиа'));
+      med.appendChild(el('p', 'hint', 'сохранены только метаданные — медиа не скачивалось'));
+      details.appendChild(med);
+    } else if (item.limitations.length) {
       var lim = el('section', 'block');
       lim.appendChild(el('h3', null, 'Ограничения'));
       var ul = el('ul', 'limitations');
@@ -793,14 +938,19 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     }
 
     card.appendChild(details);
-    card.addEventListener('click', function (e) {
+
+    function toggle() {
+      var open = card.classList.toggle('open');
+      row.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    row.addEventListener('click', function (e) {
       if (e.target.closest('a, video, img')) { return; }
-      card.classList.toggle('open');
+      toggle();
     });
-    card.addEventListener('keydown', function (e) {
+    row.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        card.classList.toggle('open');
+        toggle();
       }
     });
     return card;
@@ -813,12 +963,73 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     var ann = item.annotation || {};
     if (noteStatus && ann.status !== noteStatus) { return false; }
     if (!term) { return true; }
-    var hay = [item.display_title, item.title, item.description, item.author,
-      item.external_id, item.collections.join(' '),
+    var hay = [item.display_title, item.title, item.snippet, item.description, item.author,
+      item.external_id, item.collections.join(' '), item.hashtags.join(' '),
       ann.my_title, ann.why_saved, ann.note_preview]
       .filter(Boolean).join(' ').toLowerCase();
     return hay.indexOf(term) !== -1;
   }
+
+  var annotated = 0;
+  data.items.forEach(function (it) {
+    var a = it.annotation || {};
+    if (a.my_title || a.why_saved || a.note_preview) { annotated++; }
+  });
+
+  var parts = [data.counts.sources + ' источников', data.collections.length + ' коллекций'];
+  if (annotated) { parts.push(annotated + ' подписано'); }
+  summary.textContent = parts.join(' · ');
+
+  var chipEls = [];
+  function setCollection(name) {
+    fCollection.value = name;
+    chipEls.forEach(function (c) {
+      c.node.setAttribute('aria-pressed', c.name === name ? 'true' : 'false');
+    });
+    render(true);
+  }
+
+  function buildChips() {
+    var all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'chip';
+    all.setAttribute('aria-pressed', 'true');
+    all.appendChild(el('span', null, 'весь архив'));
+    all.appendChild(el('span', 'n', String(data.counts.sources)));
+    all.addEventListener('click', function () { setCollection(''); });
+    chipbar.appendChild(all);
+    chipEls.push({ name: '', node: all });
+
+    data.collections.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.setAttribute('aria-pressed', 'false');
+      var dot = el('span', 'dot');
+      dot.style.background = accentVar(c.name);
+      b.appendChild(dot);
+      b.appendChild(el('span', null, c.name));
+      b.appendChild(el('span', 'n', String(c.count)));
+      b.addEventListener('click', function () { setCollection(c.name); });
+      chipbar.appendChild(b);
+      chipEls.push({ name: c.name, node: b });
+    });
+  }
+
+  data.collections.forEach(function (c) {
+    var o = document.createElement('option');
+    o.value = c.name;
+    o.textContent = c.name + ' (' + c.count + ')';
+    fCollection.appendChild(o);
+  });
+  var kinds = {};
+  data.items.forEach(function (it) { kinds[it.kind] = true; });
+  Object.keys(kinds).sort().forEach(function (k) {
+    var o = document.createElement('option');
+    o.value = k;
+    o.textContent = k;
+    fKind.appendChild(o);
+  });
 
   function render(reset) {
     if (reset) { shown = CHUNK; }
@@ -842,8 +1053,14 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     }
   }
 
+  buildChips();
   q.addEventListener('input', function () { render(true); });
-  fCollection.addEventListener('change', function () { render(true); });
+  fCollection.addEventListener('change', function () {
+    chipEls.forEach(function (c) {
+      c.node.setAttribute('aria-pressed', c.name === fCollection.value ? 'true' : 'false');
+    });
+    render(true);
+  });
   fKind.addEventListener('change', function () { render(true); });
   fStatus.addEventListener('change', function () { render(true); });
   fNoteStatus.addEventListener('change', function () { render(true); });

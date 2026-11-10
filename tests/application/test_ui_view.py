@@ -127,7 +127,7 @@ def test_ui_view_writes_single_self_contained_page(tmp_path: Path) -> None:
     payload = extract_payload(html)
     assert payload["schema_version"] == "sourcefolio-ui/v1"
     assert payload["generator"] == "sourcefolio"
-    assert payload["generator_version"] == "2"
+    assert payload["generator_version"] == "3"
     assert payload["counts"] == {"sources": 2, "complete": 1, "partial": 1}
     assert payload["collections"] == [{"name": "Нейронки", "count": 2}]
 
@@ -137,6 +137,9 @@ def test_ui_view_writes_single_self_contained_page(tmp_path: Path) -> None:
         "capture_id",
         "title",
         "display_title",
+        "snippet",
+        "marker",
+        "hashtags",
         "platform",
         "kind",
         "external_id",
@@ -225,6 +228,7 @@ def test_ui_view_display_title_fallback_chain(tmp_path: Path) -> None:
     by_id = {entry["external_id"]: entry for entry in payload["items"]}
 
     assert by_id["1"]["display_title"] == "first line"
+    assert by_id["1"]["snippet"] == "second line"
     assert by_id["2"]["display_title"] == "@b"
     assert by_id["42"]["display_title"] == "video 42"
     long_title = by_id["5"]["display_title"]
@@ -258,7 +262,6 @@ def test_ui_view_media_states(tmp_path: Path) -> None:
     assert by_title["Метаданные"]["media_state"] == "metadata_only"
     assert by_title["Частичный"]["media_state"] == "partial"
     assert by_title["Метаданные"]["status"] == "partial"
-    assert "без медиа" in read_page(tmp_path)
 
 
 def test_ui_view_merges_annotations(tmp_path: Path) -> None:
@@ -311,3 +314,25 @@ def test_ui_view_merges_annotations(tmp_path: Path) -> None:
         "status": None,
         "note_preview": None,
     }
+
+
+def test_ui_view_hashtag_only_title_falls_back(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", None, saved={"desc": "#meme", "author": "someone"})
+
+    build_projection(archive, tmp_path).rebuild()
+    item = extract_payload(read_page(tmp_path))["items"][0]
+
+    assert item["display_title"] == "@someone"
+    assert item["hashtags"] == ["meme"]
+    assert item["snippet"] == "#meme"
+
+
+def test_ui_view_marker_matches_collection_initial(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Ролик")
+
+    build_projection(archive, tmp_path).rebuild()
+    item = extract_payload(read_page(tmp_path))["items"][0]
+
+    assert item["marker"] == item["collections"][0][:1].upper()
