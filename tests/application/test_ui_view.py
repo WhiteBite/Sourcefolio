@@ -325,7 +325,7 @@ def test_ui_view_hashtag_only_title_falls_back(tmp_path: Path) -> None:
 
     assert item["display_title"] == "@someone"
     assert item["hashtags"] == ["meme"]
-    assert item["snippet"] == "#meme"
+    assert item["snippet"] is None
 
 
 def test_ui_view_marker_matches_collection_initial(tmp_path: Path) -> None:

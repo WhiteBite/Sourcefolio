@@ -241,12 +241,15 @@ class UiViewProjection:
         display_title = _display_title(
             annotation["my_title"], packet.title, description, author, packet
         )
+        snippet = _snippet_for(display_title, description)
+        if snippet is not None and _is_hashtag_only(snippet):
+            snippet = None
         return {
             "source_id": packet.source_id,
             "capture_id": packet.capture_id,
             "title": packet.title,
             "display_title": display_title,
-            "snippet": _snippet_for(display_title, description),
+            "snippet": snippet,
             "marker": _marker(collections, author, packet.source.kind.value),
             "hashtags": _hashtags_for(description),
             "platform": packet.source.platform,
@@ -786,7 +789,9 @@ main.wrap { padding-top: 14px; padding-bottom: 72px; }
     main.appendChild(titleline);
 
     var meta = el('div', 'meta');
-    if (item.author) { meta.appendChild(metaItem('user', '@' + item.author, 'author')); }
+    if (item.author && item.display_title !== '@' + item.author) {
+      meta.appendChild(metaItem('user', '@' + item.author, 'author'));
+    }
     if (item.post_created_at) {
       meta.appendChild(metaItem('calendar', fmtDate(item.post_created_at)));
     }
