@@ -83,6 +83,7 @@ from sourcefolio.application.frontmatter import note_body
 from sourcefolio.application.knowledge_graph import KnowledgeGraphProjection
 from sourcefolio.application.llm_catalog import LlmCatalogQuery, LlmCatalogRunner
 from sourcefolio.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
+from sourcefolio.application.note import NoteSetter
 from sourcefolio.application.obsidian_views import ObsidianOverviewProjection
 from sourcefolio.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
 from sourcefolio.application.ocr_backlog_report import (
@@ -836,6 +837,7 @@ def _render_ui(args: argparse.Namespace) -> int:
         artifacts=FileSystemArtifactStore(archive_root),
         store=FileSystemProjectionStore(generated_root),
         extractions=FileSystemExtractionRepository(derived_root),
+        notes=FileSystemHumanNoteStore(vault_root / "ideas"),
         limit=args.limit,
     )
     items = projection.rebuild()
@@ -846,6 +848,35 @@ def _render_ui(args: argparse.Namespace) -> int:
         "output": str(output_path),
         "items": items,
         "namespace": UiViewProjection.NAMESPACE,
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _set_note(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    clear_fields = {"my-title": "my_title", "why": "why_saved"}
+    result = NoteSetter(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        notes=FileSystemHumanNoteStore(vault_root / "ideas"),
+    ).set(
+        args.source_id,
+        my_title=args.my_title,
+        why_saved=args.why,
+        status=args.status,
+        clear=tuple(clear_fields[choice] for choice in args.clear),
+    )
+    if result is None:
+        print(
+            json.dumps({"error": f"unknown source_id: {args.source_id}"}, ensure_ascii=False),
+            file=sys.stderr,
+        )
+        return 1
+    output = {
+        "note": str(vault_root / "ideas" / result.note),
+        "created": result.created,
+        "applied": result.applied,
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
@@ -1800,6 +1831,25 @@ def _build_parser() -> argparse.ArgumentParser:
         help="open the generated page in the default browser",
     )
     render_ui.set_defaults(handler=_render_ui)
+
+    note = subcommands.add_parser(
+        "note",
+        help="annotate one source on its idea note",
+    )
+    note.add_argument("source_id")
+    note.add_argument("--archive-dir", default="data/archive")
+    note.add_argument("--vault", default="data/vault")
+    note.add_argument("--my-title", help="personal title for the source")
+    note.add_argument("--why", help="why this source was saved")
+    note.add_argument("--status", help="triage status, e.g. inbox/keep/drop/done")
+    note.add_argument(
+        "--clear",
+        action="append",
+        choices=["my-title", "why"],
+        default=[],
+        help="remove one annotation field; repeatable",
+    )
+    note.set_defaults(handler=_set_note)
 
     scaffold_ideas = subcommands.add_parser(
         "scaffold-ideas",

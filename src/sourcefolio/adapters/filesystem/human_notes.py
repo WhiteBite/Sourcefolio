@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import os
+import re
+import tempfile
 import warnings
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path, PurePosixPath
+
+import yaml
+
+_FRONTMATTER_BLOCK = re.compile(
+    r"\A---\r?\n(?P<body>.*?)\r?\n---(?P<closing>\r?\n|\Z)",
+    re.DOTALL,
+)
 
 
 class FileSystemHumanNoteStore:
-    """Human-owned notes outside the generated namespace; never overwritten."""
+    """Human-owned notes outside the generated namespace; bodies and unrequested keys are kept."""
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
@@ -67,3 +76,58 @@ class FileSystemHumanNoteStore:
             path.unlink(missing_ok=True)
             raise
         return True
+
+    def update_properties(
+        self,
+        relative_path: str,
+        properties: Mapping[str, object | None],
+    ) -> bool:
+        path = self._root / self._relative_path(relative_path)
+        if not path.is_file():
+            return False
+        content = self.read(relative_path)
+        if content is None:
+            return False
+        match = _FRONTMATTER_BLOCK.match(content)
+        if match is None:
+            merged: dict[str, object] = {}
+            tail = content
+            closing = "\n"
+        else:
+            try:
+                loaded = yaml.safe_load(match.group("body"))
+            except yaml.YAMLError as exc:
+                raise ValueError(
+                    f"human note {relative_path} frontmatter is not valid YAML: {exc}"
+                ) from exc
+            if not isinstance(loaded, dict):
+                raise ValueError(f"human note {relative_path} frontmatter is not a mapping")
+            merged = {str(key): value for key, value in loaded.items()}
+            tail = content[match.end() :]
+            closing = match.group("closing")
+        for key, value in properties.items():
+            if value is None:
+                merged.pop(key, None)
+            else:
+                merged[key] = value
+        frontmatter = yaml.safe_dump(merged, allow_unicode=True, sort_keys=False).strip()
+        if match is None:
+            updated = f"---\n{frontmatter}\n---\n{tail}"
+        else:
+            updated = f"---\n{frontmatter}\n---{closing}{tail}"
+        self._replace_content(path, updated)
+        return True
+
+    @staticmethod
+    def _replace_content(path: Path, content: str) -> None:
+        descriptor, temp_name = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp_path, path)
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise

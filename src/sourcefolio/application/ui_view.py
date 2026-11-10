@@ -2,20 +2,34 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 
+from pydantic import JsonValue
+
 from sourcefolio.application.extraction_ports import ExtractionRepository
+from sourcefolio.application.frontmatter import note_body, parse_frontmatter
 from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.ports import ArtifactLocator, SourcePacketRepository
-from sourcefolio.application.projection_ports import ProjectionStore
+from sourcefolio.application.projection_ports import HumanNoteReader, ProjectionStore
 from sourcefolio.application.projection_types import GeneratedDocument
-from sourcefolio.application.saved_index import saved_index, saved_str
+from sourcefolio.application.saved_index import saved_index, saved_int, saved_str
 from sourcefolio.domain.extraction import ExtractionRecord
-from sourcefolio.domain.source import ArtifactRef, SourcePacket
+from sourcefolio.domain.source import ArtifactRef, CaptureStatus, SourcePacket
 
 _SCHEMA_VERSION = "sourcefolio-ui/v1"
-_GENERATOR_VERSION = "1"
+_GENERATOR_VERSION = "2"
+_MAX_TITLE_CHARS = 80
+_NOTE_PREVIEW_CHARS = 120
+_MEDIA_NOT_REQUESTED = "media capture was not requested"
+_NOTE_HEADING = "## Заметки"
+
+_EMPTY_ANNOTATION: dict[str, str | None] = {
+    "my_title": None,
+    "why_saved": None,
+    "status": None,
+    "note_preview": None,
+}
 
 
 def _artifact_view(artifact: ArtifactRef, artifacts: ArtifactLocator) -> dict[str, object]:
@@ -60,6 +74,76 @@ def _derived_view(records: tuple[ExtractionRecord, ...]) -> dict[str, object]:
     }
 
 
+def _clip_title(text: str) -> str:
+    if len(text) <= _MAX_TITLE_CHARS:
+        return text
+    clipped = text[:_MAX_TITLE_CHARS]
+    head = clipped.rsplit(" ", 1)[0]
+    return f"{head}…" if head else f"{clipped.rstrip()}…"
+
+
+def _display_title(
+    my_title: str | None,
+    packet_title: str | None,
+    description: str | None,
+    author: str | None,
+    packet: SourcePacket,
+) -> str:
+    if my_title:
+        return my_title
+    if packet_title:
+        return _clip_title(packet_title)
+    if description:
+        for line in description.splitlines():
+            stripped = line.strip()
+            if stripped:
+                return _clip_title(stripped)
+    if author:
+        return f"@{author}"
+    return f"{packet.source.kind.value} {packet.source.external_id or packet.source_id[:12]}"
+
+
+def _media_state(packet: SourcePacket) -> str:
+    if packet.status is CaptureStatus.COMPLETE:
+        return "complete"
+    if any(_MEDIA_NOT_REQUESTED in limitation for limitation in packet.limitations):
+        return "metadata_only"
+    return "partial"
+
+
+def _stats_view(saved: Mapping[str, JsonValue]) -> dict[str, int]:
+    value = saved.get("stats")
+    if not isinstance(value, dict):
+        return {}
+    stats: dict[str, int] = {}
+    for key in ("plays", "likes", "comments", "shares"):
+        number = saved_int(value, key)
+        if number is not None:
+            stats[key] = number
+    return stats
+
+
+def _annotation_view(properties: Mapping[str, object], body: str) -> dict[str, str | None]:
+    def prop(key: str) -> str | None:
+        value = properties.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+
+    stripped = body.strip()
+    if stripped.startswith(_NOTE_HEADING):
+        stripped = stripped[len(_NOTE_HEADING) :].strip()
+    preview: str | None = stripped if stripped else None
+    if preview is not None and len(preview) > _NOTE_PREVIEW_CHARS:
+        preview = preview[:_NOTE_PREVIEW_CHARS] + "…"
+    return {
+        "my_title": prop("my_title"),
+        "why_saved": prop("why_saved"),
+        "status": prop("status"),
+        "note_preview": preview,
+    }
+
+
 class UiViewProjection:
     NAMESPACE = "ui"
 
@@ -70,6 +154,7 @@ class UiViewProjection:
         artifacts: ArtifactLocator,
         store: ProjectionStore,
         extractions: ExtractionRepository | None = None,
+        notes: HumanNoteReader | None = None,
         limit: int | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -79,6 +164,7 @@ class UiViewProjection:
         self._artifacts = artifacts
         self._store = store
         self._extractions = extractions
+        self._notes = notes
         self._limit = limit
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -94,30 +180,47 @@ class UiViewProjection:
     def _render_document(self, payload: dict[str, object]) -> GeneratedDocument:
         return GeneratedDocument(path="index.html", content=_render_html(payload))
 
+    def _build_annotations(self) -> dict[str, dict[str, str | None]]:
+        if self._notes is None:
+            return {}
+        annotations: dict[str, dict[str, str | None]] = {}
+        for _, content in self._notes.iter_notes():
+            parsed = parse_frontmatter(content)
+            source_id = parsed.properties.get("source_id")
+            if not isinstance(source_id, str) or not source_id.strip():
+                continue
+            annotations[source_id] = _annotation_view(parsed.properties, note_body(content))
+        return annotations
+
     def _item_view(
         self,
         packet: SourcePacket,
         records: tuple[ExtractionRecord, ...],
+        annotation: Mapping[str, str | None],
     ) -> dict[str, object]:
         saved = saved_index(packet)
-        title = packet.title or (
-            f"{packet.source.kind.value} {packet.source.external_id or packet.source_id[:12]}"
-        )
+        description = saved_str(saved, "desc")
+        author = saved_str(saved, "author")
         return {
             "source_id": packet.source_id,
             "capture_id": packet.capture_id,
-            "title": title,
+            "title": packet.title,
+            "display_title": _display_title(
+                annotation["my_title"], packet.title, description, author, packet
+            ),
             "platform": packet.source.platform,
             "kind": packet.source.kind.value,
             "external_id": packet.source.external_id,
             "canonical_url": packet.source.canonical_url,
             "captured_at": packet.captured_at.isoformat(),
             "status": packet.status.value,
+            "media_state": _media_state(packet),
             "collections": [collection.name for collection in packet.collections],
-            "author": saved_str(saved, "author"),
+            "author": author,
             "video_type": saved_str(saved, "type"),
             "post_created_at": saved_str(saved, "post_created_at"),
-            "description": saved_str(saved, "desc"),
+            "description": description,
+            "stats": _stats_view(saved),
             "collector": {
                 "actor_kind": packet.collector.actor_kind.value,
                 "actor_id": packet.collector.actor_id,
@@ -129,6 +232,7 @@ class UiViewProjection:
                 _artifact_view(artifact, self._artifacts) for artifact in packet.artifacts
             ],
             "derived": _derived_view(records),
+            "annotation": dict(annotation),
         }
 
     def _build_payload(self) -> dict[str, object]:
@@ -139,6 +243,7 @@ class UiViewProjection:
         )
         if self._limit is not None:
             packets = packets[: self._limit]
+        annotations = self._build_annotations()
         items: list[dict[str, object]] = []
         status_counts: Counter[str] = Counter()
         collection_counts: Counter[str] = Counter()
@@ -148,7 +253,8 @@ class UiViewProjection:
                 if self._extractions is not None
                 else ()
             )
-            items.append(self._item_view(packet, records))
+            annotation = annotations.get(packet.source_id, _EMPTY_ANNOTATION)
+            items.append(self._item_view(packet, records, annotation))
             status_counts[packet.status.value] += 1
             for collection in packet.collections:
                 collection_counts[collection.name] += 1
@@ -201,6 +307,8 @@ _HTML_TEMPLATE = """<!doctype html>
   --complete-soft: #e3f4e8;
   --partial: #b45309;
   --partial-soft: #fbeed6;
+  --drop: #b91c1c;
+  --drop-soft: #fdeaea;
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(20,20,18,.04), 0 4px 16px rgba(20,20,18,.05);
@@ -225,6 +333,8 @@ _HTML_TEMPLATE = """<!doctype html>
     --complete-soft: #16301f;
     --partial: #f0b866;
     --partial-soft: #33260f;
+    --drop: #f28b8b;
+    --drop-soft: #3a1212;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
   }
 }
@@ -314,7 +424,30 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
 .badge-kind { background: var(--surface-2); color: var(--text-muted); }
 .badge-complete { background: var(--complete-soft); color: var(--complete); }
 .badge-partial { background: var(--partial-soft); color: var(--partial); }
+.badge-metadata { background: var(--surface-2); color: var(--text-faint); }
+.badge-inbox { background: var(--surface-2); color: var(--text-muted); }
+.badge-keep { background: var(--complete-soft); color: var(--complete); }
+.badge-done { background: var(--accent-soft); color: var(--accent); }
+.badge-drop { background: var(--drop-soft); color: var(--drop); }
 .from { margin: 6px 0 0; font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+.snippet {
+  margin: 6px 0 0; font-size: 13px; color: var(--text-muted);
+  white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.why {
+  margin: 6px 0 0; font-size: 12.5px; padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft); color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.unknown { margin: 6px 0 0; font-size: 12.5px; color: var(--text-faint); font-style: italic; }
+.src-line {
+  margin: 8px 0 0; font-size: 12.5px;
+  display: flex; gap: 16px; flex-wrap: wrap;
+}
+.src-line a { color: var(--accent); }
 .details {
   display: none; margin-top: 14px; padding-top: 14px;
   border-top: 1px solid var(--border);
@@ -359,7 +492,13 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
 .excerpt-kind { color: var(--accent); font-weight: 600; }
 .excerpt-text { margin: 0; font-size: 13px; white-space: pre-wrap; }
 .empty { color: var(--text-faint); text-align: center; padding: 40px 0; }
-.cap-note { text-align: center; color: var(--text-faint); font-size: 12.5px; margin-top: 16px; }
+.show-more {
+  display: block; margin: 18px auto 0; padding: 9px 18px;
+  font: inherit; font-size: 13.5px;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface); color: var(--text); cursor: pointer;
+}
+.show-more:hover { border-color: var(--accent); }
 @media (max-width: 560px) {
   .kv { grid-template-columns: 1fr; gap: 0; }
   .kv dt { margin-top: 8px; }
@@ -379,7 +518,7 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     </div>
     <div class="search">
       <input id="q" type="search" autocomplete="off"
-        placeholder="Поиск по названию, автору, коллекции…">
+        placeholder="Поиск по названию, автору, коллекции, подписи…">
     </div>
   </div>
 </header>
@@ -398,27 +537,46 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
         <option value="partial">partial</option>
       </select>
     </label>
+    <label>Мой статус
+      <select id="f-note-status">
+        <option value="">Любые</option>
+        <option value="inbox">inbox</option>
+        <option value="keep">keep</option>
+        <option value="drop">drop</option>
+        <option value="done">done</option>
+      </select>
+    </label>
     <span class="result-count" id="result-count"></span>
   </div>
   <div id="list" class="list"></div>
-  <p id="cap-note" class="cap-note" hidden></p>
+  <button id="show-more" class="show-more" hidden></button>
 </main>
 <script id="sourcefolio-data" type="application/json">__SOURCEFOLIO_DATA__</script>
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('sourcefolio-data').textContent);
-  var CAP = 200;
+  var CHUNK = 100;
+  var STEP = 200;
+  var shown = CHUNK;
   var list = document.getElementById('list');
   var q = document.getElementById('q');
   var fCollection = document.getElementById('f-collection');
   var fKind = document.getElementById('f-kind');
   var fStatus = document.getElementById('f-status');
+  var fNoteStatus = document.getElementById('f-note-status');
   var resultCount = document.getElementById('result-count');
-  var capNote = document.getElementById('cap-note');
+  var showMore = document.getElementById('show-more');
   var summary = document.getElementById('summary');
 
+  var annotated = 0;
+  data.items.forEach(function (it) {
+    var a = it.annotation || {};
+    if (a.my_title || a.why_saved || a.note_preview) { annotated++; }
+  });
+
   summary.textContent = data.counts.sources + ' источников · ' +
-    data.counts.complete + ' complete · ' + data.counts.partial + ' partial';
+    data.counts.complete + ' complete · ' + data.counts.partial + ' partial · ' +
+    annotated + ' подписано';
 
   data.collections.forEach(function (c) {
     var o = document.createElement('option');
@@ -458,33 +616,84 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     return (bytes / 1048576).toFixed(1) + ' MB';
   }
 
+  function fmtInt(n) {
+    if (n == null) { return ''; }
+    if (n >= 1000000) { return (n / 1000000).toFixed(1) + 'M'; }
+    if (n >= 1000) { return (n / 1000).toFixed(1) + 'K'; }
+    return String(n);
+  }
+
   function addKV(dl, key, value) {
     dl.appendChild(el('dt', null, key));
     dl.appendChild(el('dd', null, value));
   }
 
+  function addLink(dl, key, url) {
+    dl.appendChild(el('dt', null, key));
+    var dd = el('dd');
+    var a = el('a', null, url);
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    dd.appendChild(a);
+    dl.appendChild(dd);
+  }
+
+  function mediaBadge(state) {
+    if (state === 'complete') { return badge('complete', 'badge-complete'); }
+    if (state === 'metadata_only') { return badge('без медиа', 'badge-metadata'); }
+    return badge('partial', 'badge-partial');
+  }
+
   function buildCard(item) {
+    var ann = item.annotation || {};
     var card = el('article', 'card');
     card.tabIndex = 0;
 
-    var head = el('div', 'card-head');
     var titleRow = el('div', 'title-row');
-    titleRow.appendChild(el('h2', 'title', item.title));
+    titleRow.appendChild(el('h2', 'title', item.display_title));
     var badges = el('div', 'badges');
     badges.appendChild(badge(item.platform + ' · ' + item.kind, 'badge-kind'));
-    badges.appendChild(
-      badge(item.status, item.status === 'complete' ? 'badge-complete' : 'badge-partial')
-    );
+    badges.appendChild(mediaBadge(item.media_state));
+    if (ann.status) { badges.appendChild(badge(ann.status, 'badge-' + ann.status)); }
     titleRow.appendChild(badges);
-    head.appendChild(titleRow);
+    card.appendChild(titleRow);
 
-    var parts = [];
-    if (item.collections.length) { parts.push('коллекция ' + item.collections.join(', ')); }
-    if (item.author) { parts.push('@' + item.author); }
-    parts.push('собрано ' + item.collector.actor_id);
-    parts.push(fmtDate(item.captured_at));
-    head.appendChild(el('p', 'from', parts.join(' · ')));
-    card.appendChild(head);
+    var meta = [];
+    if (item.author) { meta.push('@' + item.author); }
+    if (item.post_created_at) { meta.push(fmtDate(item.post_created_at)); }
+    if (item.stats.plays != null) { meta.push('▶ ' + fmtInt(item.stats.plays)); }
+    if (item.stats.likes != null) { meta.push('♥ ' + fmtInt(item.stats.likes)); }
+    if (item.collections.length) { meta.push(item.collections.join(', ')); }
+    if (meta.length) { card.appendChild(el('p', 'from', meta.join(' · '))); }
+
+    if (item.description) {
+      card.appendChild(el('p', 'snippet', item.description));
+    } else if (!ann.note_preview && !item.title) {
+      card.appendChild(
+        el('p', 'unknown', 'описание недоступно — подпиши через sourcefolio note')
+      );
+    }
+    if (ann.why_saved) {
+      card.appendChild(el('p', 'why', 'Зачем: ' + ann.why_saved));
+    }
+
+    if (item.canonical_url) {
+      var links = el('div', 'src-line');
+      var open = el('a', null, 'открыть в TikTok');
+      open.href = item.canonical_url;
+      open.target = '_blank';
+      open.rel = 'noopener';
+      links.appendChild(open);
+      var share = el('a', null, 'поделиться');
+      share.href = 'https://t.me/share/url?url=' +
+        encodeURIComponent(item.canonical_url) + '&text=' +
+        encodeURIComponent(item.display_title);
+      share.target = '_blank';
+      share.rel = 'noopener';
+      links.appendChild(share);
+      card.appendChild(links);
+    }
 
     var details = el('div', 'details');
 
@@ -493,26 +702,31 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     var dl = el('dl', 'kv');
     addKV(dl, 'source_id', item.source_id);
     addKV(dl, 'capture_id', item.capture_id);
+    if (item.title) { addKV(dl, 'title', item.title); }
     if (item.external_id) { addKV(dl, 'external_id', item.external_id); }
-    if (item.canonical_url) {
-      dl.appendChild(el('dt', null, 'canonical_url'));
-      var dd = el('dd');
-      var a = el('a', null, item.canonical_url);
-      a.href = item.canonical_url;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      dd.appendChild(a);
-      dl.appendChild(dd);
-    }
+    if (item.canonical_url) { addLink(dl, 'canonical_url', item.canonical_url); }
     var collector = item.collector.actor_kind + ':' + item.collector.actor_id +
       ' · ' + item.collector.method;
     if (item.collector.version) { collector += ' · v' + item.collector.version; }
     addKV(dl, 'collector', collector);
+    addKV(dl, 'захвачено', fmtDate(item.captured_at));
     if (item.author) { addKV(dl, 'author', item.author); }
     if (item.video_type) { addKV(dl, 'type', item.video_type); }
     if (item.post_created_at) { addKV(dl, 'posted', item.post_created_at); }
     prov.appendChild(dl);
     details.appendChild(prov);
+
+    if (ann.my_title || ann.why_saved || ann.status || ann.note_preview) {
+      var noteBlock = el('section', 'block');
+      noteBlock.appendChild(el('h3', null, 'Моя подпись'));
+      var nd = el('dl', 'kv');
+      if (ann.my_title) { addKV(nd, 'моё название', ann.my_title); }
+      if (ann.why_saved) { addKV(nd, 'зачем', ann.why_saved); }
+      if (ann.status) { addKV(nd, 'статус', ann.status); }
+      if (ann.note_preview) { addKV(nd, 'заметка', ann.note_preview); }
+      noteBlock.appendChild(nd);
+      details.appendChild(noteBlock);
+    }
 
     if (item.description) {
       var desc = el('section', 'block');
@@ -521,7 +735,7 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
       details.appendChild(desc);
     }
 
-    if (item.limitations.length) {
+    if (item.limitations.length && item.media_state === 'partial') {
       var lim = el('section', 'block');
       lim.appendChild(el('h3', null, 'Ограничения'));
       var ul = el('ul', 'limitations');
@@ -548,15 +762,15 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
         v.preload = 'metadata';
         box.appendChild(v);
       }
-      var meta = el('div', 'art-meta');
-      meta.appendChild(el('span', 'art-role', a.role));
-      meta.appendChild(el('span', 'art-sub', a.media_type + ' · ' + fmtSize(a.size_bytes)));
+      var metaBox = el('div', 'art-meta');
+      metaBox.appendChild(el('span', 'art-role', a.role));
+      metaBox.appendChild(el('span', 'art-sub', a.media_type + ' · ' + fmtSize(a.size_bytes)));
       var link = el('a', 'art-link', 'открыть');
       link.href = a.uri;
       link.target = '_blank';
       link.rel = 'noopener';
-      meta.appendChild(link);
-      box.appendChild(meta);
+      metaBox.appendChild(link);
+      box.appendChild(metaBox);
       grid.appendChild(box);
     });
     art.appendChild(grid);
@@ -592,42 +806,49 @@ main.wrap { padding-top: 20px; padding-bottom: 64px; }
     return card;
   }
 
-  function matches(item, term, collection, kind, status) {
+  function matches(item, term, collection, kind, status, noteStatus) {
     if (collection && item.collections.indexOf(collection) === -1) { return false; }
     if (kind && item.kind !== kind) { return false; }
     if (status && item.status !== status) { return false; }
+    var ann = item.annotation || {};
+    if (noteStatus && ann.status !== noteStatus) { return false; }
     if (!term) { return true; }
-    var hay = [item.title, item.author, item.external_id, item.description,
-      item.collections.join(' ')].join(' ').toLowerCase();
+    var hay = [item.display_title, item.title, item.description, item.author,
+      item.external_id, item.collections.join(' '),
+      ann.my_title, ann.why_saved, ann.note_preview]
+      .filter(Boolean).join(' ').toLowerCase();
     return hay.indexOf(term) !== -1;
   }
 
-  function render() {
+  function render(reset) {
+    if (reset) { shown = CHUNK; }
     var term = q.value.trim().toLowerCase();
     var filtered = data.items.filter(function (it) {
-      return matches(it, term, fCollection.value, fKind.value, fStatus.value);
+      return matches(it, term, fCollection.value, fKind.value, fStatus.value,
+        fNoteStatus.value);
     });
     list.textContent = '';
-    var shown = filtered.slice(0, CAP);
-    shown.forEach(function (it) { list.appendChild(buildCard(it)); });
-    resultCount.textContent = 'Показано ' + shown.length + ' из ' + filtered.length;
-    if (filtered.length > CAP) {
-      capNote.hidden = false;
-      capNote.textContent = 'Показано ' + shown.length + ' из ' + filtered.length +
-        ' — уточните поиск или фильтры';
-    } else {
-      capNote.hidden = true;
-    }
+    var slice = filtered.slice(0, shown);
+    slice.forEach(function (it) { list.appendChild(buildCard(it)); });
     if (!filtered.length) {
       list.appendChild(el('p', 'empty', 'Ничего не найдено.'));
     }
+    resultCount.textContent = 'Показано ' + slice.length + ' из ' + filtered.length;
+    if (filtered.length > shown) {
+      showMore.hidden = false;
+      showMore.textContent = 'Показать ещё (' + (filtered.length - shown) + ')';
+    } else {
+      showMore.hidden = true;
+    }
   }
 
-  q.addEventListener('input', render);
-  fCollection.addEventListener('change', render);
-  fKind.addEventListener('change', render);
-  fStatus.addEventListener('change', render);
-  render();
+  q.addEventListener('input', function () { render(true); });
+  fCollection.addEventListener('change', function () { render(true); });
+  fKind.addEventListener('change', function () { render(true); });
+  fStatus.addEventListener('change', function () { render(true); });
+  fNoteStatus.addEventListener('change', function () { render(true); });
+  showMore.addEventListener('click', function () { shown += STEP; render(false); });
+  render(true);
 })();
 </script>
 </body>

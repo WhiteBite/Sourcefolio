@@ -17,6 +17,20 @@ class IdeaScaffoldResult:
     created_paths: tuple[str, ...]
 
 
+def render_idea_note(packet: SourcePacket) -> str:
+    title = packet.title or packet.source.external_id or packet.source_id
+    collections = sorted({collection.name for collection in packet.collections})
+    properties = {
+        "status": "inbox",
+        "source_id": packet.source_id,
+        "title": title,
+        "collections": collections,
+    }
+    frontmatter = yaml.safe_dump(properties, allow_unicode=True, sort_keys=False).strip()
+    lines = ["---", frontmatter, "---", "", "## Заметки", ""]
+    return "\n".join(lines)
+
+
 class IdeaScaffolder:
     def __init__(
         self,
@@ -34,7 +48,7 @@ class IdeaScaffolder:
         skipped = 0
         for source_id in sorted(latest):
             path = f"{source_id}.md"
-            if self._notes.create_if_absent(path, self._render(latest[source_id])):
+            if self._notes.create_if_absent(path, render_idea_note(latest[source_id])):
                 created_paths.append(path)
             else:
                 skipped += 1
@@ -43,17 +57,3 @@ class IdeaScaffolder:
             skipped=skipped,
             created_paths=tuple(created_paths),
         )
-
-    @staticmethod
-    def _render(packet: SourcePacket) -> str:
-        title = packet.title or packet.source.external_id or packet.source_id
-        collections = sorted({collection.name for collection in packet.collections})
-        properties = {
-            "status": "inbox",
-            "source_id": packet.source_id,
-            "title": title,
-            "collections": collections,
-        }
-        frontmatter = yaml.safe_dump(properties, allow_unicode=True, sort_keys=False).strip()
-        lines = ["---", frontmatter, "---", "", "## Заметки", ""]
-        return "\n".join(lines)

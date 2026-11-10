@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Protocol
 
@@ -20,6 +20,14 @@ class ProjectionStore(Protocol):
 class HumanNoteStore(Protocol):
     def create_if_absent(self, relative_path: str, content: str) -> bool:
         """Create a human-owned note only when absent; return True if created."""
+        ...
+
+    def update_properties(
+        self,
+        relative_path: str,
+        properties: Mapping[str, object | None],
+    ) -> bool:
+        """Replace only the given frontmatter keys; None removes a key. Body stays untouched."""
         ...
 
 
