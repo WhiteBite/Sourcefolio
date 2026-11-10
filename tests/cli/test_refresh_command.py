@@ -50,7 +50,7 @@ def test_refresh_runs_project_obsidian_only(tmp_path: Path, capsys) -> None:
         == 0
     )
     output = json.loads(capsys.readouterr().out)
-    assert [step["step"] for step in output["steps"]] == ["project-obsidian"]
+    assert [step["step"] for step in output["steps"]] == ["project-obsidian", "render-ui"]
     assert (vault / "_generated" / "sourcefolio" / "source-cards").is_dir()
 
 
@@ -86,6 +86,7 @@ def test_refresh_chains_import_collections(tmp_path: Path, capsys) -> None:
     assert [step["step"] for step in output["steps"]] == [
         "import-collections",
         "project-obsidian",
+        "render-ui",
     ]
 
 

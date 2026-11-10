@@ -6,6 +6,7 @@ import io
 import json
 import os
 import sys
+import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack, redirect_stdout
 from dataclasses import asdict, dataclass, field, replace
@@ -108,6 +109,7 @@ from sourcefolio.application.search_evaluation import SearchEvaluationSet, Searc
 from sourcefolio.application.slides_fetch import FetchSlidesQuery, FetchSlidesRunner
 from sourcefolio.application.source_cards import SourceCardProjection
 from sourcefolio.application.triage import IdeaScaffolder
+from sourcefolio.application.ui_view import UiViewProjection
 from sourcefolio.domain.capture import CaptureTask
 from sourcefolio.domain.common import ContractModel, Provenance, UtcDateTime
 from sourcefolio.domain.evidence import EvidenceItem
@@ -824,6 +826,31 @@ def _project_obsidian(args: argparse.Namespace) -> int:
     return 0
 
 
+def _render_ui(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    generated_root = vault_root / "_generated" / "sourcefolio"
+    projection = UiViewProjection(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        artifacts=FileSystemArtifactStore(archive_root),
+        store=FileSystemProjectionStore(generated_root),
+        extractions=FileSystemExtractionRepository(derived_root),
+        limit=args.limit,
+    )
+    items = projection.rebuild()
+    output_path = generated_root / UiViewProjection.NAMESPACE / "index.html"
+    if args.open:
+        webbrowser.open(output_path.as_uri())
+    output = {
+        "output": str(output_path),
+        "items": items,
+        "namespace": UiViewProjection.NAMESPACE,
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _scaffold_projects(args: argparse.Namespace) -> int:
     projects = _load_projects(Path(args.projects))
     vault_root = Path(args.vault).resolve()
@@ -1238,6 +1265,19 @@ def _refresh(args: argparse.Namespace) -> int:
                 vault=args.vault,
                 projects=args.projects,
                 scaffold_ideas=args.scaffold_ideas,
+            ),
+        )
+    )
+    plan.append(
+        (
+            "render-ui",
+            _render_ui,
+            argparse.Namespace(
+                archive_dir=args.archive_dir,
+                derived_dir=args.derived_dir,
+                vault=args.vault,
+                limit=None,
+                open=False,
             ),
         )
     )
@@ -1745,6 +1785,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="also create missing human idea notes under <vault>/ideas",
     )
     project.set_defaults(handler=_project_obsidian)
+
+    render_ui = subcommands.add_parser(
+        "render-ui",
+        help="render one self-contained offline HTML page of every captured source",
+    )
+    render_ui.add_argument("--archive-dir", default="data/archive")
+    render_ui.add_argument("--derived-dir", default="data/derived")
+    render_ui.add_argument("--vault", default="data/vault")
+    render_ui.add_argument("--limit", type=int, help="cap the number of items in the page")
+    render_ui.add_argument(
+        "--open",
+        action="store_true",
+        help="open the generated page in the default browser",
+    )
+    render_ui.set_defaults(handler=_render_ui)
 
     scaffold_ideas = subcommands.add_parser(
         "scaffold-ideas",

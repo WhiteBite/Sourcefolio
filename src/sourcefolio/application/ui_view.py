@@ -1,0 +1,635 @@
+from __future__ import annotations
+
+import json
+from collections import Counter
+from collections.abc import Callable
+from datetime import UTC, datetime
+
+from sourcefolio.application.extraction_ports import ExtractionRepository
+from sourcefolio.application.latest_captures import latest_capture_per_source
+from sourcefolio.application.ports import ArtifactLocator, SourcePacketRepository
+from sourcefolio.application.projection_ports import ProjectionStore
+from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.saved_index import saved_index, saved_str
+from sourcefolio.domain.extraction import ExtractionRecord
+from sourcefolio.domain.source import ArtifactRef, SourcePacket
+
+_SCHEMA_VERSION = "sourcefolio-ui/v1"
+_GENERATOR_VERSION = "1"
+
+
+def _artifact_view(artifact: ArtifactRef, artifacts: ArtifactLocator) -> dict[str, object]:
+    media_type = artifact.media_type
+    return {
+        "artifact_id": artifact.artifact_id,
+        "role": artifact.role.value,
+        "media_type": media_type,
+        "size_bytes": artifact.size_bytes,
+        "sha256": artifact.sha256,
+        "uri": artifacts.uri(artifact.artifact_id),
+        "is_image": media_type.startswith("image/"),
+        "is_video": media_type.startswith("video/"),
+    }
+
+
+def _derived_view(records: tuple[ExtractionRecord, ...]) -> dict[str, object]:
+    excerpts: list[dict[str, object]] = []
+    kinds: set[str] = set()
+    has_text = False
+    for record in records:
+        kind = record.request.kind.value
+        kinds.add(kind)
+        if record.text.strip():
+            has_text = True
+        excerpts.append(
+            {
+                "kind": kind,
+                "locator": record.request.locator.canonical,
+                "extractor": (
+                    f"{record.request.extractor.actor_id}/"
+                    f"{record.request.extractor.version or 'unknown'}"
+                ),
+                "text": record.excerpt,
+            }
+        )
+    return {
+        "count": len(records),
+        "kinds": sorted(kinds),
+        "has_text": has_text,
+        "excerpts": excerpts,
+    }
+
+
+class UiViewProjection:
+    NAMESPACE = "ui"
+
+    def __init__(
+        self,
+        *,
+        packets: SourcePacketRepository,
+        artifacts: ArtifactLocator,
+        store: ProjectionStore,
+        extractions: ExtractionRepository | None = None,
+        limit: int | None = None,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1")
+        self._packets = packets
+        self._artifacts = artifacts
+        self._store = store
+        self._extractions = extractions
+        self._limit = limit
+        self._clock = clock or (lambda: datetime.now(UTC))
+
+    def rebuild(self) -> int:
+        payload = self._build_payload()
+        self._store.replace_namespace(self.NAMESPACE, [self._render_document(payload)])
+        items = payload["items"]
+        return len(items) if isinstance(items, list) else 0
+
+    def render(self) -> GeneratedDocument:
+        return self._render_document(self._build_payload())
+
+    def _render_document(self, payload: dict[str, object]) -> GeneratedDocument:
+        return GeneratedDocument(path="index.html", content=_render_html(payload))
+
+    def _item_view(
+        self,
+        packet: SourcePacket,
+        records: tuple[ExtractionRecord, ...],
+    ) -> dict[str, object]:
+        saved = saved_index(packet)
+        title = packet.title or (
+            f"{packet.source.kind.value} {packet.source.external_id or packet.source_id[:12]}"
+        )
+        return {
+            "source_id": packet.source_id,
+            "capture_id": packet.capture_id,
+            "title": title,
+            "platform": packet.source.platform,
+            "kind": packet.source.kind.value,
+            "external_id": packet.source.external_id,
+            "canonical_url": packet.source.canonical_url,
+            "captured_at": packet.captured_at.isoformat(),
+            "status": packet.status.value,
+            "collections": [collection.name for collection in packet.collections],
+            "author": saved_str(saved, "author"),
+            "video_type": saved_str(saved, "type"),
+            "post_created_at": saved_str(saved, "post_created_at"),
+            "description": saved_str(saved, "desc"),
+            "collector": {
+                "actor_kind": packet.collector.actor_kind.value,
+                "actor_id": packet.collector.actor_id,
+                "method": packet.collector.method,
+                "version": packet.collector.version,
+            },
+            "limitations": list(packet.limitations),
+            "artifacts": [
+                _artifact_view(artifact, self._artifacts) for artifact in packet.artifacts
+            ],
+            "derived": _derived_view(records),
+        }
+
+    def _build_payload(self) -> dict[str, object]:
+        latest = latest_capture_per_source(self._packets.iter_packets())
+        packets = sorted(
+            latest.values(),
+            key=lambda packet: (-packet.captured_at.timestamp(), packet.capture_id),
+        )
+        if self._limit is not None:
+            packets = packets[: self._limit]
+        items: list[dict[str, object]] = []
+        status_counts: Counter[str] = Counter()
+        collection_counts: Counter[str] = Counter()
+        for packet in packets:
+            records = (
+                tuple(self._extractions.iter_for_capture(packet.capture_id))
+                if self._extractions is not None
+                else ()
+            )
+            items.append(self._item_view(packet, records))
+            status_counts[packet.status.value] += 1
+            for collection in packet.collections:
+                collection_counts[collection.name] += 1
+        collections = [
+            {"name": name, "count": count}
+            for name, count in sorted(
+                collection_counts.items(),
+                key=lambda item: (-item[1], item[0].casefold()),
+            )
+        ]
+        return {
+            "schema_version": _SCHEMA_VERSION,
+            "generated_at": self._clock().isoformat(),
+            "generator": "sourcefolio",
+            "generator_version": _GENERATOR_VERSION,
+            "counts": {
+                "sources": len(items),
+                "complete": status_counts["complete"],
+                "partial": status_counts["partial"],
+            },
+            "collections": collections,
+            "items": items,
+        }
+
+
+def _render_html(payload: dict[str, object]) -> str:
+    data = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
+    return _HTML_TEMPLATE.replace("__SOURCEFOLIO_DATA__", data)
+
+
+_HTML_TEMPLATE = """<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sourcefolio — архив источников</title>
+<style>
+:root {
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --surface-2: #f0f0ec;
+  --border: #e3e3dd;
+  --border-strong: #d0d0c8;
+  --text: #1b1b19;
+  --text-muted: #6d6d66;
+  --text-faint: #9a9a92;
+  --accent: #1e40af;
+  --accent-soft: #eaeefb;
+  --complete: #15803d;
+  --complete-soft: #e3f4e8;
+  --partial: #b45309;
+  --partial-soft: #fbeed6;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(20,20,18,.04), 0 4px 16px rgba(20,20,18,.05);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131311;
+    --surface: #1c1c19;
+    --surface-2: #232320;
+    --border: #2e2e29;
+    --border-strong: #3d3d36;
+    --text: #ecece6;
+    --text-muted: #a3a39a;
+    --text-faint: #75756c;
+    --accent: #8aa4ff;
+    --accent-soft: #1e2540;
+    --complete: #6ee7a0;
+    --complete-soft: #16301f;
+    --partial: #f0b866;
+    --partial-soft: #33260f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .wrap {
+  display: flex; align-items: center; gap: 24px;
+  padding-top: 14px; padding-bottom: 14px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 38px; height: 38px; border-radius: 10px;
+  background: var(--text); color: var(--bg);
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 14px; letter-spacing: .02em;
+}
+h1 {
+  font-family: var(--serif); font-size: 20px; margin: 0;
+  font-weight: 600; letter-spacing: -.01em;
+}
+.sub { margin: 2px 0 0; color: var(--text-muted); font-size: 12.5px; }
+.search { flex: 1 1 260px; }
+.search input {
+  width: 100%; padding: 10px 14px; font: inherit; font-size: 14px;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface); color: var(--text);
+}
+.search input:focus {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+  border-color: var(--accent);
+}
+main.wrap { padding-top: 20px; padding-bottom: 64px; }
+.filters {
+  display: flex; align-items: center; gap: 16px;
+  flex-wrap: wrap; margin-bottom: 18px;
+}
+.filters label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--text-muted);
+}
+.filters select {
+  font: inherit; font-size: 13px; padding: 6px 10px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); color: var(--text);
+}
+.result-count { margin-left: auto; font-size: 12.5px; color: var(--text-faint); }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card.open { border-color: var(--border-strong); box-shadow: var(--shadow); }
+.title-row {
+  display: flex; align-items: baseline; gap: 12px;
+  justify-content: space-between; flex-wrap: wrap;
+}
+.title {
+  font-size: 15.5px; font-weight: 600; margin: 0;
+  letter-spacing: -.005em; min-width: 0; overflow-wrap: anywhere;
+}
+.badges { display: flex; gap: 6px; flex-shrink: 0; }
+.badge {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  letter-spacing: .01em; white-space: nowrap;
+}
+.badge-kind { background: var(--surface-2); color: var(--text-muted); }
+.badge-complete { background: var(--complete-soft); color: var(--complete); }
+.badge-partial { background: var(--partial-soft); color: var(--partial); }
+.from { margin: 6px 0 0; font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+.details {
+  display: none; margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.card.open .details { display: block; }
+.block { margin-bottom: 16px; }
+.block:last-child { margin-bottom: 0; }
+.block h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-faint); margin: 0 0 8px; font-weight: 700;
+}
+.kv {
+  display: grid; grid-template-columns: minmax(0, 130px) minmax(0, 1fr);
+  gap: 4px 12px; margin: 0; font-size: 13px;
+}
+.kv dt { color: var(--text-faint); }
+.kv dd { margin: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.kv dd a { color: var(--accent); }
+.desc { margin: 0; font-size: 13.5px; white-space: pre-wrap; }
+.limitations { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-muted); }
+.artifacts {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.artifact {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  overflow: hidden; background: var(--surface-2);
+}
+.art-media { display: block; width: 100%; max-height: 220px; object-fit: cover; background: #000; }
+.art-meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.art-role { font-size: 12px; font-weight: 600; }
+.art-sub { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+.art-link { font-size: 12px; color: var(--accent); margin-top: 2px; }
+.excerpt {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; margin-bottom: 8px; background: var(--surface-2);
+}
+.excerpt-head {
+  display: flex; gap: 10px; font-size: 11px; color: var(--text-faint);
+  font-family: var(--mono); margin-bottom: 6px; flex-wrap: wrap;
+}
+.excerpt-kind { color: var(--accent); font-weight: 600; }
+.excerpt-text { margin: 0; font-size: 13px; white-space: pre-wrap; }
+.empty { color: var(--text-faint); text-align: center; padding: 40px 0; }
+.cap-note { text-align: center; color: var(--text-faint); font-size: 12.5px; margin-top: 16px; }
+@media (max-width: 560px) {
+  .kv { grid-template-columns: 1fr; gap: 0; }
+  .kv dt { margin-top: 8px; }
+  .kv dd { margin-bottom: 2px; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="brand-mark">SF</span>
+      <div>
+        <h1>Архив источников</h1>
+        <p class="sub" id="summary"></p>
+      </div>
+    </div>
+    <div class="search">
+      <input id="q" type="search" autocomplete="off"
+        placeholder="Поиск по названию, автору, коллекции…">
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <div class="filters">
+    <label>Коллекция
+      <select id="f-collection"><option value="">Любые</option></select>
+    </label>
+    <label>Тип
+      <select id="f-kind"><option value="">Любые</option></select>
+    </label>
+    <label>Статус
+      <select id="f-status">
+        <option value="">Любые</option>
+        <option value="complete">complete</option>
+        <option value="partial">partial</option>
+      </select>
+    </label>
+    <span class="result-count" id="result-count"></span>
+  </div>
+  <div id="list" class="list"></div>
+  <p id="cap-note" class="cap-note" hidden></p>
+</main>
+<script id="sourcefolio-data" type="application/json">__SOURCEFOLIO_DATA__</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('sourcefolio-data').textContent);
+  var CAP = 200;
+  var list = document.getElementById('list');
+  var q = document.getElementById('q');
+  var fCollection = document.getElementById('f-collection');
+  var fKind = document.getElementById('f-kind');
+  var fStatus = document.getElementById('f-status');
+  var resultCount = document.getElementById('result-count');
+  var capNote = document.getElementById('cap-note');
+  var summary = document.getElementById('summary');
+
+  summary.textContent = data.counts.sources + ' источников · ' +
+    data.counts.complete + ' complete · ' + data.counts.partial + ' partial';
+
+  data.collections.forEach(function (c) {
+    var o = document.createElement('option');
+    o.value = c.name;
+    o.textContent = c.name + ' (' + c.count + ')';
+    fCollection.appendChild(o);
+  });
+  var kinds = {};
+  data.items.forEach(function (it) { kinds[it.kind] = true; });
+  Object.keys(kinds).sort().forEach(function (k) {
+    var o = document.createElement('option');
+    o.value = k;
+    o.textContent = k;
+    fKind.appendChild(o);
+  });
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) { n.className = cls; }
+    if (text != null) { n.textContent = text; }
+    return n;
+  }
+
+  function badge(text, cls) { return el('span', 'badge ' + cls, text); }
+
+  function fmtDate(iso) {
+    if (!iso) { return ''; }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) { return iso; }
+    return d.toISOString().slice(0, 10);
+  }
+
+  function fmtSize(bytes) {
+    if (bytes == null) { return ''; }
+    if (bytes < 1024) { return bytes + ' B'; }
+    if (bytes < 1048576) { return (bytes / 1024).toFixed(1) + ' KB'; }
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  function addKV(dl, key, value) {
+    dl.appendChild(el('dt', null, key));
+    dl.appendChild(el('dd', null, value));
+  }
+
+  function buildCard(item) {
+    var card = el('article', 'card');
+    card.tabIndex = 0;
+
+    var head = el('div', 'card-head');
+    var titleRow = el('div', 'title-row');
+    titleRow.appendChild(el('h2', 'title', item.title));
+    var badges = el('div', 'badges');
+    badges.appendChild(badge(item.platform + ' · ' + item.kind, 'badge-kind'));
+    badges.appendChild(
+      badge(item.status, item.status === 'complete' ? 'badge-complete' : 'badge-partial')
+    );
+    titleRow.appendChild(badges);
+    head.appendChild(titleRow);
+
+    var parts = [];
+    if (item.collections.length) { parts.push('коллекция ' + item.collections.join(', ')); }
+    if (item.author) { parts.push('@' + item.author); }
+    parts.push('собрано ' + item.collector.actor_id);
+    parts.push(fmtDate(item.captured_at));
+    head.appendChild(el('p', 'from', parts.join(' · ')));
+    card.appendChild(head);
+
+    var details = el('div', 'details');
+
+    var prov = el('section', 'block');
+    prov.appendChild(el('h3', null, 'Провенанс'));
+    var dl = el('dl', 'kv');
+    addKV(dl, 'source_id', item.source_id);
+    addKV(dl, 'capture_id', item.capture_id);
+    if (item.external_id) { addKV(dl, 'external_id', item.external_id); }
+    if (item.canonical_url) {
+      dl.appendChild(el('dt', null, 'canonical_url'));
+      var dd = el('dd');
+      var a = el('a', null, item.canonical_url);
+      a.href = item.canonical_url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      dd.appendChild(a);
+      dl.appendChild(dd);
+    }
+    var collector = item.collector.actor_kind + ':' + item.collector.actor_id +
+      ' · ' + item.collector.method;
+    if (item.collector.version) { collector += ' · v' + item.collector.version; }
+    addKV(dl, 'collector', collector);
+    if (item.author) { addKV(dl, 'author', item.author); }
+    if (item.video_type) { addKV(dl, 'type', item.video_type); }
+    if (item.post_created_at) { addKV(dl, 'posted', item.post_created_at); }
+    prov.appendChild(dl);
+    details.appendChild(prov);
+
+    if (item.description) {
+      var desc = el('section', 'block');
+      desc.appendChild(el('h3', null, 'Описание'));
+      desc.appendChild(el('p', 'desc', item.description));
+      details.appendChild(desc);
+    }
+
+    if (item.limitations.length) {
+      var lim = el('section', 'block');
+      lim.appendChild(el('h3', null, 'Ограничения'));
+      var ul = el('ul', 'limitations');
+      item.limitations.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+      lim.appendChild(ul);
+      details.appendChild(lim);
+    }
+
+    var art = el('section', 'block');
+    art.appendChild(el('h3', null, 'Артефакты (' + item.artifacts.length + ')'));
+    var grid = el('div', 'artifacts');
+    item.artifacts.forEach(function (a) {
+      var box = el('div', 'artifact');
+      if (a.is_image) {
+        var img = el('img', 'art-media');
+        img.src = a.uri;
+        img.alt = a.role;
+        img.loading = 'lazy';
+        box.appendChild(img);
+      } else if (a.is_video) {
+        var v = el('video', 'art-media');
+        v.src = a.uri;
+        v.controls = true;
+        v.preload = 'metadata';
+        box.appendChild(v);
+      }
+      var meta = el('div', 'art-meta');
+      meta.appendChild(el('span', 'art-role', a.role));
+      meta.appendChild(el('span', 'art-sub', a.media_type + ' · ' + fmtSize(a.size_bytes)));
+      var link = el('a', 'art-link', 'открыть');
+      link.href = a.uri;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      meta.appendChild(link);
+      box.appendChild(meta);
+      grid.appendChild(box);
+    });
+    art.appendChild(grid);
+    details.appendChild(art);
+
+    if (item.derived.count) {
+      var der = el('section', 'block');
+      der.appendChild(el('h3', null, 'Извлечённый текст (' + item.derived.count + ')'));
+      item.derived.excerpts.forEach(function (ex) {
+        var exBox = el('div', 'excerpt');
+        var exHead = el('div', 'excerpt-head');
+        exHead.appendChild(el('span', 'excerpt-kind', ex.kind));
+        exHead.appendChild(el('span', 'excerpt-loc', ex.locator));
+        exHead.appendChild(el('span', 'excerpt-ext', ex.extractor));
+        exBox.appendChild(exHead);
+        exBox.appendChild(el('p', 'excerpt-text', ex.text));
+        der.appendChild(exBox);
+      });
+      details.appendChild(der);
+    }
+
+    card.appendChild(details);
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('a, video, img')) { return; }
+      card.classList.toggle('open');
+    });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        card.classList.toggle('open');
+      }
+    });
+    return card;
+  }
+
+  function matches(item, term, collection, kind, status) {
+    if (collection && item.collections.indexOf(collection) === -1) { return false; }
+    if (kind && item.kind !== kind) { return false; }
+    if (status && item.status !== status) { return false; }
+    if (!term) { return true; }
+    var hay = [item.title, item.author, item.external_id, item.description,
+      item.collections.join(' ')].join(' ').toLowerCase();
+    return hay.indexOf(term) !== -1;
+  }
+
+  function render() {
+    var term = q.value.trim().toLowerCase();
+    var filtered = data.items.filter(function (it) {
+      return matches(it, term, fCollection.value, fKind.value, fStatus.value);
+    });
+    list.textContent = '';
+    var shown = filtered.slice(0, CAP);
+    shown.forEach(function (it) { list.appendChild(buildCard(it)); });
+    resultCount.textContent = 'Показано ' + shown.length + ' из ' + filtered.length;
+    if (filtered.length > CAP) {
+      capNote.hidden = false;
+      capNote.textContent = 'Показано ' + shown.length + ' из ' + filtered.length +
+        ' — уточните поиск или фильтры';
+    } else {
+      capNote.hidden = true;
+    }
+    if (!filtered.length) {
+      list.appendChild(el('p', 'empty', 'Ничего не найдено.'));
+    }
+  }
+
+  q.addEventListener('input', render);
+  fCollection.addEventListener('change', render);
+  fKind.addEventListener('change', render);
+  fStatus.addEventListener('change', render);
+  render();
+})();
+</script>
+</body>
+</html>
+"""
