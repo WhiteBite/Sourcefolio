@@ -590,6 +590,7 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   background: var(--surface); color: var(--text); cursor: pointer;
 }
 .show-more:hover { border-color: var(--accent); }
+.show-more[hidden] { display: none; }
 @media (max-width: 620px) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .kv { grid-template-columns: 1fr; }
