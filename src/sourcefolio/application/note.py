@@ -6,6 +6,7 @@ from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.ports import SourcePacketRepository
 from sourcefolio.application.projection_ports import HumanNoteStore
 from sourcefolio.application.triage import render_idea_note
+from sourcefolio.domain.source import SourcePacket
 
 _CLEARABLE = ("my_title", "why_saved")
 
@@ -17,20 +18,19 @@ class NoteResult:
     applied: dict[str, object | None]
 
 
-class NoteSetter:
-    def __init__(self, *, packets: SourcePacketRepository, notes: HumanNoteStore) -> None:
-        self._packets = packets
+class NoteWriter:
+    def __init__(self, *, notes: HumanNoteStore) -> None:
         self._notes = notes
 
-    def set(
+    def set_packet(
         self,
-        source_id: str,
+        packet: SourcePacket,
         *,
         my_title: str | None = None,
         why_saved: str | None = None,
         status: str | None = None,
         clear: tuple[str, ...] = (),
-    ) -> NoteResult | None:
+    ) -> NoteResult:
         updates: dict[str, object | None] = {}
         if my_title is not None:
             updates["my_title"] = my_title
@@ -44,12 +44,35 @@ class NoteSetter:
             updates[field] = None
         if not updates:
             raise ValueError("nothing to set: pass --my-title, --why, --status or --clear")
-        latest = latest_capture_per_source(self._packets.iter_packets())
-        packet = latest.get(source_id)
-        if packet is None:
-            return None
-        path = f"{source_id}.md"
+        path = f"{packet.source_id}.md"
         created = self._notes.create_if_absent(path, render_idea_note(packet))
         if not self._notes.update_properties(path, updates):
             raise ValueError(f"idea note is unreadable: {path}")
         return NoteResult(note=path, created=created, applied=dict(updates))
+
+
+class NoteSetter(NoteWriter):
+    def __init__(self, *, packets: SourcePacketRepository, notes: HumanNoteStore) -> None:
+        super().__init__(notes=notes)
+        self._packets = packets
+
+    def set(
+        self,
+        source_id: str,
+        *,
+        my_title: str | None = None,
+        why_saved: str | None = None,
+        status: str | None = None,
+        clear: tuple[str, ...] = (),
+    ) -> NoteResult | None:
+        latest = latest_capture_per_source(self._packets.iter_packets())
+        packet = latest.get(source_id)
+        if packet is None:
+            return None
+        return self.set_packet(
+            packet,
+            my_title=my_title,
+            why_saved=why_saved,
+            status=status,
+            clear=clear,
+        )

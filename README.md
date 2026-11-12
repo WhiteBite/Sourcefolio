@@ -49,6 +49,7 @@
 30. `ask`: единая точка входа — retrieval через search + evidence-pack и optional grounded LLM synthesis только по excerpts; immutable per-run note `answer/v1` в `answers/` с `provenance: agent_inference`, citations и human decision stub.
 31. `profile-draft`: черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`) с `create_if_absent` и без перезаписи.
 32. `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-obsidian` → `project-fit` (при `--fit`) с одним combined JSON; без daemon, расписание ручное.
+33. `serve`: локальный HTTP-сервер архива — отдаёт тот же браузер, что `render-ui`, вместе с превью-артефактами (Range) и записывает triage/заголовок/«зачем сохранил» прямо в human `ideas/` через `POST /api/note`.
 
 ## Быстрый старт
 
@@ -410,6 +411,21 @@ sourcefolio refresh \
 ```
 
 Daemon/watcher нет: расписание ручное — запускайте команду вручную или из планировщика с новым capture-файлом.
+
+## Локальный браузер архива
+
+`render-ui` пишет самодостаточную HTML-страницу без медиа. `serve` поднимает локальный HTTP-сервер и отдаёт тот же интерфейс вместе с артефактами (превью и видео через Range) и записывает triage прямо из браузера:
+
+```bash
+sourcefolio serve \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --vault data/vault \
+  --port 8765 \
+  --open
+```
+
+Сервер слушает только `127.0.0.1`, печатает `{url, sources, vault}` и останавливается по Ctrl+C. `GET /` — та же проекция, что у `render-ui`; `GET /artifacts/<art_...>` — артефакт с `Accept-Ranges`; `POST /api/note` принимает `source_id`, `status` (`inbox`/`keep`/`drop`/`done`), `my_title`, `why_saved` и `clear` и требует заголовок `X-Sourcefolio: 1` (иначе 403) — это защита от записи со сторонних страниц. Правки идут в human-заметки `<vault>/ideas/<source_id>.md`, generated-зона не перезаписывается. После сохранения заголовок и статус на карточке и в drawer обновляются без перезагрузки; чтение заметки в Obsidian подхватывает изменения при следующем открытии.
 
 ## MCP-сервер
 

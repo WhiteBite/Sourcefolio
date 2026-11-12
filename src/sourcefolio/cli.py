@@ -85,9 +85,10 @@ from sourcefolio.application.evidence_pack_integrity import (
 )
 from sourcefolio.application.frontmatter import note_body
 from sourcefolio.application.knowledge_graph import KnowledgeGraphProjection
+from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.llm_catalog import LlmCatalogQuery, LlmCatalogRunner
 from sourcefolio.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
-from sourcefolio.application.note import NoteSetter
+from sourcefolio.application.note import NoteSetter, NoteWriter
 from sourcefolio.application.obsidian_views import ObsidianOverviewProjection
 from sourcefolio.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
 from sourcefolio.application.ocr_backlog_report import (
@@ -114,6 +115,7 @@ from sourcefolio.application.search_evaluation import SearchEvaluationSet, Searc
 from sourcefolio.application.slides_fetch import FetchSlidesQuery, FetchSlidesRunner
 from sourcefolio.application.source_cards import SourceCardProjection
 from sourcefolio.application.triage import IdeaScaffolder
+from sourcefolio.application.ui_serve import UiHttpServer
 from sourcefolio.application.ui_view import UiViewProjection
 from sourcefolio.domain.capture import CaptureTask
 from sourcefolio.domain.common import ContractModel, Provenance, UtcDateTime
@@ -932,6 +934,49 @@ def _render_ui(args: argparse.Namespace) -> int:
         "namespace": UiViewProjection.NAMESPACE,
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _build_serve_server(args: argparse.Namespace) -> UiHttpServer:
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    packets_repository = FileSystemSourcePacketRepository(archive_root)
+    projection = UiViewProjection(
+        packets=packets_repository,
+        artifacts=FileSystemArtifactStore(archive_root),
+        store=FileSystemProjectionStore(vault_root / "_generated" / "sourcefolio"),
+        extractions=FileSystemExtractionRepository(derived_root),
+        notes=FileSystemHumanNoteStore(vault_root / "ideas"),
+        uri_prefix="/artifacts/",
+    )
+    return UiHttpServer(
+        projection=projection,
+        artifacts=FileSystemArtifactStore(archive_root),
+        notes=NoteWriter(notes=FileSystemHumanNoteStore(vault_root / "ideas")),
+        packets=latest_capture_per_source(packets_repository.iter_packets()),
+        host=args.host,
+        port=args.port,
+    )
+
+
+def _serve(args: argparse.Namespace) -> int:
+    vault_root = Path(args.vault).resolve()
+    server = _build_serve_server(args)
+    output = {
+        "url": server.url,
+        "sources": server.sources,
+        "vault": str(vault_root / "ideas"),
+    }
+    print(json.dumps(output, ensure_ascii=False), flush=True)
+    if args.open:
+        webbrowser.open(server.url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
     return 0
 
 
@@ -1948,6 +1993,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="open the generated page in the default browser",
     )
     render_ui.set_defaults(handler=_render_ui)
+
+    serve = subcommands.add_parser(
+        "serve",
+        help="serve the archive browser locally and persist triage annotations",
+    )
+    serve.add_argument("--archive-dir", default="data/archive")
+    serve.add_argument("--derived-dir", default="data/derived")
+    serve.add_argument("--vault", default="data/vault")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument(
+        "--open",
+        action="store_true",
+        help="open the served page in the default browser",
+    )
+    serve.set_defaults(handler=_serve)
 
     note = subcommands.add_parser(
         "note",

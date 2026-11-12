@@ -63,6 +63,7 @@ data/            # локальные данные (gitignored): archive, derive
 | JSON Schema контракта | contracts/*.schema.json; источник — pydantic-модель |
 | Operational-отчёты | application/capture_report.py, ocr_backlog_report.py |
 | Obsidian-генерация | application/source_cards.py, obsidian_views.py |
+| Локальный браузер и triage-запись | application/ui_serve.py, application/ui_view.py |
 | Пилот на личных данных | docs/PILOT.md, HANDOFF.md §5 |
 | Производительность и лимиты | docs/PERFORMANCE.md |
 

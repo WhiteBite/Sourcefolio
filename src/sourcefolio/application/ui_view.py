@@ -35,15 +35,20 @@ _EMPTY_ANNOTATION: dict[str, str | None] = {
 }
 
 
-def _artifact_view(artifact: ArtifactRef, artifacts: ArtifactLocator) -> dict[str, object]:
+def _artifact_view(
+    artifact: ArtifactRef, artifacts: ArtifactLocator, uri_prefix: str = ""
+) -> dict[str, object]:
     media_type = artifact.media_type
+    uri = (
+        f"{uri_prefix}{artifact.artifact_id}" if uri_prefix else artifacts.uri(artifact.artifact_id)
+    )
     return {
         "artifact_id": artifact.artifact_id,
         "role": artifact.role.value,
         "media_type": media_type,
         "size_bytes": artifact.size_bytes,
         "sha256": artifact.sha256,
-        "uri": artifacts.uri(artifact.artifact_id),
+        "uri": uri,
         "is_image": media_type.startswith("image/"),
         "is_video": media_type.startswith("video/"),
     }
@@ -108,6 +113,17 @@ def _display_title(
     if author:
         return f"@{author}"
     return f"{packet.source.kind.value} {packet.source.external_id or packet.source_id[:12]}"
+
+
+def display_title_for(packet: SourcePacket, my_title: str | None) -> str:
+    saved = saved_index(packet)
+    return _display_title(
+        my_title,
+        packet.title,
+        saved_str(saved, "desc"),
+        saved_str(saved, "author"),
+        packet,
+    )
 
 
 def _snippet_for(title: str, description: str | None) -> str | None:
@@ -193,6 +209,7 @@ class UiViewProjection:
         notes: HumanNoteReader | None = None,
         limit: int | None = None,
         clock: Callable[[], datetime] | None = None,
+        uri_prefix: str = "",
     ) -> None:
         if limit is not None and limit < 1:
             raise ValueError("limit must be at least 1")
@@ -203,6 +220,7 @@ class UiViewProjection:
         self._notes = notes
         self._limit = limit
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._uri_prefix = uri_prefix
 
     def rebuild(self) -> int:
         payload = self._build_payload()
@@ -244,7 +262,10 @@ class UiViewProjection:
         snippet = _snippet_for(display_title, description)
         if snippet is not None and _is_hashtag_only(snippet):
             snippet = None
-        artifacts = [_artifact_view(artifact, self._artifacts) for artifact in packet.artifacts]
+        artifacts = [
+            _artifact_view(artifact, self._artifacts, self._uri_prefix)
+            for artifact in packet.artifacts
+        ]
         thumb_uri = next((entry["uri"] for entry in artifacts if entry["is_image"] is True), None)
         return {
             "source_id": packet.source_id,
@@ -330,12 +351,14 @@ def _render_html(payload: dict[str, object]) -> str:
     return _HTML_TEMPLATE.replace("__SOURCEFOLIO_DATA__", data)
 
 
-_HTML_TEMPLATE = """<!doctype html>
+_HTML_TEMPLATE = """
+<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sourcefolio — архив источников</title>
+<link rel="icon" href="data:,">
 <style>
 :root {
   --bg: #f5f5f2;
@@ -394,6 +417,7 @@ body {
   font-family: var(--sans); font-size: 15px; line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
+body.drawer-open { overflow: hidden; }
 .wrap { max-width: none; margin: 0 auto; padding: 0 20px; }
 .topbar {
   position: sticky; top: 0; z-index: 20; background: var(--bg);
@@ -423,9 +447,7 @@ h1 { font-family: var(--serif); font-size: 17px; margin: 0; font-weight: 600; }
 }
 .search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 main.wrap { padding-top: 12px; padding-bottom: 80px; }
-.chipbar {
-  display: flex; gap: 7px; flex-wrap: wrap; padding: 2px 0 12px;
-}
+.chipbar { display: flex; gap: 7px; flex-wrap: wrap; padding: 2px 0 10px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
@@ -439,37 +461,68 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .chip .n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .filters {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
 }
 .filters label {
   display: flex; align-items: center; gap: 5px;
   font-size: 12px; color: var(--text-muted);
 }
 .filters select {
-  font: inherit; font-size: 12.5px; padding: 5px 8px; min-width: 124px;
+  font: inherit; font-size: 12.5px; padding: 5px 8px; min-width: 118px;
   border: 1px solid var(--border-strong); border-radius: 7px;
   background: var(--surface); color: var(--text);
 }
 .result-count { margin-left: auto; font-size: 12px; color: var(--text-faint); }
+.triage {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 12px; font-size: 12px; color: var(--text-muted);
+}
+.triage .label { color: var(--text-faint); }
+.triage .remaining { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.tstat {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-muted); font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.tstat:hover { border-color: var(--border-strong); color: var(--text); }
+.tstat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.tstat .n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.tstat .sw { width: 7px; height: 7px; border-radius: 50%; }
+.tstat.keep .sw { background: var(--complete); }
+.tstat.drop .sw { background: var(--drop); }
+.tstat.done .sw { background: var(--accent); }
+.tstat.inbox .sw { background: var(--partial); }
+.triage-hint { font-size: 11.5px; color: var(--text-faint); font-family: var(--mono); }
 .grid {
   display: grid; gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
+  align-items: start;
 }
+.group-head {
+  grid-column: 1 / -1; position: sticky; top: 57px; z-index: 3;
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 2px 5px; margin-top: 4px;
+  font-size: 12px; font-weight: 700; letter-spacing: .02em;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+}
+.group-head .n { color: var(--text-faint); font-weight: 400; }
 .card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); overflow: hidden; position: relative;
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  cursor: pointer;
 }
 .card:hover {
   border-color: var(--border-strong); box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
 .card:focus-within { border-color: var(--border-strong); }
-.card.open { grid-column: 1 / -1; }
-.card.open .thumb { aspect-ratio: auto; height: 200px; }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .thumb {
   position: relative; aspect-ratio: 16 / 9; width: 100%;
-  background: var(--surface-2); overflow: hidden; cursor: pointer;
+  background: var(--surface-2); overflow: hidden;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb.ph {
@@ -501,7 +554,7 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 .status-dot.done { background: var(--accent); }
 .status-dot.drop { background: var(--drop); }
 .status-dot.partial { background: var(--partial); }
-.body { padding: 10px 12px 12px; cursor: pointer; }
+.body { padding: 10px 12px 12px; }
 .title {
   font-size: 13.5px; font-weight: 600; margin: 0; line-height: 1.3;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -533,19 +586,128 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   opacity: 0; transition: opacity .15s ease;
 }
 .card:hover .side, .card:focus-within .side { opacity: 1; }
+.card.has-dot .side { top: 24px; }
 .icon-btn {
   width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
   background: rgba(0,0,0,.5); color: #fff; text-decoration: none;
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px); border: none; cursor: pointer; padding: 0;
 }
 .icon-btn:hover { background: var(--accent); }
 .icon-btn svg { width: 14px; height: 14px; }
-.details {
-  display: none; padding: 0 14px 14px; margin-top: 2px;
-  border-top: 1px solid var(--border);
+.empty { color: var(--text-faint); text-align: center; padding: 48px 0; grid-column: 1 / -1; }
+.show-more {
+  display: block; margin: 18px auto 0; padding: 9px 18px; font: inherit; font-size: 13px;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface); color: var(--text); cursor: pointer;
 }
-.card.open .details { display: block; padding-top: 12px; }
-.dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.show-more:hover { border-color: var(--accent); }
+.show-more[hidden] { display: none; }
+.backdrop {
+  position: fixed; inset: 0; z-index: 40; background: rgba(20,20,18,.34);
+  animation: fade .16s ease;
+}
+.backdrop[hidden] { display: none; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide {
+  from { transform: translateX(24px); opacity: .25; }
+  to { transform: none; opacity: 1; }
+}
+.drawer {
+  position: fixed; top: 0; right: 0; z-index: 50;
+  display: flex; flex-direction: column;
+  width: 46vw; min-width: 380px; max-width: 560px; height: 100vh;
+  background: var(--surface); border-left: 1px solid var(--border-strong);
+  box-shadow: -10px 0 36px rgba(20,20,18,.16);
+  animation: slide .18s ease;
+}
+.drawer[hidden] { display: none; }
+.drawer-head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 9px 12px; border-bottom: 1px solid var(--border);
+}
+.drawer-head .nav {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+  cursor: pointer; padding: 0;
+}
+.drawer-head .nav:hover { border-color: var(--border-strong); color: var(--text); }
+.drawer-head .nav:disabled { opacity: .35; cursor: default; }
+.drawer-head .nav svg { width: 15px; height: 15px; }
+.drawer-title { font-size: 12px; color: var(--text-faint); margin-left: 4px; }
+.drawer-count {
+  margin-left: auto; font-size: 11.5px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.drawer-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+.dcover-wrap { background: var(--surface-2); display: grid; place-items: center; }
+.dcover { display: block; max-width: 100%; max-height: 58vh; width: auto; height: auto; }
+.dcover.ph {
+  width: 100%; height: 210px; display: grid; place-items: center;
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 9%, transparent) 0 12px,
+      transparent 12px 24px),
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--accent) 22%, var(--surface-2)),
+      color-mix(in srgb, var(--accent) 7%, var(--surface-2)));
+}
+.dsec { padding: 13px 16px; border-bottom: 1px solid var(--border); }
+.dsec:last-child { border-bottom: none; }
+.dtitle {
+  font-family: var(--serif); font-size: 18px; line-height: 1.28;
+  margin: 0 0 5px; font-weight: 600; overflow-wrap: anywhere;
+}
+.dmeta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-faint); }
+.dtags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+.ddesc {
+  margin: 0; font-size: 13.5px; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.dactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px;
+  border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text); font: inherit; font-size: 12.5px; text-decoration: none; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--text); border-color: var(--text); color: var(--bg); }
+.btn.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn svg { width: 14px; height: 14px; }
+.triage-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+.tbtn {
+  padding: 6px 13px; border-radius: 9px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-muted); font: inherit; font-size: 12.5px;
+  cursor: pointer;
+}
+.tbtn:hover { border-color: var(--text-muted); color: var(--text); }
+.tbtn[aria-pressed="true"] { color: var(--text); border-color: var(--text-muted); }
+.tbtn.keep[aria-pressed="true"] {
+  background: var(--complete-soft); color: var(--complete); border-color: var(--complete);
+}
+.tbtn.drop[aria-pressed="true"] {
+  background: var(--drop-soft); color: var(--drop); border-color: var(--drop);
+}
+.tbtn.done[aria-pressed="true"] {
+  background: var(--accent-soft); color: var(--accent); border-color: var(--accent);
+}
+.tbtn[disabled] { opacity: .45; cursor: not-allowed; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-top: 9px; }
+.field span {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-faint); font-weight: 700;
+}
+.field input, .field textarea {
+  font: inherit; font-size: 13px; padding: 7px 9px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--bg); color: var(--text); width: 100%;
+}
+.field input:focus, .field textarea:focus {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.field textarea { resize: vertical; min-height: 62px; }
+.save-row { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.save-note { font-size: 11.5px; color: var(--text-faint); }
+.save-note.err { color: var(--drop); }
 .block h3 {
   font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
   color: var(--text-faint); margin: 0 0 6px; font-weight: 700;
@@ -557,12 +719,10 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 .kv dt { color: var(--text-faint); }
 .kv dd { margin: 0; font-family: var(--mono); font-size: 11.5px; overflow-wrap: anywhere; }
 .kv dd a { color: var(--accent); }
-.desc { margin: 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .hint { margin: 0; font-size: 12px; color: var(--text-faint); }
 .limitations { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-muted); }
 .artifacts {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px;
 }
 .artifact {
   border: 1px solid var(--border); border-radius: var(--r-sm);
@@ -583,14 +743,9 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 }
 .excerpt-kind { color: var(--accent); font-weight: 600; }
 .excerpt-text { margin: 0; font-size: 12.5px; white-space: pre-wrap; }
-.empty { color: var(--text-faint); text-align: center; padding: 48px 0; grid-column: 1 / -1; }
-.show-more {
-  display: block; margin: 18px auto 0; padding: 9px 18px; font: inherit; font-size: 13px;
-  border: 1px solid var(--border-strong); border-radius: 10px;
-  background: var(--surface); color: var(--text); cursor: pointer;
+@media (max-width: 860px) {
+  .drawer { width: 100vw; max-width: none; min-width: 0; }
 }
-.show-more:hover { border-color: var(--accent); }
-.show-more[hidden] { display: none; }
 @media (max-width: 620px) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .kv { grid-template-columns: 1fr; }
@@ -644,11 +799,33 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
         <option value="done">done</option>
       </select>
     </label>
+    <label>Сортировка
+      <select id="f-sort">
+        <option value="post-desc">сначала свежие посты</option>
+        <option value="post-asc">сначала старые посты</option>
+        <option value="likes-desc">по лайкам</option>
+        <option value="plays-desc">по просмотрам</option>
+        <option value="saved-desc">по дате сохранения</option>
+        <option value="title-asc">по названию</option>
+      </select>
+    </label>
+    <label>Группировка
+      <select id="f-group">
+        <option value="">без группировки</option>
+        <option value="collection">по коллекции</option>
+        <option value="month">по месяцу поста</option>
+        <option value="author">по автору</option>
+        <option value="status">по статусу разбора</option>
+      </select>
+    </label>
     <span class="result-count" id="result-count"></span>
   </div>
+  <div class="triage" id="triage"></div>
   <div id="grid" class="grid"></div>
   <button id="show-more" class="show-more" hidden></button>
 </main>
+<div id="backdrop" class="backdrop" hidden></div>
+<aside id="drawer" class="drawer" role="dialog" aria-modal="true" hidden></aside>
 <script id="sourcefolio-data" type="application/json">__SOURCEFOLIO_DATA__</script>
 <script>
 (function () {
@@ -656,14 +833,23 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   var NS = 'http://www.w3.org/2000/svg';
   var CHUNK = 120;
   var STEP = 240;
-  var shown = CHUNK;
+  var CAN_WRITE = location.protocol === 'http:' || location.protocol === 'https:';
+  var SORT_KEY = 'sf.sort';
+  var GROUP_KEY = 'sf.group';
+  var COLLATOR = new Intl.Collator('ru', { sensitivity: 'base' });
+
   var grid = document.getElementById('grid');
   var q = document.getElementById('q');
   var chipbar = document.getElementById('chipbar');
+  var triageBar = document.getElementById('triage');
+  var drawer = document.getElementById('drawer');
+  var backdrop = document.getElementById('backdrop');
   var fCollection = document.getElementById('f-collection');
   var fKind = document.getElementById('f-kind');
   var fStatus = document.getElementById('f-status');
   var fNoteStatus = document.getElementById('f-note-status');
+  var fSort = document.getElementById('f-sort');
+  var fGroup = document.getElementById('f-group');
   var resultCount = document.getElementById('result-count');
   var showMore = document.getElementById('show-more');
   var summary = document.getElementById('summary');
@@ -672,9 +858,13 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     video: 'видео', slideshow: 'слайдшоу', web_page: 'страница',
     repository: 'репозиторий', document: 'документ', text: 'текст', other: 'прочее'
   };
-
-  function kindLabel(k) { return KIND_LABELS[k] || k; }
-
+  var STATUS_LABELS = {
+    inbox: 'в инбоксе', keep: 'оставить', drop: 'не нужно', done: 'разобрано',
+    none: 'без пометки'
+  };
+  var MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль',
+    'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+  var STATUS_ORDER = { '': 0, inbox: 1, keep: 2, done: 3, drop: 4 };
   var PATHS = {
     calendar: 'M8 2v4M16 2v4M3 10h18' +
       'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
@@ -684,8 +874,18 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     external: 'M15 3h6v6M10 14 21 3' +
       'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
     share: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8' +
-      'M16 6l-4-4-4 4M12 2v13'
+      'M16 6l-4-4-4 4M12 2v13',
+    close: 'M6 6l12 12M18 6L6 18',
+    left: 'M15 6l-6 6 6 6',
+    right: 'M9 6l6 6-6 6'
   };
+
+  var state = { shown: CHUNK, openId: null, list: [], index: -1 };
+  var cards = {};
+  var chipEls = [];
+
+  function kindLabel(k) { return KIND_LABELS[k] || k; }
+  function statusLabel(s) { return STATUS_LABELS[s || 'none'] || s; }
 
   function icon(name) {
     var s = document.createElementNS(NS, 'svg');
@@ -763,19 +963,114 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     dl.appendChild(dd);
   }
 
+  function annotation(item) { return item.annotation || {}; }
+
   function statusDot(item) {
-    var ann = item.annotation || {};
+    var ann = annotation(item);
     if (ann.status && ann.status !== 'inbox') { return ann.status; }
     if (item.media_state === 'partial') { return 'partial'; }
     return null;
   }
 
+  function timeValue(item, key) {
+    var raw = key === 'post-desc' || key === 'post-asc'
+      ? item.post_created_at : item.captured_at;
+    if (!raw) { return null; }
+    var ms = Date.parse(raw);
+    return isNaN(ms) ? null : ms;
+  }
+
+  function sortMetric(item, key) {
+    if (key === 'likes-desc') {
+      return item.stats && item.stats.likes != null ? item.stats.likes : null;
+    }
+    if (key === 'plays-desc') {
+      return item.stats && item.stats.plays != null ? item.stats.plays : null;
+    }
+    return timeValue(item, key);
+  }
+
+  function compare(a, b) {
+    var key = fSort.value;
+    if (key === 'title-asc') {
+      return COLLATOR.compare(a.display_title, b.display_title);
+    }
+    var av = sortMetric(a, key);
+    var bv = sortMetric(b, key);
+    if (av === null && bv === null) {
+      return COLLATOR.compare(a.display_title, b.display_title);
+    }
+    if (av === null) { return 1; }
+    if (bv === null) { return -1; }
+    if (av === bv) { return COLLATOR.compare(a.display_title, b.display_title); }
+    if (key === 'post-asc') { return av < bv ? -1 : 1; }
+    return av > bv ? -1 : 1;
+  }
+
+  function monthLabel(raw) {
+    var parts = raw.split('-');
+    var index = parseInt(parts[1], 10) - 1;
+    if (index < 0 || index > 11) { return raw; }
+    return MONTHS[index] + ' ' + parts[0];
+  }
+
+  function groupKey(item) {
+    var mode = fGroup.value;
+    if (mode === 'collection') { return item.collections[0] || ''; }
+    if (mode === 'month') {
+      return item.post_created_at ? item.post_created_at.slice(0, 7) : '';
+    }
+    if (mode === 'author') { return item.author || ''; }
+    if (mode === 'status') { return annotation(item).status || ''; }
+    return '';
+  }
+
+  function groupLabel(raw) {
+    var mode = fGroup.value;
+    if (mode === 'month') { return raw ? monthLabel(raw) : 'без даты'; }
+    if (mode === 'status') { return statusLabel(raw); }
+    if (mode === 'collection') { return raw || 'без коллекции'; }
+    if (mode === 'author') { return raw ? '@' + raw : 'без автора'; }
+    return raw;
+  }
+
+  function groupOrder(items) {
+    var counts = {};
+    var keys = [];
+    items.forEach(function (it) {
+      var key = groupKey(it);
+      if (counts[key] == null) {
+        counts[key] = 0;
+        keys.push(key);
+      }
+      counts[key] += 1;
+    });
+    var mode = fGroup.value;
+    keys.sort(function (a, b) {
+      if (mode === 'status') { return STATUS_ORDER[a] - STATUS_ORDER[b]; }
+      if (mode === 'month') { return a < b ? 1 : a > b ? -1 : 0; }
+      if (counts[b] !== counts[a]) { return counts[b] - counts[a]; }
+      return COLLATOR.compare(a, b);
+    });
+    var index = {};
+    keys.forEach(function (key, position) { index[key] = position; });
+    return { counts: counts, index: index };
+  }
+
+  function compareGrouped(order, a, b) {
+    var ia = order.index[groupKey(a)];
+    var ib = order.index[groupKey(b)];
+    if (ia !== ib) { return ia - ib; }
+    return compare(a, b);
+  }
+
   function buildCard(item) {
-    var ann = item.annotation || {};
+    var ann = annotation(item);
     var card = el('article', 'card');
     card.style.setProperty('--accent', accentVar(accentKey(item)));
 
     var thumb = el('div', 'thumb' + (item.thumb_uri ? '' : ' ph'));
+    card._thumb = thumb;
     if (item.thumb_uri) {
       var img = el('img');
       img.src = item.thumb_uri;
@@ -787,7 +1082,11 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     }
     thumb.appendChild(el('span', 'kind-tag', kindLabel(item.kind)));
     var dot = statusDot(item);
-    if (dot) { thumb.appendChild(el('span', 'status-dot ' + dot)); }
+    if (dot) {
+      card.classList.add('has-dot');
+      card._dot = el('span', 'status-dot ' + dot);
+      thumb.appendChild(card._dot);
+    }
 
     var side = el('div', 'side');
     if (item.canonical_url) {
@@ -834,10 +1133,328 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     }
     if (ann.why_saved) { body.appendChild(el('p', 'why', ann.why_saved)); }
 
-    var details = el('div', 'details');
-    var dgrid = el('div', 'dgrid');
+    card.appendChild(thumb);
+    card.appendChild(body);
 
-    var prov = el('section', 'block');
+    card.tabIndex = 0;
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('a')) { return; }
+      openDrawer(item.source_id);
+    });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openDrawer(item.source_id);
+      }
+    });
+    cards[item.source_id] = card;
+    return card;
+  }
+
+  function syncDot(item, card) {
+    var next = statusDot(item);
+    if (card._dot) {
+      if (next) {
+        card._dot.className = 'status-dot ' + next;
+      } else {
+        card._dot.parentNode.removeChild(card._dot);
+        card._dot = null;
+        card.classList.remove('has-dot');
+      }
+    } else if (next) {
+      card._dot = el('span', 'status-dot ' + next);
+      card._thumb.appendChild(card._dot);
+      card.classList.add('has-dot');
+    }
+  }
+
+  function matches(item, term, collection, kind, status, noteStatus) {
+    if (collection && item.collections.indexOf(collection) === -1) { return false; }
+    if (kind && item.kind !== kind) { return false; }
+    if (status && item.status !== status) { return false; }
+    var ann = annotation(item);
+    if (noteStatus && ann.status !== noteStatus) { return false; }
+    if (!term) { return true; }
+    var hay = [item.display_title, item.title, item.snippet, item.description, item.author,
+      item.external_id, item.collections.join(' '), item.hashtags.join(' '),
+      ann.my_title, ann.why_saved, ann.note_preview]
+      .filter(Boolean).join(' ').toLowerCase();
+    return hay.indexOf(term) !== -1;
+  }
+
+  function filteredItems() {
+    var term = q.value.trim().toLowerCase();
+    return data.items.filter(function (it) {
+      return matches(it, term, fCollection.value, fKind.value, fStatus.value,
+        fNoteStatus.value);
+    });
+  }
+
+  function render(reset) {
+    if (reset) { state.shown = CHUNK; }
+    var items = filteredItems();
+    var grouped = fGroup.value !== '';
+    var order = grouped ? groupOrder(items) : null;
+    if (order) {
+      items.sort(function (a, b) { return compareGrouped(order, a, b); });
+    } else {
+      items.sort(compare);
+    }
+    state.list = items;
+    if (state.openId && !items.some(function (it) {
+      return it.source_id === state.openId;
+    })) {
+      closeDrawer();
+    }
+    cards = {};
+    grid.textContent = '';
+    var slice = grouped ? items : items.slice(0, state.shown);
+    var current = null;
+    slice.forEach(function (it) {
+      if (grouped) {
+        var key = groupKey(it);
+        if (key !== current) {
+          current = key;
+          var head = el('div', 'group-head');
+          head.appendChild(el('span', null, groupLabel(key)));
+          head.appendChild(el('span', 'n', String(order.counts[key])));
+          grid.appendChild(head);
+        }
+      }
+      grid.appendChild(buildCard(it));
+    });
+    if (!items.length) {
+      grid.appendChild(el('p', 'empty', 'Ничего не найдено.'));
+    }
+    resultCount.textContent = 'Показано ' + slice.length + ' из ' + items.length;
+    if (!grouped && items.length > state.shown) {
+      showMore.hidden = false;
+      showMore.textContent = 'Показать ещё (' + (items.length - state.shown) + ')';
+    } else {
+      showMore.hidden = true;
+    }
+    if (state.openId) { refreshDrawerHead(); }
+  }
+
+  function triageCounts() {
+    var counts = { inbox: 0, keep: 0, drop: 0, done: 0, none: 0 };
+    data.items.forEach(function (it) {
+      var status = annotation(it).status;
+      if (status && counts[status] != null) {
+        counts[status] += 1;
+      } else {
+        counts.none += 1;
+      }
+    });
+    return counts;
+  }
+
+  function buildTriage() {
+    triageBar.textContent = '';
+    var counts = triageCounts();
+    var remaining = counts.none + counts.inbox;
+    triageBar.appendChild(el('span', 'label', 'разбор:'));
+    triageBar.appendChild(el('span', 'remaining', remaining + ' осталось'));
+    ['inbox', 'keep', 'drop', 'done'].forEach(function (status) {
+      var button = el('button', 'tstat ' + status);
+      button.type = 'button';
+      button.appendChild(el('span', 'sw'));
+      button.appendChild(el('span', null, statusLabel(status)));
+      button.appendChild(el('span', 'n', String(counts[status])));
+      button.setAttribute('aria-pressed',
+        fNoteStatus.value === status ? 'true' : 'false');
+      button.addEventListener('click', function () {
+        fNoteStatus.value = fNoteStatus.value === status ? '' : status;
+        syncTriage();
+        render(true);
+      });
+      triageBar.appendChild(button);
+    });
+    if (!CAN_WRITE) {
+      triageBar.appendChild(el('span', 'triage-hint', 'запись — через sourcefolio serve'));
+    }
+  }
+
+  function syncTriage() {
+    var buttons = triageBar.querySelectorAll('.tstat');
+    for (var i = 0; i < buttons.length; i++) {
+      var name = buttons[i].className.replace('tstat ', '');
+      buttons[i].setAttribute('aria-pressed', fNoteStatus.value === name ? 'true' : 'false');
+    }
+  }
+
+  function refreshTriage() {
+    var counts = triageCounts();
+    var remaining = triageBar.querySelector('.remaining');
+    if (remaining) {
+      remaining.textContent = (counts.none + counts.inbox) + ' осталось';
+    }
+    var buttons = triageBar.querySelectorAll('.tstat');
+    for (var i = 0; i < buttons.length; i++) {
+      var name = buttons[i].className.replace('tstat ', '');
+      var counter = buttons[i].querySelector('.n');
+      if (counter && counts[name] != null) { counter.textContent = String(counts[name]); }
+    }
+  }
+
+  function currentItem() {
+    if (!state.openId) { return null; }
+    for (var i = 0; i < state.list.length; i++) {
+      if (state.list[i].source_id === state.openId) { return state.list[i]; }
+    }
+    return null;
+  }
+
+  function openDrawer(sourceId) {
+    state.openId = sourceId;
+    state.index = -1;
+    for (var i = 0; i < state.list.length; i++) {
+      if (state.list[i].source_id === sourceId) { state.index = i; break; }
+    }
+    buildDrawer();
+    drawer.hidden = false;
+    backdrop.hidden = false;
+    document.body.classList.add('drawer-open');
+  }
+
+  function closeDrawer() {
+    state.openId = null;
+    state.index = -1;
+    drawer.hidden = true;
+    backdrop.hidden = true;
+    drawer.textContent = '';
+    document.body.classList.remove('drawer-open');
+  }
+
+  function step(delta) {
+    if (!state.openId || !state.list.length) { return; }
+    if (state.index < 0) { return; }
+    var next = state.index + delta;
+    if (next < 0 || next >= state.list.length) { return; }
+    openDrawer(state.list[next].source_id);
+  }
+
+  function refreshDrawerHead() {
+    var count = drawer.querySelector('.drawer-count');
+    if (!count) { return; }
+    count.textContent = (state.index + 1) + ' / ' + state.list.length;
+    var prev = drawer.querySelector('.nav.prev');
+    var next = drawer.querySelector('.nav.next');
+    if (prev) { prev.disabled = state.index <= 0; }
+    if (next) { next.disabled = state.index >= state.list.length - 1; }
+  }
+
+  function buildDrawer() {
+    var item = currentItem();
+    drawer.textContent = '';
+    if (!item) { closeDrawer(); return; }
+    var ann = annotation(item);
+    var head = el('div', 'drawer-head');
+    var prev = el('button', 'nav prev');
+    prev.type = 'button';
+    prev.title = 'предыдущий';
+    prev.appendChild(icon('left'));
+    prev.addEventListener('click', function () { step(-1); });
+    var next = el('button', 'nav next');
+    next.type = 'button';
+    next.title = 'следующий';
+    next.appendChild(icon('right'));
+    next.addEventListener('click', function () { step(1); });
+    var close = el('button', 'nav close');
+    close.type = 'button';
+    close.title = 'закрыть';
+    close.appendChild(icon('close'));
+    close.addEventListener('click', closeDrawer);
+    head.appendChild(prev);
+    head.appendChild(next);
+    head.appendChild(el('span', 'drawer-title', kindLabel(item.kind)));
+    head.appendChild(el('span', 'drawer-count'));
+    head.appendChild(close);
+    drawer.appendChild(head);
+
+    var body = el('div', 'drawer-body');
+    var cover = el('div', 'dcover-wrap');
+    if (item.thumb_uri) {
+      var img = el('img', 'dcover');
+      img.src = item.thumb_uri;
+      img.alt = item.display_title;
+      cover.appendChild(img);
+    } else {
+      var ph = el('div', 'dcover ph');
+      ph.appendChild(el('span', 'ph-letter', item.marker));
+      cover.appendChild(ph);
+    }
+    body.appendChild(cover);
+
+    var info = el('section', 'dsec');
+    info.appendChild(el('h2', 'dtitle', item.display_title));
+    var meta = el('div', 'dmeta');
+    if (item.author) { meta.appendChild(el('span', null, '@' + item.author)); }
+    if (item.post_created_at) {
+      meta.appendChild(el('span', null, fmtDate(item.post_created_at)));
+    }
+    if (item.stats.plays != null) {
+      meta.appendChild(el('span', null, fmtInt(item.stats.plays) + ' просмотров'));
+    }
+    if (item.stats.likes != null) {
+      meta.appendChild(el('span', null, fmtInt(item.stats.likes) + ' лайков'));
+    }
+    if (meta.childNodes.length) { info.appendChild(meta); }
+    if (item.hashtags.length) {
+      var tags = el('div', 'dtags');
+      item.hashtags.forEach(function (t) {
+        tags.appendChild(el('span', 'tag', '#' + t));
+      });
+      info.appendChild(tags);
+    }
+    if (item.canonical_url) {
+      var actions = el('div', 'dactions');
+      actions.style.marginTop = '10px';
+      var open = el('a', 'btn primary');
+      open.href = item.canonical_url;
+      open.target = '_blank';
+      open.rel = 'noopener';
+      open.appendChild(icon('external'));
+      open.appendChild(el('span', null, 'открыть в TikTok'));
+      actions.appendChild(open);
+      info.appendChild(actions);
+    }
+    body.appendChild(info);
+
+    body.appendChild(buildTriageSection(item));
+    body.appendChild(buildNoteSection(item, ann));
+
+    if (item.description) {
+      var desc = el('section', 'dsec block');
+      desc.appendChild(el('h3', null, 'Описание'));
+      desc.appendChild(el('p', 'ddesc', item.description));
+      body.appendChild(desc);
+    }
+
+    if (!item.thumb_uri) {
+      var med = el('section', 'dsec block');
+      med.appendChild(el('h3', null, 'Медиа'));
+      med.appendChild(el(
+        'p', 'hint', 'сохранены только метаданные — превью появится после загрузки'
+      ));
+      body.appendChild(med);
+    } else if (item.media_state !== 'complete') {
+      var med2 = el('section', 'dsec block');
+      med2.appendChild(el('h3', null, 'Медиа'));
+      med2.appendChild(el('p', 'hint', 'обложка сохранена, медиа не скачано'));
+      body.appendChild(med2);
+    }
+
+    if (item.limitations.length) {
+      var lim = el('section', 'dsec block');
+      lim.appendChild(el('h3', null, 'Ограничения'));
+      var ul = el('ul', 'limitations');
+      item.limitations.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+      lim.appendChild(ul);
+      body.appendChild(lim);
+    }
+
+    var prov = el('section', 'dsec block');
     prov.appendChild(el('h3', null, 'Провенанс'));
     var dl = el('dl', 'kv');
     addKV(dl, 'source_id', item.source_id);
@@ -852,44 +1469,9 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     addKV(dl, 'collector', collector);
     addKV(dl, 'захвачено', fmtDate(item.captured_at));
     prov.appendChild(dl);
-    dgrid.appendChild(prov);
+    body.appendChild(prov);
 
-    if (ann.my_title || ann.why_saved || ann.status || ann.note_preview) {
-      var noteBlock = el('section', 'block');
-      noteBlock.appendChild(el('h3', null, 'Моя подпись'));
-      var nd = el('dl', 'kv');
-      if (ann.my_title) { addKV(nd, 'моё название', ann.my_title); }
-      if (ann.why_saved) { addKV(nd, 'зачем', ann.why_saved); }
-      if (ann.status) { addKV(nd, 'статус', ann.status); }
-      if (ann.note_preview) { addKV(nd, 'заметка', ann.note_preview); }
-      noteBlock.appendChild(nd);
-      dgrid.appendChild(noteBlock);
-    }
-
-    if (item.description) {
-      var desc = el('section', 'block');
-      desc.appendChild(el('h3', null, 'Описание'));
-      desc.appendChild(el('p', 'desc', item.description));
-      dgrid.appendChild(desc);
-    }
-
-    if (item.media_state === 'metadata_only') {
-      var med = el('section', 'block');
-      med.appendChild(el('h3', null, 'Медиа'));
-      med.appendChild(
-        el('p', 'hint', 'сохранены только метаданные — превью появится после загрузки')
-      );
-      dgrid.appendChild(med);
-    } else if (item.limitations.length) {
-      var lim = el('section', 'block');
-      lim.appendChild(el('h3', null, 'Ограничения'));
-      var ul = el('ul', 'limitations');
-      item.limitations.forEach(function (t) { ul.appendChild(el('li', null, t)); });
-      lim.appendChild(ul);
-      dgrid.appendChild(lim);
-    }
-
-    var art = el('section', 'block');
+    var art = el('section', 'dsec block');
     art.appendChild(el('h3', null, 'Артефакты (' + item.artifacts.length + ')'));
     var gridA = el('div', 'artifacts');
     item.artifacts.forEach(function (a) {
@@ -919,10 +1501,10 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
       gridA.appendChild(box);
     });
     art.appendChild(gridA);
-    dgrid.appendChild(art);
+    body.appendChild(art);
 
     if (item.derived.count) {
-      var der = el('section', 'block');
+      var der = el('section', 'dsec block');
       der.appendChild(el('h3', null, 'Извлечённый текст (' + item.derived.count + ')'));
       item.derived.excerpts.forEach(function (ex) {
         var exBox = el('div', 'excerpt');
@@ -934,58 +1516,176 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
         exBox.appendChild(el('p', 'excerpt-text', ex.text));
         der.appendChild(exBox);
       });
-      dgrid.appendChild(der);
+      body.appendChild(der);
     }
 
-    details.appendChild(dgrid);
-
-    card.appendChild(thumb);
-    card.appendChild(body);
-    card.appendChild(details);
-
-    function toggle() { card.classList.toggle('open'); }
-    thumb.addEventListener('click', function (e) {
-      if (e.target.closest('a')) { return; }
-      toggle();
-    });
-    body.addEventListener('click', function (e) {
-      if (e.target.closest('a')) { return; }
-      toggle();
-    });
-    card.tabIndex = 0;
-    card.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggle();
-      }
-    });
-    return card;
+    drawer.appendChild(body);
+    refreshDrawerHead();
   }
 
-  function matches(item, term, collection, kind, status, noteStatus) {
-    if (collection && item.collections.indexOf(collection) === -1) { return false; }
-    if (kind && item.kind !== kind) { return false; }
-    if (status && item.status !== status) { return false; }
-    var ann = item.annotation || {};
-    if (noteStatus && ann.status !== noteStatus) { return false; }
-    if (!term) { return true; }
-    var hay = [item.display_title, item.title, item.snippet, item.description, item.author,
-      item.external_id, item.collections.join(' '), item.hashtags.join(' '),
-      ann.my_title, ann.why_saved, ann.note_preview]
-      .filter(Boolean).join(' ').toLowerCase();
-    return hay.indexOf(term) !== -1;
+  function buildTriageSection(item) {
+    var ann = annotation(item);
+    var section = el('section', 'dsec block');
+    section.appendChild(el('h3', null, 'Разбор'));
+    var row = el('div', 'triage-buttons');
+    ['keep', 'drop', 'done', 'inbox'].forEach(function (status) {
+      var button = el('button', 'tbtn ' + status, statusLabel(status));
+      button.type = 'button';
+      button.setAttribute('aria-pressed', ann.status === status ? 'true' : 'false');
+      button.disabled = !CAN_WRITE;
+      button.addEventListener('click', function () { applyStatus(item, status); });
+      row.appendChild(button);
+    });
+    section.appendChild(row);
+    if (!CAN_WRITE) {
+      section.appendChild(el(
+        'p', 'hint', 'запись доступна через sourcefolio serve (см. README)'
+      ));
+    } else {
+      section.appendChild(el(
+        'p', 'hint', 'клавиши 1-4: оставить / не нужно / разобрано / инбокс'
+      ));
+    }
+    return section;
+  }
+
+  function buildNoteSection(item, ann) {
+    var section = el('section', 'dsec block');
+    section.appendChild(el('h3', null, 'Моя подпись'));
+    var titleField = el('label', 'field');
+    titleField.appendChild(el('span', null, 'моё название'));
+    var titleInput = el('input');
+    titleInput.type = 'text';
+    titleInput.value = ann.my_title || '';
+    titleInput.disabled = !CAN_WRITE;
+    titleField.appendChild(titleInput);
+    section.appendChild(titleField);
+
+    var whyField = el('label', 'field');
+    whyField.appendChild(el('span', null, 'зачем сохранил'));
+    var whyInput = el('textarea');
+    whyInput.value = ann.why_saved || '';
+    whyInput.disabled = !CAN_WRITE;
+    whyField.appendChild(whyInput);
+    section.appendChild(whyField);
+
+    var row = el('div', 'save-row');
+    var save = el('button', 'btn', 'Сохранить');
+    save.type = 'button';
+    save.disabled = !CAN_WRITE;
+    var note = el('span', 'save-note');
+    row.appendChild(save);
+    row.appendChild(note);
+    section.appendChild(row);
+
+    save.addEventListener('click', function () {
+      var body = { source_id: item.source_id };
+      var clear = [];
+      var nextTitle = titleInput.value.trim();
+      var nextWhy = whyInput.value.trim();
+      if (nextTitle) {
+        body.my_title = nextTitle;
+      } else if (ann.my_title) {
+        clear.push('my_title');
+      }
+      if (nextWhy) {
+        body.why_saved = nextWhy;
+      } else if (ann.why_saved) {
+        clear.push('why_saved');
+      }
+      if (clear.length) { body.clear = clear; }
+      if (Object.keys(body).length === 1) {
+        note.textContent = 'нечего сохранять';
+        return;
+      }
+      save.disabled = true;
+      note.className = 'save-note';
+      note.textContent = 'сохраняю…';
+      postNote(body, function (response) {
+        ann.my_title = nextTitle || null;
+        ann.why_saved = nextWhy || null;
+        if (response && response.display_title) {
+          item.display_title = response.display_title;
+        }
+        render(false);
+        buildDrawer();
+        var fresh = drawer.querySelector('.save-note');
+        if (fresh) { fresh.textContent = 'сохранено'; }
+      }, function (message) {
+        note.className = 'save-note err';
+        note.textContent = message;
+        save.disabled = false;
+      });
+    });
+    return section;
+  }
+
+  function applyStatus(item, status) {
+    if (!CAN_WRITE) { return; }
+    var ann = annotation(item);
+    var previous = ann.status;
+    ann.status = status;
+    syncCardStatus(item);
+    refreshTriage();
+    syncDrawerStatus();
+    postNote({ source_id: item.source_id, status: status }, function () {
+      refreshTriage();
+    }, function (message) {
+      ann.status = previous;
+      syncCardStatus(item);
+      refreshTriage();
+      syncDrawerStatus();
+      var note = drawer.querySelector('.save-note');
+      if (note) {
+        note.className = 'save-note err';
+        note.textContent = message;
+      }
+    });
+  }
+
+  function syncCardStatus(item) {
+    var card = cards[item.source_id];
+    if (card) { syncDot(item, card); }
+  }
+
+  function syncDrawerStatus() {
+    var item = currentItem();
+    if (!item) { return; }
+    var ann = annotation(item);
+    var buttons = drawer.querySelectorAll('.tbtn');
+    for (var i = 0; i < buttons.length; i++) {
+      var status = buttons[i].className.replace('tbtn ', '');
+      buttons[i].setAttribute('aria-pressed', ann.status === status ? 'true' : 'false');
+    }
+  }
+
+  function postNote(body, onOk, onError) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/note', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('X-Sourcefolio', '1');
+    xhr.onload = function () {
+      var payload = null;
+      try { payload = JSON.parse(xhr.responseText); } catch (e) { payload = null; }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onOk(payload);
+        return;
+      }
+      onError(payload && payload.error ? payload.error : 'ошибка ' + xhr.status);
+    };
+    xhr.onerror = function () { onError('сервер не отвечает'); };
+    xhr.send(JSON.stringify(body));
   }
 
   var annotated = 0;
   data.items.forEach(function (it) {
-    var a = it.annotation || {};
+    var a = annotation(it);
     if (a.my_title || a.why_saved || a.note_preview) { annotated++; }
   });
   var parts = [data.counts.sources + ' источников', data.collections.length + ' коллекций'];
   if (annotated) { parts.push(annotated + ' подписано'); }
   summary.textContent = parts.join(' · ');
 
-  var chipEls = [];
   function setCollection(name) {
     fCollection.value = name;
     chipEls.forEach(function (c) {
@@ -1020,6 +1720,24 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     });
   }
 
+  function restoreSelect(select, key, fallback) {
+    var stored = null;
+    try { stored = localStorage.getItem(key); } catch (e) { stored = null; }
+    if (stored) {
+      for (var i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === stored) {
+          select.value = stored;
+          return;
+        }
+      }
+    }
+    select.value = fallback;
+  }
+
+  function persistSelect(select, key) {
+    try { localStorage.setItem(key, select.value); } catch (e) { return; }
+  }
+
   data.collections.forEach(function (c) {
     var o = document.createElement('option');
     o.value = c.name;
@@ -1035,29 +1753,12 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     fKind.appendChild(o);
   });
 
-  function render(reset) {
-    if (reset) { shown = CHUNK; }
-    var term = q.value.trim().toLowerCase();
-    var filtered = data.items.filter(function (it) {
-      return matches(it, term, fCollection.value, fKind.value, fStatus.value,
-        fNoteStatus.value);
-    });
-    grid.textContent = '';
-    var slice = filtered.slice(0, shown);
-    slice.forEach(function (it) { grid.appendChild(buildCard(it)); });
-    if (!filtered.length) {
-      grid.appendChild(el('p', 'empty', 'Ничего не найдено.'));
-    }
-    resultCount.textContent = 'Показано ' + slice.length + ' из ' + filtered.length;
-    if (filtered.length > shown) {
-      showMore.hidden = false;
-      showMore.textContent = 'Показать ещё (' + (filtered.length - shown) + ')';
-    } else {
-      showMore.hidden = true;
-    }
-  }
+  restoreSelect(fSort, SORT_KEY, 'post-desc');
+  restoreSelect(fGroup, GROUP_KEY, '');
 
   buildChips();
+  buildTriage();
+
   q.addEventListener('input', function () { render(true); });
   fCollection.addEventListener('change', function () {
     chipEls.forEach(function (c) {
@@ -1067,8 +1768,39 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   });
   fKind.addEventListener('change', function () { render(true); });
   fStatus.addEventListener('change', function () { render(true); });
-  fNoteStatus.addEventListener('change', function () { render(true); });
-  showMore.addEventListener('click', function () { shown += STEP; render(false); });
+  fNoteStatus.addEventListener('change', function () { syncTriage(); render(true); });
+  fSort.addEventListener('change', function () {
+    persistSelect(fSort, SORT_KEY);
+    render(true);
+  });
+  fGroup.addEventListener('change', function () {
+    persistSelect(fGroup, GROUP_KEY);
+    render(true);
+  });
+  showMore.addEventListener('click', function () { state.shown += STEP; render(false); });
+  backdrop.addEventListener('click', closeDrawer);
+
+  document.addEventListener('keydown', function (e) {
+    var tag = e.target && e.target.tagName ? e.target.tagName : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') { return; }
+    if (!state.openId) { return; }
+    if (e.key === 'Escape') {
+      closeDrawer();
+    } else if (e.key === 'ArrowRight' || e.key === 'j') {
+      e.preventDefault();
+      step(1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'k') {
+      e.preventDefault();
+      step(-1);
+    } else if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '4') {
+      var item = currentItem();
+      if (!item) { return; }
+      var statuses = { '1': 'keep', '2': 'drop', '3': 'done', '4': 'inbox' };
+      applyStatus(item, statuses[e.key]);
+      step(1);
+    }
+  });
+
   render(true);
 })();
 </script>
