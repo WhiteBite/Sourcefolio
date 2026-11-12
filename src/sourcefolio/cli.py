@@ -20,6 +20,8 @@ from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
     FileSystemProjectFitIndex,
+    FileSystemRegistryRouteStore,
+    FileSystemRegistrySnapshotStore,
     FileSystemRepoReader,
     FileSystemSourcePacketRepository,
 )
@@ -47,6 +49,10 @@ from sourcefolio.adapters.tiktok.yt_dlp import YtDlpConfig, YtDlpTikTokAdapter
 from sourcefolio.application.archive_capture import ArchiveCapture
 from sourcefolio.application.ask import AskQuery, AskRunner, ask_to_dict, render_ask_note
 from sourcefolio.application.audit import ArchiveAudit
+from sourcefolio.application.candidate_notes import (
+    CandidateDecisionReader,
+    CandidateDecisionWriter,
+)
 from sourcefolio.application.capture_batch import CaptureBatchRunner
 from sourcefolio.application.capture_ports import CaptureAdapter
 from sourcefolio.application.capture_report import (
@@ -108,6 +114,8 @@ from sourcefolio.application.project_fit import (
     parse_projects,
 )
 from sourcefolio.application.project_profiles import ProjectProfileScaffolder
+from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
+from sourcefolio.application.registry_extract import RegistryExtractor, RegistryExtractQuery
 from sourcefolio.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
 from sourcefolio.application.repo_nodes import RepoNodeProjection
 from sourcefolio.application.search import SearchIndexBuilder
@@ -121,6 +129,14 @@ from sourcefolio.domain.capture import CaptureTask
 from sourcefolio.domain.common import ContractModel, Provenance, UtcDateTime
 from sourcefolio.domain.evidence import EvidenceItem
 from sourcefolio.domain.extraction import ExtractionRecord
+from sourcefolio.domain.registry import (
+    Candidate,
+    CandidateDecision,
+    CandidateKind,
+    DecisionStatus,
+    RegistryRoute,
+    RegistrySnapshot,
+)
 from sourcefolio.domain.source import (
     ArtifactRole,
     CaptureStatus,
@@ -1398,6 +1414,156 @@ def _project_fit(args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def _registry_extract(args: argparse.Namespace) -> int:
+    projects = _load_projects(Path(args.projects))
+    if args.profiles:
+        projects = _with_profiles(projects, Path(args.profiles).resolve())
+    config = resolve_llm_config(
+        base_url=args.base_url,
+        api_key=args.api_key,
+        model=args.model,
+    )
+    archive_root = Path(args.archive_dir).resolve()
+    derived_root = Path(args.derived_dir).resolve()
+    report = RegistryExtractor(
+        packets=FileSystemSourcePacketRepository(archive_root),
+        artifacts=FileSystemArtifactStore(archive_root),
+        extractions=FileSystemExtractionRepository(derived_root),
+        client=OpenAIChatClient(
+            OpenAIChatConfig(
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model=config.model,
+            )
+        ),
+        cache=FileSystemLlmCache(derived_root, "registry-llm"),
+        routes=FileSystemRegistryRouteStore(derived_root),
+        projects=projects,
+        model=config.model,
+        clock=lambda: datetime.now(UTC),
+        progress=lambda line: print(line, file=sys.stderr),
+    ).run(
+        RegistryExtractQuery(
+            projects=projects,
+            project_ids=tuple(args.project or ()),
+            collections=tuple(args.collection or ()),
+            limit=args.limit,
+            max_ocr_kb=args.max_ocr_kb,
+            max_caption_kb=args.max_caption_kb,
+            refresh=args.refresh,
+            dry_run=args.dry_run,
+        )
+    )
+    if report.dry_run:
+        for position, (system_prompt, user_prompt) in enumerate(report.previews, start=1):
+            print(f"PROMPT {position}", file=sys.stderr)
+            print(system_prompt, file=sys.stderr)
+            print(user_prompt, file=sys.stderr)
+    output = {
+        "projects": list(report.projects),
+        "model": report.model,
+        "items_scanned": report.items_scanned,
+        "routes_processed": report.routes_processed,
+        "skipped_cached": report.skipped_cached,
+        "failed": report.failed,
+        "verdicts": report.verdicts,
+        "mentions": report.mentions,
+        "dropped_anchors": report.dropped_anchors,
+        "dry_run": report.dry_run,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "project_id": item.project_id,
+                "status": item.status,
+                "verdict": item.verdict,
+                "error": item.error,
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
+
+
+def _registry_build(args: argparse.Namespace) -> int:
+    projects = _load_projects(Path(args.projects))
+    if args.profiles:
+        projects = _with_profiles(projects, Path(args.profiles).resolve())
+    derived_root = Path(args.derived_dir).resolve()
+    notes = FileSystemHumanNoteStore(Path(args.vault).resolve() / "candidates")
+    reader = CandidateDecisionReader(notes=notes)
+    report = RegistryBuilder(
+        routes=FileSystemRegistryRouteStore(derived_root),
+        snapshots=FileSystemRegistrySnapshotStore(derived_root),
+        projects={project.id: project.name for project in projects},
+        decisions=reader.iter_decisions(),
+        merges=reader.merges(),
+    ).run(RegistryBuildQuery(dry_run=args.dry_run))
+    output = {
+        "snapshot_id": report.snapshot_id,
+        "snapshot_path": report.snapshot_path,
+        "latest_path": report.latest_path,
+        "candidates": report.candidates,
+        "mentions": report.mentions,
+        "projects": report.projects,
+        "merged": report.merged,
+        "stale_accepted": report.stale_accepted,
+        "dropped": report.dropped,
+        "dry_run": report.dry_run,
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _candidate_decide(args: argparse.Namespace) -> int:
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    notes = FileSystemHumanNoteStore(vault_root / "candidates")
+    reader = CandidateDecisionReader(notes=notes)
+    snapshot = FileSystemRegistrySnapshotStore(derived_root).load_latest()
+    identity: tuple[str, str, CandidateKind, str] | None = None
+    if snapshot is not None:
+        candidate = next(
+            (item for item in snapshot.candidates if item.candidate_id == args.candidate_id),
+            None,
+        )
+        if candidate is not None:
+            identity = (candidate.project_id, candidate.key, candidate.kind, candidate.title)
+    if identity is None:
+        decision = next(
+            (item for item in reader.iter_decisions() if item.candidate_id == args.candidate_id),
+            None,
+        )
+        if decision is not None:
+            identity = (decision.project_id, decision.key, decision.kind, decision.title)
+    if identity is None:
+        print(json.dumps({"error": "unknown candidate_id"}, ensure_ascii=False), file=sys.stderr)
+        return 1
+    project_id, key, kind, title = identity
+    result = CandidateDecisionWriter(
+        notes=notes,
+        clock=lambda: datetime.now(UTC),
+    ).set(
+        candidate_id=args.candidate_id,
+        project_id=project_id,
+        key=key,
+        kind=kind,
+        title=title,
+        status=DecisionStatus(args.status),
+        rationale=args.rationale or "",
+        approved_by=args.approved_by,
+        merge_into=args.merge_into,
+    )
+    output = {
+        "note": str(vault_root / "candidates" / result.note),
+        "created": result.created,
+        "applied": result.applied,
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _refresh(args: argparse.Namespace) -> int:
     plan: list[tuple[str, Callable[[argparse.Namespace], int], argparse.Namespace]] = []
     if args.capture:
@@ -1726,6 +1892,10 @@ def _export_schema(args: argparse.Namespace) -> int:
         "ocr-evaluation": OcrEvaluationSet,
         "ocr-evaluation-report": OcrEvaluationReport,
         "collection-capture": CollectionCaptureDocument,
+        "registry-route": RegistryRoute,
+        "candidate-record": Candidate,
+        "registry-snapshot": RegistrySnapshot,
+        "candidate-decision": CandidateDecision,
     }
     schema = models[args.contract].model_json_schema()
     print(json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True))
@@ -2187,6 +2357,76 @@ def _build_parser() -> argparse.ArgumentParser:
     project_fit.add_argument("--model")
     project_fit.set_defaults(handler=_project_fit)
 
+    registry_extract = subcommands.add_parser(
+        "registry-extract",
+        help="extract anchored candidate mentions from saved items for each project",
+    )
+    registry_extract.add_argument("--projects", default="data/projects.json")
+    registry_extract.add_argument("--profiles", default="data/vault/projects")
+    registry_extract.add_argument("--archive-dir", default="data/archive")
+    registry_extract.add_argument("--derived-dir", default="data/derived")
+    registry_extract.add_argument("--vault", default="data/vault")
+    registry_extract.add_argument(
+        "--project",
+        action="append",
+        help="project id to extract for; repeat to restrict the set",
+    )
+    registry_extract.add_argument(
+        "--collection",
+        action="append",
+        help="collection name; repeat to scan several; omit to scan every source",
+    )
+    registry_extract.add_argument("--limit", type=int, help="process at most N captures")
+    registry_extract.add_argument(
+        "--max-ocr-kb",
+        type=int,
+        default=20,
+        help="cap concatenated OCR text per item in KB",
+    )
+    registry_extract.add_argument(
+        "--max-caption-kb",
+        type=int,
+        default=20,
+        help="cap concatenated caption text per item in KB",
+    )
+    registry_extract.add_argument(
+        "--refresh", action="store_true", help="ignore the cache and re-query"
+    )
+    registry_extract.add_argument("--dry-run", action="store_true", help="report without writing")
+    registry_extract.add_argument("--base-url")
+    registry_extract.add_argument("--api-key")
+    registry_extract.add_argument("--model")
+    registry_extract.set_defaults(handler=_registry_extract)
+
+    registry_build = subcommands.add_parser(
+        "registry-build",
+        help="aggregate extracted routes into a candidate snapshot",
+    )
+    registry_build.add_argument("--projects", default="data/projects.json")
+    registry_build.add_argument("--profiles", default="data/vault/projects")
+    registry_build.add_argument("--derived-dir", default="data/derived")
+    registry_build.add_argument("--vault", default="data/vault")
+    registry_build.add_argument("--dry-run", action="store_true", help="report without writing")
+    registry_build.set_defaults(handler=_registry_build)
+
+    candidate_decide = subcommands.add_parser(
+        "candidate-decide",
+        help="record a human decision on one registry candidate",
+    )
+    candidate_decide.add_argument("--candidate-id", required=True)
+    candidate_decide.add_argument(
+        "--status",
+        choices=tuple(item.value for item in DecisionStatus),
+        default=DecisionStatus.INBOX.value,
+    )
+    candidate_decide.add_argument("--rationale")
+    candidate_decide.add_argument("--approved-by")
+    candidate_decide.add_argument("--merge-into")
+    candidate_decide.add_argument("--projects", default="data/projects.json")
+    candidate_decide.add_argument("--derived-dir", default="data/derived")
+    candidate_decide.add_argument("--vault", default="data/vault")
+    candidate_decide.set_defaults(handler=_candidate_decide)
+
     refresh = subcommands.add_parser(
         "refresh",
         help="re-import a new capture and rebuild generated views, optionally matching projects",
@@ -2309,6 +2549,10 @@ def _build_parser() -> argparse.ArgumentParser:
             "ocr-evaluation",
             "ocr-evaluation-report",
             "collection-capture",
+            "registry-route",
+            "candidate-record",
+            "registry-snapshot",
+            "candidate-decision",
         ),
     )
     schema.set_defaults(handler=_export_schema)
