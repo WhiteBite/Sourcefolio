@@ -455,7 +455,7 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 .result-count { margin-left: auto; font-size: 12px; color: var(--text-faint); }
 .grid {
   display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
 }
 .card {
   background: var(--surface); border: 1px solid var(--border);
@@ -510,14 +510,13 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   overflow: hidden; overflow-wrap: anywhere;
 }
 .meta {
-  display: flex; align-items: center; gap: 9px;
-  margin-top: 5px; font-size: 11.5px; color: var(--text-faint);
-  white-space: nowrap; overflow: hidden;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  row-gap: 2px; margin-top: 5px; font-size: 11.5px; color: var(--text-faint);
 }
 .meta > span:first-child {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.meta-item { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.meta-item { display: inline-flex; align-items: center; gap: 3px; }
 .meta-item svg { width: 12px; height: 12px; }
 .stat { font-variant-numeric: tabular-nums; }
 .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
