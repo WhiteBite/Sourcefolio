@@ -127,7 +127,7 @@ def test_ui_view_writes_single_self_contained_page(tmp_path: Path) -> None:
     payload = extract_payload(html)
     assert payload["schema_version"] == "sourcefolio-ui/v1"
     assert payload["generator"] == "sourcefolio"
-    assert payload["generator_version"] == "3"
+    assert payload["generator_version"] == "4"
     assert payload["counts"] == {"sources": 2, "complete": 1, "partial": 1}
     assert payload["collections"] == [{"name": "Нейронки", "count": 2}]
 
@@ -140,6 +140,7 @@ def test_ui_view_writes_single_self_contained_page(tmp_path: Path) -> None:
         "snippet",
         "marker",
         "hashtags",
+        "thumb_uri",
         "platform",
         "kind",
         "external_id",
