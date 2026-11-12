@@ -15,6 +15,12 @@ from sourcefolio.application.search_evaluation import SearchEvaluationSet
 from sourcefolio.domain.capture import CaptureTask
 from sourcefolio.domain.evidence import EvidenceItem
 from sourcefolio.domain.extraction import ExtractionRecord
+from sourcefolio.domain.registry import (
+    Candidate,
+    CandidateDecision,
+    RegistryRoute,
+    RegistrySnapshot,
+)
 from sourcefolio.domain.source import SourcePacket
 
 CONTRACTS = Path(__file__).parents[2] / "contracts"
@@ -34,6 +40,10 @@ CONTRACTS = Path(__file__).parents[2] / "contracts"
         ("ocr-evaluation-v1.schema.json", OcrEvaluationSet),
         ("ocr-evaluation-report-v1.schema.json", OcrEvaluationReport),
         ("collection-capture-v1.schema.json", CollectionCaptureDocument),
+        ("registry-route-v1.schema.json", RegistryRoute),
+        ("candidate-record-v1.schema.json", Candidate),
+        ("registry-snapshot-v1.schema.json", RegistrySnapshot),
+        ("candidate-decision-v1.schema.json", CandidateDecision),
     ],
 )
 def test_exported_schema_matches_domain_contract(

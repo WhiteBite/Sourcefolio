@@ -1,0 +1,257 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "default": [],
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9:._/-]*$",
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "candidate_id": {
+          "pattern": "^cand_[0-9a-f]{64}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "first_capture_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Capture At"
+        },
+        "fit": {
+          "$ref": "#/$defs/FitLevel"
+        },
+        "key": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9:._/-]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CandidateKind"
+        },
+        "last_capture_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Capture At"
+        },
+        "mention_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Mention Count",
+          "type": "integer"
+        },
+        "mention_ids": {
+          "default": [],
+          "items": {
+            "pattern": "^men_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Mention Ids",
+          "type": "array"
+        },
+        "merged_from": {
+          "default": [],
+          "items": {
+            "pattern": "^cand_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Merged From",
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "candidate-record/v1",
+          "default": "candidate-record/v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "pattern": "^src_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "stale": {
+          "default": false,
+          "title": "Stale",
+          "type": "boolean"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "project_id",
+        "key",
+        "kind",
+        "title",
+        "fit"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "CandidateKind": {
+      "enum": [
+        "tool",
+        "library",
+        "service",
+        "technique",
+        "pattern",
+        "model",
+        "dataset",
+        "repository",
+        "topic",
+        "other"
+      ],
+      "title": "CandidateKind",
+      "type": "string"
+    },
+    "FitLevel": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "FitLevel",
+      "type": "string"
+    },
+    "SnapshotProject": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "minimum": 0,
+          "title": "Accepted",
+          "type": "integer"
+        },
+        "candidate_count": {
+          "minimum": 0,
+          "title": "Candidate Count",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "rejected": {
+          "minimum": 0,
+          "title": "Rejected",
+          "type": "integer"
+        },
+        "stale": {
+          "minimum": 0,
+          "title": "Stale",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "name",
+        "candidate_count",
+        "accepted",
+        "rejected",
+        "stale"
+      ],
+      "title": "SnapshotProject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "dropped_claims": {
+      "minimum": 0,
+      "title": "Dropped Claims",
+      "type": "integer"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "insufficient_signal_routes": {
+      "minimum": 0,
+      "title": "Insufficient Signal Routes",
+      "type": "integer"
+    },
+    "projects": {
+      "items": {
+        "$ref": "#/$defs/SnapshotProject"
+      },
+      "title": "Projects",
+      "type": "array"
+    },
+    "route_count": {
+      "minimum": 0,
+      "title": "Route Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "registry-snapshot/v1",
+      "default": "registry-snapshot/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "pattern": "^snap_[0-9a-f]{64}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "generated_at",
+    "projects",
+    "candidates",
+    "route_count",
+    "insufficient_signal_routes",
+    "dropped_claims"
+  ],
+  "title": "RegistrySnapshot",
+  "type": "object"
+}
