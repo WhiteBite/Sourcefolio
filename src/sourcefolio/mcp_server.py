@@ -328,6 +328,120 @@ def project_fit(
     return _run(arguments)
 
 
+@server.tool(annotations=_annotations("Extract registry mentions", read_only=False))
+def registry_extract(
+    projects: str = "data/projects.json",
+    profiles: str = "data/vault/projects",
+    archive_dir: str = "data/archive",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+    project: list[str] | None = None,
+    collection: list[str] | None = None,
+    limit: int | None = None,
+    max_ocr_kb: int = 20,
+    max_caption_kb: int = 20,
+    refresh: bool = False,
+    dry_run: bool = False,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> str:
+    """Extract anchored candidate mentions from saved items for each project."""
+    arguments = [
+        "registry-extract",
+        "--projects",
+        projects,
+        "--profiles",
+        profiles,
+        "--archive-dir",
+        archive_dir,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+        "--max-ocr-kb",
+        str(max_ocr_kb),
+        "--max-caption-kb",
+        str(max_caption_kb),
+    ]
+    for name in project or []:
+        arguments += ["--project", name]
+    for name in collection or []:
+        arguments += ["--collection", name]
+    if limit is not None:
+        arguments += ["--limit", str(limit)]
+    if refresh:
+        arguments.append("--refresh")
+    if dry_run:
+        arguments.append("--dry-run")
+    if base_url is not None:
+        arguments += ["--base-url", base_url]
+    if api_key is not None:
+        arguments += ["--api-key", api_key]
+    if model is not None:
+        arguments += ["--model", model]
+    return _run(arguments)
+
+
+@server.tool(annotations=_annotations("Build registry snapshot", read_only=False))
+def registry_build(
+    projects: str = "data/projects.json",
+    profiles: str = "data/vault/projects",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+    dry_run: bool = False,
+) -> str:
+    """Aggregate extracted routes into a registry candidate snapshot."""
+    arguments = [
+        "registry-build",
+        "--projects",
+        projects,
+        "--profiles",
+        profiles,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+    ]
+    if dry_run:
+        arguments.append("--dry-run")
+    return _run(arguments)
+
+
+@server.tool(annotations=_annotations("Decide candidate", read_only=False))
+def candidate_decide(
+    candidate_id: str,
+    status: str = "inbox",
+    rationale: str | None = None,
+    approved_by: str | None = None,
+    merge_into: str | None = None,
+    projects: str = "data/projects.json",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+) -> str:
+    """Record a human decision on one registry candidate."""
+    arguments = [
+        "candidate-decide",
+        "--candidate-id",
+        candidate_id,
+        "--status",
+        status,
+        "--projects",
+        projects,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+    ]
+    if rationale is not None:
+        arguments += ["--rationale", rationale]
+    if approved_by is not None:
+        arguments += ["--approved-by", approved_by]
+    if merge_into is not None:
+        arguments += ["--merge-into", merge_into]
+    return _run(arguments)
+
+
 @server.tool(annotations=_annotations("Audit archive", read_only=True))
 def archive_audit(archive_dir: str = "data/archive", verify_bytes: bool = False) -> str:
     """Verify artifact references and optionally hash all archived bytes."""

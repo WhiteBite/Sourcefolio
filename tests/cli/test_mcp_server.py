@@ -160,3 +160,239 @@ def test_ask_tool_no_llm_on_empty_archive(tmp_path: Path) -> None:
     assert output
     assert '"status"' in output
     assert not output.startswith("error")
+
+
+def _stub_cli(monkeypatch: pytest.MonkeyPatch, code: int = 0) -> list[list[str]]:
+    pytest.importorskip("mcp")
+    from sourcefolio import mcp_server
+
+    calls: list[list[str]] = []
+
+    def fake_main(arguments: list[str]) -> int:
+        calls.append(list(arguments))
+        return code
+
+    monkeypatch.setattr(mcp_server.cli, "main", fake_main)
+    return calls
+
+
+def test_registry_extract_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.registry_extract(
+        projects="p.json",
+        profiles="profiles",
+        archive_dir="arch",
+        derived_dir="der",
+        vault="v",
+        project=["alpha", "beta"],
+        collection=["One", "Two"],
+        limit=5,
+        max_ocr_kb=11,
+        max_caption_kb=7,
+        refresh=True,
+        dry_run=True,
+        base_url="http://llm",
+        api_key="k",
+        model="m",
+    )
+
+    assert calls == [
+        [
+            "registry-extract",
+            "--projects",
+            "p.json",
+            "--profiles",
+            "profiles",
+            "--archive-dir",
+            "arch",
+            "--derived-dir",
+            "der",
+            "--vault",
+            "v",
+            "--max-ocr-kb",
+            "11",
+            "--max-caption-kb",
+            "7",
+            "--project",
+            "alpha",
+            "--project",
+            "beta",
+            "--collection",
+            "One",
+            "--collection",
+            "Two",
+            "--limit",
+            "5",
+            "--refresh",
+            "--dry-run",
+            "--base-url",
+            "http://llm",
+            "--api-key",
+            "k",
+            "--model",
+            "m",
+        ]
+    ]
+
+
+def test_registry_extract_tool_omits_optional_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.registry_extract()
+
+    assert calls == [
+        [
+            "registry-extract",
+            "--projects",
+            "data/projects.json",
+            "--profiles",
+            "data/vault/projects",
+            "--archive-dir",
+            "data/archive",
+            "--derived-dir",
+            "data/derived",
+            "--vault",
+            "data/vault",
+            "--max-ocr-kb",
+            "20",
+            "--max-caption-kb",
+            "20",
+        ]
+    ]
+
+
+def test_registry_build_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.registry_build(
+        projects="p.json",
+        profiles="profiles",
+        derived_dir="der",
+        vault="v",
+        dry_run=True,
+    )
+
+    assert calls == [
+        [
+            "registry-build",
+            "--projects",
+            "p.json",
+            "--profiles",
+            "profiles",
+            "--derived-dir",
+            "der",
+            "--vault",
+            "v",
+            "--dry-run",
+        ]
+    ]
+
+
+def test_registry_build_tool_omits_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.registry_build()
+
+    assert calls == [
+        [
+            "registry-build",
+            "--projects",
+            "data/projects.json",
+            "--profiles",
+            "data/vault/projects",
+            "--derived-dir",
+            "data/derived",
+            "--vault",
+            "data/vault",
+        ]
+    ]
+
+
+def test_candidate_decide_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.candidate_decide(
+        candidate_id="cand_1",
+        status="accepted",
+        rationale="why",
+        approved_by="me",
+        merge_into="cand_2",
+        projects="p.json",
+        derived_dir="der",
+        vault="v",
+    )
+
+    assert calls == [
+        [
+            "candidate-decide",
+            "--candidate-id",
+            "cand_1",
+            "--status",
+            "accepted",
+            "--projects",
+            "p.json",
+            "--derived-dir",
+            "der",
+            "--vault",
+            "v",
+            "--rationale",
+            "why",
+            "--approved-by",
+            "me",
+            "--merge-into",
+            "cand_2",
+        ]
+    ]
+
+
+def test_candidate_decide_tool_omits_optional_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.candidate_decide(candidate_id="cand_1")
+
+    assert calls == [
+        [
+            "candidate-decide",
+            "--candidate-id",
+            "cand_1",
+            "--status",
+            "inbox",
+            "--projects",
+            "data/projects.json",
+            "--derived-dir",
+            "data/derived",
+            "--vault",
+            "data/vault",
+        ]
+    ]
+
+
+def test_registry_tools_surface_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_cli(monkeypatch, code=3)
+    from sourcefolio import mcp_server
+
+    assert mcp_server.registry_extract().startswith("error (exit 3)")
+    assert mcp_server.registry_build().startswith("error (exit 3)")
+    assert mcp_server.candidate_decide(candidate_id="cand_1").startswith("error (exit 3)")
+
+
+def test_registry_tool_annotations() -> None:
+    pytest.importorskip("mcp")
+    import asyncio
+
+    from sourcefolio import mcp_server
+
+    tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
+
+    for name in ("registry_extract", "registry_build", "candidate_decide"):
+        annotations = tools[name].annotations
+        assert annotations is not None
+        assert annotations.read_only_hint is False
+    assert "candidate_id" in tools["candidate_decide"].input_schema["required"]
