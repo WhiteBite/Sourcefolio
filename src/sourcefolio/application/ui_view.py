@@ -394,7 +394,7 @@ body {
   font-family: var(--sans); font-size: 15px; line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
+.wrap { max-width: none; margin: 0 auto; padding: 0 20px; }
 .topbar {
   position: sticky; top: 0; z-index: 20; background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -424,10 +424,8 @@ h1 { font-family: var(--serif); font-size: 17px; margin: 0; font-weight: 600; }
 .search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 main.wrap { padding-top: 12px; padding-bottom: 80px; }
 .chipbar {
-  display: flex; gap: 7px; overflow-x: auto; padding: 2px 0 12px;
-  scrollbar-width: none;
+  display: flex; gap: 7px; flex-wrap: wrap; padding: 2px 0 12px;
 }
-.chipbar::-webkit-scrollbar { display: none; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
