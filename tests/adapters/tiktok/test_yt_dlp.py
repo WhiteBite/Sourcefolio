@@ -99,6 +99,13 @@ info = {"id": "123", "title": "No media", "webpage_url": url}
 info = {"id": "123", "webpage_url": url}
 (directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
 """,
+        "cover": """
+(directory / "source.mp4").write_bytes(b"downloaded-video")
+if "--write-thumbnail" in sys.argv:
+    (directory / "source.jpg").write_bytes(b"cover-image")
+info = {"id": "123", "title": "A useful video", "webpage_url": url}
+(directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
+""",
     }
     return write_fake_executable(path, common + behaviors[behavior])
 
@@ -159,6 +166,30 @@ def test_subprocess_capture_archives_sanitized_media_and_metadata(tmp_path: Path
                 assert b"thumbnail-secret" not in content
                 assert b"secret-format-url" not in content
         assert list((tmp_path / "tmp").iterdir()) == []
+        assert not any(
+            artifact.role == ArtifactRole.ORIGINAL_IMAGE for artifact in packet.artifacts
+        )
+
+
+def test_video_capture_archives_the_platform_cover_as_original_image(tmp_path: Path) -> None:
+    media_adapter = adapter(tmp_path, "cover")
+
+    capture = asyncio.run(media_adapter.capture(task()))
+    try:
+        assert capture.satisfied is True
+        assert capture.source.kind == SourceKind.VIDEO
+        roles = [artifact.role for artifact in capture.artifacts]
+        assert roles.count(ArtifactRole.ORIGINAL_VIDEO) == 1
+        image = next(
+            artifact
+            for artifact in capture.artifacts
+            if artifact.role == ArtifactRole.ORIGINAL_IMAGE
+        )
+        assert image.media_type == "image/jpeg"
+        assert image.stream.read() == b"cover-image"
+    finally:
+        capture.close()
+    assert list((tmp_path / "tmp").iterdir()) == []
 
 
 @pytest.mark.parametrize(

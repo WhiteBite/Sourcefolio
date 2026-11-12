@@ -99,7 +99,7 @@ sourcefolio tiktok-download /path/to/user_data.json \
   --limit 10
 ```
 
-`--limit 10` подходит для первого пилота. `tiktok-download` по-прежнему не объявляет slideshow решённым. Для слайдшоу используется отдельная operation:
+`--limit 10` подходит для первого пилота. `tiktok-download` по-прежнему не объявляет slideshow решённым. Вместе с видео архивируется обложка поста (`--write-thumbnail`): она сохраняется как `original_image` и даёт превью в `render-ui`. Для слайдшоу используется отдельная operation:
 
 ```bash
 python -m pip install -e '.[slides]'

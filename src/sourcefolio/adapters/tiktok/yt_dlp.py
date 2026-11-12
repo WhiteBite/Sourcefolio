@@ -128,6 +128,7 @@ class YtDlpTikTokAdapter:
                 "adapter": "yt-dlp-tiktok/v1",
                 "format_selector": self.config.format_selector,
                 "max_artifact_bytes": self.config.max_artifact_bytes,
+                "write_thumbnail": True,
             }
         )
         digest = hashlib.sha256(operation_fingerprint.encode("utf-8")).hexdigest()[:16]
@@ -225,6 +226,7 @@ class YtDlpTikTokAdapter:
             "--format",
             self.config.format_selector,
             "--write-info-json",
+            "--write-thumbnail",
             "--paths",
             str(directory),
             "--output",
@@ -292,9 +294,13 @@ class YtDlpTikTokAdapter:
         has_video = any(
             path.suffix.lower() not in _IMAGE_SUFFIXES | _AUDIO_SUFFIXES for path in media_files
         )
-        if source.kind == SourceKind.SLIDESHOW or (media_files and not has_video):
+        if source.kind == SourceKind.SLIDESHOW:
             limitations.append(
                 "slideshow requires a dedicated resolver; only returned media was archived"
+            )
+        elif media_files and not has_video:
+            limitations.append(
+                "yt-dlp returned no video artifact; only auxiliary media was archived"
             )
         if not media_files:
             limitations.append("yt-dlp returned metadata but no media artifact")
