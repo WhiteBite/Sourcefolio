@@ -8,13 +8,26 @@ from pathlib import Path
 from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
+    FileSystemRegistryRouteStore,
+    FileSystemRegistrySnapshotStore,
     FileSystemSourcePacketRepository,
 )
 from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
 from sourcefolio.application.archive_capture import ArchiveCapture
 from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
+from sourcefolio.application.registry_queue import RegistryQueueBuilder
 from sourcefolio.application.ui_view import UiViewProjection
-from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.common import ActorKind, Provenance, content_id
+from sourcefolio.domain.registry import (
+    AnchorField,
+    CandidateKind,
+    CandidateMention,
+    FitLevel,
+    MentionAnchor,
+    RegistryRoute,
+    RouteVerdict,
+)
 from sourcefolio.domain.source import (
     ArtifactRole,
     CaptureStatus,
@@ -25,6 +38,7 @@ from sourcefolio.domain.source import (
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 DATA_MARKER = '<script id="sourcefolio-data" type="application/json">'
+REGISTRY_QUOTE = "Alpha Tool is a useful library"
 
 
 def add_packet(
@@ -85,6 +99,7 @@ def build_projection(
     *,
     limit: int | None = None,
     notes: FileSystemHumanNoteStore | None = None,
+    registry: RegistryQueueBuilder | None = None,
 ) -> UiViewProjection:
     return UiViewProjection(
         packets=FileSystemSourcePacketRepository(archive),
@@ -92,6 +107,78 @@ def build_projection(
         store=FileSystemProjectionStore(tmp_path / "vault" / "_generated" / "sourcefolio"),
         notes=notes,
         limit=limit,
+        registry=registry,
+    )
+
+
+def write_registry(derived: Path, *, project_id: str = "sourcefolio") -> None:
+    anchor = MentionAnchor(
+        field=AnchorField.DESCRIPTION,
+        quote=REGISTRY_QUOTE,
+        start_char=0,
+        end_char=len(REGISTRY_QUOTE),
+    )
+    mention = CandidateMention(
+        mention_id=content_id(
+            "men",
+            {
+                "candidate_key": "tool/alpha",
+                "kind": CandidateKind.TOOL,
+                "title": "Alpha Tool",
+                "fit": FitLevel.HIGH,
+                "anchor": anchor.model_dump(mode="json"),
+            },
+        ),
+        candidate_key="tool/alpha",
+        kind=CandidateKind.TOOL,
+        title="Alpha Tool",
+        fit=FitLevel.HIGH,
+        anchor=anchor,
+    )
+    identity = {
+        "source_id": "src_" + "1" * 64,
+        "capture_id": "cap_" + "2" * 64,
+        "project_id": project_id,
+        "model": "test-model",
+        "prompt_fingerprint": "0123456789abcdef",
+    }
+    routes = FileSystemRegistryRouteStore(derived)
+    routes.save(
+        RegistryRoute(
+            route_id=content_id("rt", identity),
+            source_id="src_" + "1" * 64,
+            capture_id="cap_" + "2" * 64,
+            source_url="https://example.com/alpha",
+            source_title="Alpha source",
+            project_id=project_id,
+            model="test-model",
+            prompt_fingerprint="0123456789abcdef",
+            verdict=RouteVerdict.CANDIDATE,
+            mentions=(mention,),
+            fit=FitLevel.HIGH,
+            pre_rank=5,
+            captured_at=NOW,
+            provenance=Provenance(
+                actor_kind=ActorKind.TOOL,
+                actor_id="agent",
+                method="registry-test",
+            ),
+            created_at=NOW,
+        )
+    )
+    RegistryBuilder(
+        routes=routes,
+        snapshots=FileSystemRegistrySnapshotStore(derived),
+        projects={project_id: "Sourcefolio"},
+        clock=lambda: NOW,
+    ).run(RegistryBuildQuery())
+
+
+def queue_builder(derived: Path, *, project_id: str = "sourcefolio") -> RegistryQueueBuilder:
+    return RegistryQueueBuilder(
+        snapshots=FileSystemRegistrySnapshotStore(derived),
+        routes=FileSystemRegistryRouteStore(derived),
+        projects={project_id: "Sourcefolio"},
     )
 
 
@@ -337,3 +424,76 @@ def test_ui_view_marker_matches_collection_initial(tmp_path: Path) -> None:
     item = extract_payload(read_page(tmp_path))["items"][0]
 
     assert item["marker"] == item["collections"][0][:1].upper()
+
+
+def test_ui_view_embeds_registry_queue(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Ролик")
+    derived = tmp_path / "derived"
+    write_registry(derived)
+
+    build_projection(archive, tmp_path, registry=queue_builder(derived)).rebuild()
+    payload = extract_payload(read_page(tmp_path))
+    registry = payload["registry"]
+    assert isinstance(registry, dict)
+    assert set(registry) == {"snapshot_id", "generated_at", "projects"}
+    assert registry["snapshot_id"].startswith("snap_")
+    assert registry["generated_at"] == NOW.isoformat()
+
+    projects = registry["projects"]
+    assert isinstance(projects, list) and len(projects) == 1
+    project = projects[0]
+    assert set(project) == {"project_id", "name", "candidates"}
+    assert project["project_id"] == "sourcefolio"
+    assert project["name"] == "Sourcefolio"
+
+    candidates = project["candidates"]
+    assert isinstance(candidates, list) and len(candidates) == 1
+    candidate = candidates[0]
+    assert set(candidate) == {
+        "candidate_id",
+        "title",
+        "kind",
+        "key",
+        "fit",
+        "mention_count",
+        "source_count",
+        "score",
+        "outcome",
+        "mentions",
+    }
+    assert candidate["title"] == "Alpha Tool"
+    assert candidate["kind"] == "tool"
+    assert candidate["key"] == "tool/alpha"
+    assert candidate["fit"] == "high"
+    assert candidate["mention_count"] == 1
+    assert candidate["source_count"] == 1
+    assert candidate["score"] == 5
+    assert candidate["outcome"] == "inbox"
+
+    mentions = candidate["mentions"]
+    assert isinstance(mentions, list) and len(mentions) == 1
+    mention = mentions[0]
+    assert set(mention) == {
+        "source_id",
+        "capture_id",
+        "url",
+        "title",
+        "quote",
+        "field",
+        "fit",
+    }
+    assert mention["quote"] == REGISTRY_QUOTE
+    assert mention["url"] == "https://example.com/alpha"
+    assert mention["title"] == "Alpha source"
+    assert mention["field"] == "description"
+    assert mention["fit"] == "high"
+
+
+def test_ui_view_omits_registry_without_builder(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Ролик")
+
+    build_projection(archive, tmp_path).rebuild()
+
+    assert "registry" not in extract_payload(read_page(tmp_path))

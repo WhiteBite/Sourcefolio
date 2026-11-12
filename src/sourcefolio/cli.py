@@ -116,6 +116,8 @@ from sourcefolio.application.project_fit import (
 from sourcefolio.application.project_profiles import ProjectProfileScaffolder
 from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
 from sourcefolio.application.registry_extract import RegistryExtractor, RegistryExtractQuery
+from sourcefolio.application.registry_queue import RegistryQueueBuilder
+from sourcefolio.application.registry_views import RegistryViewProjection
 from sourcefolio.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
 from sourcefolio.application.repo_nodes import RepoNodeProjection
 from sourcefolio.application.search import SearchIndexBuilder
@@ -124,7 +126,7 @@ from sourcefolio.application.slides_fetch import FetchSlidesQuery, FetchSlidesRu
 from sourcefolio.application.source_cards import SourceCardProjection
 from sourcefolio.application.triage import IdeaScaffolder
 from sourcefolio.application.ui_serve import UiHttpServer
-from sourcefolio.application.ui_view import UiViewProjection
+from sourcefolio.application.ui_view import UiViewProjection, registry_view
 from sourcefolio.domain.capture import CaptureTask
 from sourcefolio.domain.common import ContractModel, Provenance, UtcDateTime
 from sourcefolio.domain.evidence import EvidenceItem
@@ -241,6 +243,27 @@ def _with_profiles(projects: tuple[Project, ...], profiles_root: Path) -> tuple[
         profile = note_body(content) if content is not None else project.profile
         result.append(replace(project, profile=profile))
     return tuple(result)
+
+
+def _project_names(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    return {project.id: project.name for project in _load_projects(path)}
+
+
+def _registry_queue_builder(
+    *,
+    projects_path: Path,
+    derived_root: Path,
+    vault_root: Path,
+) -> RegistryQueueBuilder:
+    reader = CandidateDecisionReader(notes=FileSystemHumanNoteStore(vault_root / "candidates"))
+    return RegistryQueueBuilder(
+        routes=FileSystemRegistryRouteStore(derived_root),
+        snapshots=FileSystemRegistrySnapshotStore(derived_root),
+        decisions=reader.iter_decisions(),
+        projects=_project_names(projects_path),
+    )
 
 
 def _archive_capture(args: argparse.Namespace) -> int:
@@ -933,15 +956,26 @@ def _render_ui(args: argparse.Namespace) -> int:
     derived_root = Path(args.derived_dir).resolve()
     vault_root = Path(args.vault).resolve()
     generated_root = vault_root / "_generated" / "sourcefolio"
+    store = FileSystemProjectionStore(generated_root)
+    builder = _registry_queue_builder(
+        projects_path=Path(getattr(args, "projects", "data/projects.json")),
+        derived_root=derived_root,
+        vault_root=vault_root,
+    )
     projection = UiViewProjection(
         packets=FileSystemSourcePacketRepository(archive_root),
         artifacts=FileSystemArtifactStore(archive_root),
-        store=FileSystemProjectionStore(generated_root),
+        store=store,
         extractions=FileSystemExtractionRepository(derived_root),
         notes=FileSystemHumanNoteStore(vault_root / "ideas"),
         limit=args.limit,
+        registry=builder,
     )
     items = projection.rebuild()
+    store.replace_namespace(
+        RegistryViewProjection.NAMESPACE,
+        RegistryViewProjection().render(builder.build()),
+    )
     output_path = generated_root / UiViewProjection.NAMESPACE / "index.html"
     if args.open:
         webbrowser.open(output_path.as_uri())
@@ -959,6 +993,11 @@ def _build_serve_server(args: argparse.Namespace) -> UiHttpServer:
     derived_root = Path(args.derived_dir).resolve()
     vault_root = Path(args.vault).resolve()
     packets_repository = FileSystemSourcePacketRepository(archive_root)
+    builder = _registry_queue_builder(
+        projects_path=Path(getattr(args, "projects", "data/projects.json")),
+        derived_root=derived_root,
+        vault_root=vault_root,
+    )
     projection = UiViewProjection(
         packets=packets_repository,
         artifacts=FileSystemArtifactStore(archive_root),
@@ -966,12 +1005,18 @@ def _build_serve_server(args: argparse.Namespace) -> UiHttpServer:
         extractions=FileSystemExtractionRepository(derived_root),
         notes=FileSystemHumanNoteStore(vault_root / "ideas"),
         uri_prefix="/artifacts/",
+        registry=builder,
     )
     return UiHttpServer(
         projection=projection,
         artifacts=FileSystemArtifactStore(archive_root),
         notes=NoteWriter(notes=FileSystemHumanNoteStore(vault_root / "ideas")),
         packets=latest_capture_per_source(packets_repository.iter_packets()),
+        registry=builder,
+        outcomes=CandidateDecisionWriter(
+            notes=FileSystemHumanNoteStore(vault_root / "candidates"),
+            clock=lambda: datetime.now(UTC),
+        ),
         host=args.host,
         port=args.port,
     )
@@ -1513,6 +1558,32 @@ def _registry_build(args: argparse.Namespace) -> int:
         "dry_run": report.dry_run,
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _registry_queue(args: argparse.Namespace) -> int:
+    derived_root = Path(args.derived_dir).resolve()
+    vault_root = Path(args.vault).resolve()
+    builder = _registry_queue_builder(
+        projects_path=Path(args.projects),
+        derived_root=derived_root,
+        vault_root=vault_root,
+    )
+    queue = builder.build(
+        project_ids=tuple(args.project or ()),
+        status=DecisionStatus(args.status) if args.status else None,
+        limit=args.limit,
+    )
+    documents = RegistryViewProjection().render(queue)
+    if not args.dry_run:
+        FileSystemProjectionStore(vault_root / "_generated" / "sourcefolio").replace_namespace(
+            RegistryViewProjection.NAMESPACE,
+            documents,
+        )
+    if args.format == "markdown":
+        print("\n".join(document.content for document in documents), end="")
+    else:
+        print(json.dumps(registry_view(queue), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -2408,6 +2479,33 @@ def _build_parser() -> argparse.ArgumentParser:
     registry_build.add_argument("--vault", default="data/vault")
     registry_build.add_argument("--dry-run", action="store_true", help="report without writing")
     registry_build.set_defaults(handler=_registry_build)
+
+    registry_queue = subcommands.add_parser(
+        "registry-queue",
+        help="render the candidate queue for projects and persist registry views",
+    )
+    registry_queue.add_argument("--projects", default="data/projects.json")
+    registry_queue.add_argument("--profiles", default="data/vault/projects")
+    registry_queue.add_argument("--derived-dir", default="data/derived")
+    registry_queue.add_argument("--vault", default="data/vault")
+    registry_queue.add_argument(
+        "--project",
+        action="append",
+        help="project id to include; repeat to restrict the set",
+    )
+    registry_queue.add_argument(
+        "--status",
+        choices=tuple(item.value for item in DecisionStatus),
+    )
+    registry_queue.add_argument("--limit", type=int, help="cap candidates per project")
+    registry_queue.add_argument(
+        "--format",
+        dest="format",
+        choices=("json", "markdown"),
+        default="json",
+    )
+    registry_queue.add_argument("--dry-run", action="store_true", help="report without writing")
+    registry_queue.set_defaults(handler=_registry_queue)
 
     candidate_decide = subcommands.add_parser(
         "candidate-decide",

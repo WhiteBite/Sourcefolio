@@ -10,9 +10,15 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
 
+from sourcefolio.application.candidate_notes import CandidateDecisionWriter
 from sourcefolio.application.note import NoteWriter
 from sourcefolio.application.ports import ArtifactStore
-from sourcefolio.application.ui_view import UiViewProjection, display_title_for
+from sourcefolio.application.registry_queue import (
+    QueueCandidate,
+    RegistryQueueBuilder,
+)
+from sourcefolio.application.ui_view import UiViewProjection, display_title_for, registry_view
+from sourcefolio.domain.registry import DecisionStatus
 from sourcefolio.domain.source import SourcePacket
 
 _ARTIFACT_PATH = re.compile(r"^/artifacts/(art_[0-9a-f]{64})$")
@@ -39,11 +45,15 @@ class _Context:
         artifacts: ArtifactStore,
         notes: NoteWriter,
         packets: Mapping[str, SourcePacket],
+        registry: RegistryQueueBuilder | None = None,
+        outcomes: CandidateDecisionWriter | None = None,
     ) -> None:
         self.projection = projection
         self.artifacts = artifacts
         self.notes = notes
         self.packets = dict(packets)
+        self.registry = registry
+        self.outcomes = outcomes
         self.media_types = {
             artifact.artifact_id: artifact.media_type
             for packet in packets.values()
@@ -51,6 +61,7 @@ class _Context:
         }
         self.render_lock = threading.Lock()
         self.note_lock = threading.Lock()
+        self.decision_lock = threading.Lock()
 
 
 def _parse_range(header: str | None, size: int) -> tuple[int, int, bool] | None:
@@ -92,6 +103,9 @@ class _Handler(BaseHTTPRequestHandler):
                 document = self._context.projection.render()
             self._send(HTTPStatus.OK, "text/html; charset=utf-8", document.content.encode())
             return
+        if path == "/api/registry":
+            self._send_registry()
+            return
         match = _ARTIFACT_PATH.fullmatch(path)
         if match is not None:
             self._send_artifact(match.group(1))
@@ -99,35 +113,121 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_POST(self) -> None:
-        if self.path.split("?", 1)[0] != "/api/note":
-            self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+        path = self.path.split("?", 1)[0]
+        if path == "/api/note":
+            payload = self._read_json()
+            if payload is not None:
+                self._update_note(payload)
             return
+        if path == "/api/candidate":
+            if self._context.registry is None or self._context.outcomes is None:
+                self._send_json(
+                    HTTPStatus.NOT_FOUND,
+                    {"error": "registry not configured"},
+                )
+                return
+            payload = self._read_json()
+            if payload is not None:
+                self._update_candidate(payload)
+            return
+        self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
+    def _read_json(self) -> dict[str, object] | None:
         if self.headers.get("X-Sourcefolio") != "1":
             self._send_json(HTTPStatus.FORBIDDEN, {"error": "missing X-Sourcefolio header"})
-            return
+            return None
         content_type = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip()
         if content_type != "application/json":
             self._send_json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "expected json"})
-            return
+            return None
         try:
             length = int(self.headers.get("Content-Length") or "0")
         except ValueError:
             length = 0
         if length <= 0:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
-            return
+            return None
         if length > _MAX_BODY_BYTES:
             self._send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "body is too large"})
-            return
+            return None
         try:
             parsed: object = json.loads(self.rfile.read(length).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-            return
+            return None
         if not isinstance(parsed, dict):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+            return None
+        return {str(key): value for key, value in parsed.items()}
+
+    def _send_registry(self) -> None:
+        registry = self._context.registry
+        if registry is None:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "registry not configured"})
             return
-        self._update_note({str(key): value for key, value in parsed.items()})
+        self._send_json(HTTPStatus.OK, registry_view(registry.build()))
+
+    def _find_candidate(self, candidate_id: str) -> tuple[str, QueueCandidate] | None:
+        registry = self._context.registry
+        if registry is None:
+            return None
+        queue = registry.build()
+        for project in queue.projects:
+            for candidate in project.candidates:
+                if candidate.candidate_id == candidate_id:
+                    return (project.project_id, candidate)
+        return None
+
+    def _update_candidate(self, payload: dict[str, object]) -> None:
+        outcomes = self._context.outcomes
+        if outcomes is None:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "registry not configured"})
+            return
+        candidate_id = payload.get("candidate_id")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "candidate_id is required"})
+            return
+        raw_status = payload.get("status")
+        allowed = {item.value for item in DecisionStatus}
+        if not isinstance(raw_status, str) or raw_status not in allowed:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid status"})
+            return
+        rationale = payload.get("rationale")
+        if rationale is not None and not isinstance(rationale, str):
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid rationale"})
+            return
+        approved_by = payload.get("approved_by")
+        if approved_by is not None and not isinstance(approved_by, str):
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid approved_by"})
+            return
+        status = DecisionStatus(raw_status)
+        if status != DecisionStatus.INBOX and (approved_by is None or not approved_by.strip()):
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "approved_by is required"})
+            return
+        found = self._find_candidate(candidate_id)
+        if found is None:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown candidate_id"})
+            return
+        project_id, candidate = found
+        try:
+            with self._context.decision_lock:
+                result = outcomes.set(
+                    candidate_id=candidate.candidate_id,
+                    project_id=project_id,
+                    key=candidate.key,
+                    kind=candidate.kind,
+                    title=candidate.title,
+                    status=status,
+                    rationale=rationale or "",
+                    approved_by=approved_by,
+                )
+        except ValueError as error:
+            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+            return
+        self._send_json(
+            HTTPStatus.OK,
+            {"note": result.note, "created": result.created, "applied": result.applied},
+        )
 
     def _update_note(self, payload: dict[str, object]) -> None:
         source_id = payload.get("source_id")
@@ -264,6 +364,8 @@ class UiHttpServer:
         artifacts: ArtifactStore,
         notes: NoteWriter,
         packets: Mapping[str, SourcePacket],
+        registry: RegistryQueueBuilder | None = None,
+        outcomes: CandidateDecisionWriter | None = None,
         host: str = "127.0.0.1",
         port: int = 8765,
     ) -> None:
@@ -272,6 +374,8 @@ class UiHttpServer:
             artifacts=artifacts,
             notes=notes,
             packets=packets,
+            registry=registry,
+            outcomes=outcomes,
         )
         self._server = _UiHttpServer((host, port), self._context)
 

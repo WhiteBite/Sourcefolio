@@ -15,6 +15,7 @@ from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.ports import ArtifactLocator, SourcePacketRepository
 from sourcefolio.application.projection_ports import HumanNoteReader, ProjectionStore
 from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.registry_queue import RegistryQueue, RegistryQueueBuilder
 from sourcefolio.application.saved_index import saved_index, saved_int, saved_str
 from sourcefolio.domain.extraction import ExtractionRecord
 from sourcefolio.domain.source import ArtifactRef, CaptureStatus, SourcePacket
@@ -196,6 +197,46 @@ def _media_state(packet: SourcePacket) -> str:
     return "partial"
 
 
+def registry_view(queue: RegistryQueue) -> dict[str, object]:
+    return {
+        "snapshot_id": queue.snapshot_id,
+        "generated_at": queue.generated_at,
+        "projects": [
+            {
+                "project_id": project.project_id,
+                "name": project.name,
+                "candidates": [
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "title": candidate.title,
+                        "kind": candidate.kind.value,
+                        "key": candidate.key,
+                        "fit": candidate.fit.value,
+                        "mention_count": candidate.mention_count,
+                        "source_count": candidate.source_count,
+                        "score": candidate.score,
+                        "outcome": candidate.outcome,
+                        "mentions": [
+                            {
+                                "source_id": mention.source_id,
+                                "capture_id": mention.capture_id,
+                                "url": mention.url,
+                                "title": mention.title,
+                                "quote": mention.quote,
+                                "field": mention.field,
+                                "fit": mention.fit.value,
+                            }
+                            for mention in candidate.mentions
+                        ],
+                    }
+                    for candidate in project.candidates
+                ],
+            }
+            for project in queue.projects
+        ],
+    }
+
+
 class UiViewProjection:
     NAMESPACE = "ui"
 
@@ -210,6 +251,7 @@ class UiViewProjection:
         limit: int | None = None,
         clock: Callable[[], datetime] | None = None,
         uri_prefix: str = "",
+        registry: RegistryQueueBuilder | None = None,
     ) -> None:
         if limit is not None and limit < 1:
             raise ValueError("limit must be at least 1")
@@ -221,6 +263,7 @@ class UiViewProjection:
         self._limit = limit
         self._clock = clock or (lambda: datetime.now(UTC))
         self._uri_prefix = uri_prefix
+        self._registry = registry
 
     def rebuild(self) -> int:
         payload = self._build_payload()
@@ -331,7 +374,7 @@ class UiViewProjection:
                 key=lambda item: (-item[1], item[0].casefold()),
             )
         ]
-        return {
+        payload: dict[str, object] = {
             "schema_version": _SCHEMA_VERSION,
             "generated_at": self._clock().isoformat(),
             "generator": "sourcefolio",
@@ -344,6 +387,9 @@ class UiViewProjection:
             "collections": collections,
             "items": items,
         }
+        if self._registry is not None:
+            payload["registry"] = registry_view(self._registry.build())
+        return payload
 
 
 def _render_html(payload: dict[str, object]) -> str:

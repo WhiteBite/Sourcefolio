@@ -136,6 +136,21 @@ def build_arguments(tmp_path: Path, *extra: str) -> list[str]:
     ]
 
 
+def queue_arguments(tmp_path: Path, *extra: str) -> list[str]:
+    return [
+        "registry-queue",
+        "--projects",
+        str(tmp_path / "projects.json"),
+        "--profiles",
+        str(tmp_path / "profiles"),
+        "--derived-dir",
+        str(tmp_path / "derived"),
+        "--vault",
+        str(tmp_path / "vault"),
+        *extra,
+    ]
+
+
 def decide_arguments(tmp_path: Path, candidate_id: str, *extra: str) -> list[str]:
     return [
         "candidate-decide",
@@ -211,6 +226,51 @@ def test_registry_build_writes_snapshot(tmp_path: Path, capsys, monkeypatch) -> 
     )
     assert snapshot_path.is_file()
     assert (tmp_path / "derived" / "registry" / "latest.json").is_file()
+
+
+def test_registry_queue_prints_queue(tmp_path: Path, capsys, monkeypatch) -> None:
+    prepare(tmp_path, monkeypatch)
+    assert main(extract_arguments(tmp_path)) == 0
+    capsys.readouterr()
+    assert main(build_arguments(tmp_path)) == 0
+    capsys.readouterr()
+
+    assert main(queue_arguments(tmp_path)) == 0
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["snapshot_id"].startswith("snap_")
+    project = output["projects"][0]
+    assert project["project_id"] == "sourcefolio"
+    assert project["name"] == "Sourcefolio"
+    candidate = project["candidates"][0]
+    assert candidate["title"] == "Alpha Tool"
+    assert candidate["outcome"] == "inbox"
+    registry_root = tmp_path / "vault" / "_generated" / "sourcefolio" / "registry"
+    assert (registry_root / "index.md").is_file()
+
+
+def test_registry_queue_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
+    prepare(tmp_path, monkeypatch)
+    assert main(extract_arguments(tmp_path)) == 0
+    capsys.readouterr()
+    assert main(build_arguments(tmp_path)) == 0
+    capsys.readouterr()
+
+    assert main(queue_arguments(tmp_path, "--format", "markdown")) == 0
+
+    assert "### Alpha Tool" in capsys.readouterr().out
+
+
+def test_registry_queue_dry_run_writes_nothing(tmp_path: Path, capsys, monkeypatch) -> None:
+    prepare(tmp_path, monkeypatch)
+    assert main(extract_arguments(tmp_path)) == 0
+    capsys.readouterr()
+    assert main(build_arguments(tmp_path)) == 0
+    capsys.readouterr()
+
+    assert main(queue_arguments(tmp_path, "--dry-run")) == 0
+
+    assert not (tmp_path / "vault" / "_generated" / "sourcefolio" / "registry").exists()
 
 
 def test_candidate_decide_writes_note(tmp_path: Path, capsys, monkeypatch) -> None:
