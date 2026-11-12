@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
+import pytest
+
 from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemSourcePacketRepository,
@@ -12,6 +14,7 @@ from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStor
 from sourcefolio.application.archive_capture import ArchiveCapture
 from sourcefolio.application.collection_index import CollectionIndexProjection
 from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
+from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.obsidian_views import ObsidianOverviewProjection
 from sourcefolio.application.source_cards import SourceCardProjection
 from sourcefolio.domain.common import ActorKind, Provenance
@@ -27,7 +30,24 @@ EARLIER = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 
 
-def _capture(root: Path, *, captured_at: datetime, title: str) -> SourcePacket:
+def _capture(
+    root: Path, *, captured_at: datetime, title: str, extra_artifacts: int = 0
+) -> SourcePacket:
+    artifacts = [
+        ArtifactPayload(
+            role=ArtifactRole.CAPTION_TEXT,
+            media_type="text/plain",
+            stream=BytesIO(b"caption"),
+        )
+    ]
+    artifacts.extend(
+        ArtifactPayload(
+            role=ArtifactRole.CAPTION_TEXT,
+            media_type="text/plain",
+            stream=BytesIO(f"caption-{index}".encode()),
+        )
+        for index in range(extra_artifacts)
+    )
     return (
         ArchiveCapture(
             artifacts=FileSystemArtifactStore(root),
@@ -45,17 +65,27 @@ def _capture(root: Path, *, captured_at: datetime, title: str) -> SourcePacket:
                 collector=Provenance(actor_kind=ActorKind.TOOL, actor_id="test", method="test"),
                 title=title,
                 collections=(CollectionMembership(name="Нейронки"),),
-                artifacts=(
-                    ArtifactPayload(
-                        role=ArtifactRole.CAPTION_TEXT,
-                        media_type="text/plain",
-                        stream=BytesIO(b"caption"),
-                    ),
-                ),
+                artifacts=tuple(artifacts),
             )
         )
         .packet
     )
+
+
+@pytest.mark.parametrize(("lean_title", "rich_title"), [("A", "B"), ("B", "A")])
+def test_same_instant_capture_prefers_the_one_carrying_more_artifacts(
+    tmp_path: Path, lean_title: str, rich_title: str
+) -> None:
+    archive = tmp_path / "archive"
+    lean = _capture(archive, captured_at=LATER, title=lean_title)
+    rich = _capture(archive, captured_at=LATER, title=rich_title, extra_artifacts=2)
+    assert lean.source_id == rich.source_id
+    assert len(lean.artifacts) < len(rich.artifacts)
+
+    packets = FileSystemSourcePacketRepository(archive)
+    latest = latest_capture_per_source(packets.iter_packets())
+
+    assert latest[lean.source_id].capture_id == rich.capture_id
 
 
 def test_projections_render_only_latest_capture_per_source(tmp_path: Path) -> None:
