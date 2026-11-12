@@ -112,6 +112,18 @@ sourcefolio tiktok-slides /path/to/user_data.json \
 
 Resolver отбирает только slideshow tasks и считает capture complete лишь при непрерывной нумерации и совпадении числа images с `imagePost.images`. Иначе сохраняет честный partial. Живой TikTok не вызывается в test suite: оба subprocess-пути проверены fake executables.
 
+Добрать обложки к уже архивированным источникам (нужно для превью в `render-ui`):
+
+```bash
+python -m pip install -e '.[media,slides]'
+sourcefolio fetch-covers \
+  --archive-dir data/archive \
+  --collection Нейронки \
+  --limit 50
+```
+
+`fetch-covers` берёт latest capture каждого источника, скачивает только обложку (`yt-dlp --skip-download --write-thumbnail`, для slideshow — `gallery-dl`) и сохраняет новый capture, который содержит прежние артефакты плюс `original_image`. Исходные captures не меняются. `--collection` повторяется для нескольких коллекций, `--kind` ограничивает типы источников, `--include-existing` перезапускает обработку источников, у которых обложка уже есть. Повторный прогон идемпотентен: источники с обложкой пропускаются. Для `yt-dlp` нужен `curl-cffi` (extra `media`) — без него `--impersonate chrome` не работает.
+
 Пересобрать generated source cards и выполнить baseline search:
 
 ```bash

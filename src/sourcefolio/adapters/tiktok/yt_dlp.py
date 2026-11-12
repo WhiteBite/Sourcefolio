@@ -96,6 +96,8 @@ class YtDlpConfig:
     socket_timeout_seconds: int = 30
     max_artifact_bytes: int = 2 * 1024**3
     min_free_bytes: int = 512 * 1024**2
+    covers_only: bool = False
+    impersonate: str | None = None
 
     def __post_init__(self) -> None:
         if self.site_limit < 1:
@@ -106,6 +108,8 @@ class YtDlpConfig:
             raise ValueError("invalid byte limits")
         if not self.format_selector.strip():
             raise ValueError("format_selector cannot be empty")
+        if self.impersonate is not None and not self.impersonate.strip():
+            raise ValueError("impersonate cannot be empty")
 
 
 class YtDlpTikTokAdapter:
@@ -129,6 +133,8 @@ class YtDlpTikTokAdapter:
                 "format_selector": self.config.format_selector,
                 "max_artifact_bytes": self.config.max_artifact_bytes,
                 "write_thumbnail": True,
+                "covers_only": self.config.covers_only,
+                "impersonate": self.config.impersonate,
             }
         )
         digest = hashlib.sha256(operation_fingerprint.encode("utf-8")).hexdigest()[:16]
@@ -211,7 +217,7 @@ class YtDlpTikTokAdapter:
             raise CaptureError("invalid TikTok task URL") from exc
 
         log_path = directory / "process.log"
-        command = (
+        command_parts = [
             self.config.executable,
             "--no-playlist",
             "--no-progress",
@@ -226,13 +232,22 @@ class YtDlpTikTokAdapter:
             "--format",
             self.config.format_selector,
             "--write-info-json",
-            "--write-thumbnail",
-            "--paths",
-            str(directory),
-            "--output",
-            "source.%(ext)s",
-            task.source.canonical_url,
+        ]
+        if self.config.covers_only:
+            command_parts.append("--skip-download")
+        command_parts.append("--write-thumbnail")
+        if self.config.impersonate is not None:
+            command_parts.extend(["--impersonate", self.config.impersonate])
+        command_parts.extend(
+            [
+                "--paths",
+                str(directory),
+                "--output",
+                "source.%(ext)s",
+                task.source.canonical_url,
+            ]
         )
+        command = tuple(command_parts)
         try:
             with log_path.open("wb") as log_stream:
                 process = await asyncio.create_subprocess_exec(
@@ -273,6 +288,7 @@ class YtDlpTikTokAdapter:
             raise CaptureError("playlist capture is not a single-source operation")
 
         source = self._source_from_info(info, task)
+        self._normalize_extensionless_media(directory)
         media_files = sorted(
             path
             for path in directory.iterdir()
@@ -299,9 +315,12 @@ class YtDlpTikTokAdapter:
                 "slideshow requires a dedicated resolver; only returned media was archived"
             )
         elif media_files and not has_video:
-            limitations.append(
-                "yt-dlp returned no video artifact; only auxiliary media was archived"
-            )
+            if self.config.covers_only:
+                limitations.append("cover-only capture: video was not downloaded")
+            else:
+                limitations.append(
+                    "yt-dlp returned no video artifact; only auxiliary media was archived"
+                )
         if not media_files:
             limitations.append("yt-dlp returned metadata but no media artifact")
 
@@ -334,6 +353,31 @@ class YtDlpTikTokAdapter:
             for artifact in artifacts:
                 artifact.stream.close()
             raise
+
+    @staticmethod
+    def _normalize_extensionless_media(directory: Path) -> None:
+        for path in sorted(directory.iterdir()):
+            if not path.is_file() or path.suffix.lower() in _MEDIA_SUFFIXES:
+                continue
+            suffix = YtDlpTikTokAdapter._detect_image_suffix(path)
+            if suffix is None:
+                continue
+            path.rename(path.with_suffix(suffix))
+
+    @staticmethod
+    def _detect_image_suffix(path: Path) -> str | None:
+        try:
+            with path.open("rb") as stream:
+                header = stream.read(16)
+        except OSError:
+            return None
+        if header.startswith(b"\xff\xd8\xff"):
+            return ".jpg"
+        if header.startswith(b"\x89PNG\r\n\x1a\n"):
+            return ".png"
+        if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+            return ".webp"
+        return None
 
     @staticmethod
     async def _kill_process(process: asyncio.subprocess.Process) -> None:

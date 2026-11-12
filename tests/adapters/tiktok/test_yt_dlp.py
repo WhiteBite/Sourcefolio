@@ -106,6 +106,12 @@ if "--write-thumbnail" in sys.argv:
 info = {"id": "123", "title": "A useful video", "webpage_url": url}
 (directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
 """,
+        "covers": """
+(Path(__file__).parent / "argv.txt").write_text("\\n".join(sys.argv), encoding="utf-8")
+(directory / "source.image").write_bytes(b"\\xff\\xd8\\xff\\xe0jpeg-cover")
+info = {"id": "123", "title": "A useful video", "webpage_url": url}
+(directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
+""",
     }
     return write_fake_executable(path, common + behaviors[behavior])
 
@@ -253,6 +259,41 @@ def test_post_download_size_limit_is_enforced(tmp_path: Path) -> None:
 
     with pytest.raises(CaptureError, match="exceeds the configured byte limit"):
         asyncio.run(media_adapter.capture(task()))
+
+
+def test_covers_only_mode_skips_the_video_and_archives_the_cover(tmp_path: Path) -> None:
+    media_adapter = adapter(tmp_path, "covers", covers_only=True, impersonate="chrome")
+
+    capture = asyncio.run(media_adapter.capture(task()))
+    try:
+        assert capture.satisfied is False
+        assert capture.limitations == ("cover-only capture: video was not downloaded",)
+        image = next(
+            artifact
+            for artifact in capture.artifacts
+            if artifact.role == ArtifactRole.ORIGINAL_IMAGE
+        )
+        assert image.media_type == "image/jpeg"
+        assert image.stream.read() == b"\xff\xd8\xff\xe0jpeg-cover"
+    finally:
+        capture.close()
+    argv = (tmp_path / "argv.txt").read_text(encoding="utf-8").splitlines()
+    assert "--skip-download" in argv
+    assert "--write-thumbnail" in argv
+    assert argv[argv.index("--impersonate") + 1] == "chrome"
+    assert argv.index("--skip-download") < argv.index("--write-thumbnail")
+
+
+def test_covers_only_mode_is_part_of_the_operation_key(tmp_path: Path) -> None:
+    executable_path = executable(tmp_path / "fake-yt-dlp", "covers")
+    plain = YtDlpTikTokAdapter(config(tmp_path, executable_path))
+    covers = YtDlpTikTokAdapter(config(tmp_path, executable_path, covers_only=True))
+    impersonated = YtDlpTikTokAdapter(
+        config(tmp_path, executable_path, covers_only=True, impersonate="chrome")
+    )
+
+    assert plain.operation_key != covers.operation_key
+    assert covers.operation_key != impersonated.operation_key
 
 
 def test_operation_key_depends_on_output_config_not_timeouts(tmp_path: Path) -> None:

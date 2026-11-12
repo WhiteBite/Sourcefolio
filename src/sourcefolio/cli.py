@@ -62,6 +62,10 @@ from sourcefolio.application.context_brief import (
     render_json,
     render_markdown,
 )
+from sourcefolio.application.cover_backfill import (
+    CoverBackfillQuery,
+    CoverBackfillRunner,
+)
 from sourcefolio.application.dashboards import TriageDashboardProjection
 from sourcefolio.application.decisions import (
     DecisionDraft,
@@ -574,6 +578,84 @@ def _fetch_slides(args: argparse.Namespace) -> int:
                 "status": item.status,
                 "images_downloaded": item.images_downloaded,
                 "failed_indexes": list(item.failed_indexes),
+            }
+            for item in report.results
+        ],
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 1 if report.failed else 0
+
+
+def _fetch_covers(args: argparse.Namespace) -> int:
+    archive_root = Path(args.archive_dir).resolve()
+    packets = FileSystemSourcePacketRepository(archive_root)
+    artifacts = FileSystemArtifactStore(archive_root)
+    videos = YtDlpTikTokAdapter(
+        YtDlpConfig(
+            executable=args.yt_dlp,
+            temp_root=Path(args.temp_dir).resolve(),
+            site_limit=args.site_limit,
+            total_timeout_seconds=args.timeout,
+            socket_timeout_seconds=args.socket_timeout,
+            max_artifact_bytes=args.max_mb * 1024**2,
+            min_free_bytes=args.min_free_mb * 1024**2,
+            covers_only=True,
+            impersonate=args.impersonate,
+        )
+    )
+    slideshows = GalleryDlTikTokSlidesAdapter(
+        GalleryDlConfig(
+            executable=args.gallery_dl,
+            temp_root=Path(args.temp_dir).resolve(),
+            site_limit=args.site_limit,
+            total_timeout_seconds=args.timeout,
+            socket_timeout_seconds=args.socket_timeout,
+            max_slides=1,
+            max_slide_bytes=args.max_mb * 1024**2,
+            max_total_bytes=args.max_mb * 1024**2,
+            min_free_bytes=args.min_free_mb * 1024**2,
+        )
+    )
+    kinds = (
+        frozenset(SourceKind(item) for item in args.kind)
+        if args.kind
+        else frozenset({SourceKind.VIDEO, SourceKind.SLIDESHOW})
+    )
+    report = asyncio.run(
+        CoverBackfillRunner(
+            packets=packets,
+            artifacts=artifacts,
+            archive=ArchiveCapture(
+                artifacts=artifacts,
+                packets=packets,
+            ),
+            videos=videos,
+            slideshows=slideshows,
+            concurrency=args.concurrency,
+        ).run(
+            CoverBackfillQuery(
+                collections=tuple(args.collection),
+                kinds=kinds,
+                limit=args.limit,
+                skip_existing=not args.include_existing,
+            )
+        )
+    )
+    output = {
+        "operations": {
+            "video": videos.operation_key,
+            "slideshow": slideshows.operation_key,
+        },
+        "selected": report.selected,
+        "created": report.created,
+        "skipped": report.skipped,
+        "failed": report.failed,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "status": item.status,
+                "reason": item.reason,
             }
             for item in report.results
         ],
@@ -1759,6 +1841,41 @@ def _build_parser() -> argparse.ArgumentParser:
         help="per-image byte limit in MiB",
     )
     fetch_slides.set_defaults(handler=_fetch_slides)
+
+    fetch_covers = subcommands.add_parser(
+        "fetch-covers",
+        help="backfill one preview image per archived source",
+    )
+    fetch_covers.add_argument("--archive-dir", default="data/archive")
+    fetch_covers.add_argument(
+        "--collection",
+        action="append",
+        default=[],
+        help="only sources in this collection; repeat for several collections",
+    )
+    fetch_covers.add_argument(
+        "--kind",
+        action="append",
+        choices=tuple(item.value for item in (SourceKind.VIDEO, SourceKind.SLIDESHOW)),
+        help="source kind to backfill; repeat to restrict the set",
+    )
+    fetch_covers.add_argument("--limit", type=int, help="process at most N sources")
+    fetch_covers.add_argument("--concurrency", type=int, default=2)
+    fetch_covers.add_argument("--site-limit", type=int, default=2)
+    fetch_covers.add_argument("--temp-dir", default="data/tmp/covers")
+    fetch_covers.add_argument("--yt-dlp", default="yt-dlp")
+    fetch_covers.add_argument("--gallery-dl", default="gallery-dl")
+    fetch_covers.add_argument("--impersonate", default="chrome")
+    fetch_covers.add_argument("--timeout", type=float, default=300)
+    fetch_covers.add_argument("--socket-timeout", type=int, default=30)
+    fetch_covers.add_argument("--max-mb", type=int, default=200)
+    fetch_covers.add_argument("--min-free-mb", type=int, default=512)
+    fetch_covers.add_argument(
+        "--include-existing",
+        action="store_true",
+        help="also backfill sources that already have an image artifact",
+    )
+    fetch_covers.set_defaults(handler=_fetch_covers)
 
     ocr = subcommands.add_parser(
         "ocr-capture",
