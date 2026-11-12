@@ -474,6 +474,7 @@ def _tiktok_download(args: argparse.Namespace) -> int:
             socket_timeout_seconds=args.socket_timeout,
             max_artifact_bytes=args.max_file_mb * 1024**2,
             min_free_bytes=args.min_free_mb * 1024**2,
+            captions=not args.no_captions,
         )
     )
     return _run_tiktok_batch(args, adapter, partial_is_failure=True)
@@ -1832,6 +1833,7 @@ def _build_parser() -> argparse.ArgumentParser:
     download.add_argument("--socket-timeout", type=int, default=30)
     download.add_argument("--max-file-mb", type=int, default=2048)
     download.add_argument("--min-free-mb", type=int, default=512)
+    download.add_argument("--no-captions", action="store_true")
     download.set_defaults(handler=_tiktok_download)
 
     slides = subcommands.add_parser(

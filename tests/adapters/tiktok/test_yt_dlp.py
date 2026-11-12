@@ -112,6 +112,28 @@ info = {"id": "123", "title": "A useful video", "webpage_url": url}
 info = {"id": "123", "title": "A useful video", "webpage_url": url}
 (directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
 """,
+        "captions": """
+(Path(__file__).parent / "argv.txt").write_text("\\n".join(sys.argv), encoding="utf-8")
+(directory / "source.mp4").write_bytes(b"downloaded-video")
+if "--write-subs" in sys.argv:
+    (directory / "source.en.vtt").write_bytes(b"WEBVTT\\n\\ncaption text\\n")
+info = {"id": "123", "title": "A useful video", "webpage_url": url}
+(directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
+""",
+        "oversized-caption": """
+(directory / "source.mp4").write_bytes(b"downloaded-video")
+if "--write-subs" in sys.argv:
+    (directory / "source.en.vtt").write_bytes(b"x" * 100)
+info = {"id": "123", "title": "A useful video", "webpage_url": url}
+(directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
+""",
+        "empty-caption": """
+(directory / "source.mp4").write_bytes(b"downloaded-video")
+if "--write-subs" in sys.argv:
+    (directory / "source.en.vtt").write_bytes(b"")
+info = {"id": "123", "title": "A useful video", "webpage_url": url}
+(directory / "source.info.json").write_text(json.dumps(info), encoding="utf-8")
+""",
     }
     return write_fake_executable(path, common + behaviors[behavior])
 
@@ -175,6 +197,92 @@ def test_subprocess_capture_archives_sanitized_media_and_metadata(tmp_path: Path
         assert not any(
             artifact.role == ArtifactRole.ORIGINAL_IMAGE for artifact in packet.artifacts
         )
+
+
+def test_caption_track_is_archived_as_caption_text(tmp_path: Path) -> None:
+    media_adapter = adapter(tmp_path, "captions")
+
+    capture = asyncio.run(media_adapter.capture(task()))
+    try:
+        assert capture.satisfied is True
+        assert capture.limitations == ()
+        assert capture.metadata["caption_tracks"] == 1
+        assert [artifact.role for artifact in capture.artifacts].count(
+            ArtifactRole.ORIGINAL_VIDEO
+        ) == 1
+        assert [artifact.role for artifact in capture.artifacts].count(
+            ArtifactRole.CAPTION_TEXT
+        ) == 1
+        caption = next(
+            artifact for artifact in capture.artifacts if artifact.role == ArtifactRole.CAPTION_TEXT
+        )
+        assert caption.media_type == "text/vtt"
+        assert caption.original_filename == "source.en.vtt"
+        assert caption.stream.read() == b"WEBVTT\n\ncaption text\n"
+    finally:
+        capture.close()
+
+
+def test_missing_caption_track_does_not_add_a_limitation(tmp_path: Path) -> None:
+    media_adapter = adapter(tmp_path, "success")
+
+    capture = asyncio.run(media_adapter.capture(task()))
+    try:
+        assert capture.satisfied is True
+        assert capture.limitations == ()
+        assert capture.metadata["caption_tracks"] == 0
+        assert not any(artifact.role == ArtifactRole.CAPTION_TEXT for artifact in capture.artifacts)
+    finally:
+        capture.close()
+
+
+def test_captions_can_be_disabled_and_rotate_the_operation_key(tmp_path: Path) -> None:
+    executable_path = executable(tmp_path / "fake-yt-dlp", "captions")
+    default = YtDlpTikTokAdapter(config(tmp_path, executable_path))
+    disabled = YtDlpTikTokAdapter(config(tmp_path, executable_path, captions=False))
+
+    assert default.operation_key != disabled.operation_key
+
+    capture = asyncio.run(disabled.capture(task()))
+    try:
+        assert not any(artifact.role == ArtifactRole.CAPTION_TEXT for artifact in capture.artifacts)
+    finally:
+        capture.close()
+    argv = (tmp_path / "argv.txt").read_text(encoding="utf-8").splitlines()
+    assert "--write-subs" not in argv
+
+
+def test_oversized_caption_track_is_truncated(tmp_path: Path) -> None:
+    media_adapter = adapter(tmp_path, "oversized-caption", max_caption_bytes=10)
+
+    capture = asyncio.run(media_adapter.capture(task()))
+    try:
+        caption = next(
+            artifact for artifact in capture.artifacts if artifact.role == ArtifactRole.CAPTION_TEXT
+        )
+        assert caption.stream.read() == b"x" * 10
+    finally:
+        capture.close()
+
+
+def test_empty_caption_track_is_skipped(tmp_path: Path) -> None:
+    media_adapter = adapter(tmp_path, "empty-caption")
+
+    capture = asyncio.run(media_adapter.capture(task()))
+    try:
+        assert capture.metadata["caption_tracks"] == 0
+        assert not any(artifact.role == ArtifactRole.CAPTION_TEXT for artifact in capture.artifacts)
+    finally:
+        capture.close()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("max_caption_bytes", 0), ("max_caption_tracks", 0)],
+)
+def test_caption_limits_must_be_positive(field: str, value: int) -> None:
+    with pytest.raises(ValueError):
+        YtDlpConfig(**{field: value})
 
 
 def test_video_capture_archives_the_platform_cover_as_original_image(tmp_path: Path) -> None:

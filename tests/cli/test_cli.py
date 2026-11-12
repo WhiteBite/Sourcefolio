@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import sourcefolio.cli as cli
 from sourcefolio.cli import main
 
 
@@ -34,3 +35,30 @@ def test_schema_export(capsys) -> None:
     assert schema["type"] == "object"
     assert "SourcePacket" in schema["title"]
     assert "capture_id" in schema["properties"]
+
+
+def test_tiktok_download_no_captions_disables_caption_download(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class Adapter:
+        operation_key = "test-operation"
+
+        def __init__(self, config) -> None:
+            captured["config"] = config
+
+    monkeypatch.setattr(cli, "YtDlpTikTokAdapter", Adapter)
+    monkeypatch.setattr(cli, "_run_tiktok_batch", lambda args, adapter, partial_is_failure: 0)
+
+    assert (
+        main(
+            [
+                "tiktok-download",
+                "export.json",
+                "--no-captions",
+            ]
+        )
+        == 0
+    )
+
+    config = captured["config"]
+    assert config.captions is False

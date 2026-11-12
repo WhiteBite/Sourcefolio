@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import re
@@ -38,6 +39,12 @@ _MEDIA_SUFFIXES = {
 }
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 _AUDIO_SUFFIXES = {".m4a", ".mp3", ".aac", ".opus"}
+_CAPTION_SUFFIXES = {".vtt", ".srt", ".json3"}
+_CAPTION_MEDIA_TYPES = {
+    ".vtt": "text/vtt",
+    ".srt": "application/x-subrip",
+    ".json3": "application/json",
+}
 _MEDIA_TYPES = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
@@ -98,6 +105,9 @@ class YtDlpConfig:
     min_free_bytes: int = 512 * 1024**2
     covers_only: bool = False
     impersonate: str | None = None
+    captions: bool = True
+    max_caption_bytes: int = 1024 * 1024
+    max_caption_tracks: int = 5
 
     def __post_init__(self) -> None:
         if self.site_limit < 1:
@@ -106,6 +116,8 @@ class YtDlpConfig:
             raise ValueError("yt-dlp timeouts must be positive")
         if self.max_artifact_bytes < 1 or self.min_free_bytes < 0:
             raise ValueError("invalid byte limits")
+        if self.max_caption_bytes <= 0 or self.max_caption_tracks <= 0:
+            raise ValueError("caption limits must be positive")
         if not self.format_selector.strip():
             raise ValueError("format_selector cannot be empty")
         if self.impersonate is not None and not self.impersonate.strip():
@@ -135,6 +147,7 @@ class YtDlpTikTokAdapter:
                 "write_thumbnail": True,
                 "covers_only": self.config.covers_only,
                 "impersonate": self.config.impersonate,
+                "write_captions": self.config.captions,
             }
         )
         digest = hashlib.sha256(operation_fingerprint.encode("utf-8")).hexdigest()[:16]
@@ -236,6 +249,17 @@ class YtDlpTikTokAdapter:
         if self.config.covers_only:
             command_parts.append("--skip-download")
         command_parts.append("--write-thumbnail")
+        if self.config.captions and not self.config.covers_only:
+            command_parts.extend(
+                [
+                    "--write-subs",
+                    "--write-auto-subs",
+                    "--sub-langs",
+                    "all,-live_chat",
+                    "--sub-format",
+                    "vtt/srt/best",
+                ]
+            )
         if self.config.impersonate is not None:
             command_parts.extend(["--impersonate", self.config.impersonate])
         command_parts.extend(
@@ -328,6 +352,12 @@ class YtDlpTikTokAdapter:
         try:
             for media_file in media_files:
                 artifacts.append(self._media_payload(media_file))
+            caption_payloads = (
+                self._caption_payloads(directory)
+                if self.config.captions and not self.config.covers_only
+                else []
+            )
+            artifacts.extend(caption_payloads)
             artifacts.append(
                 ArtifactPayload(
                     role=ArtifactRole.AUTHOR_METADATA,
@@ -344,6 +374,7 @@ class YtDlpTikTokAdapter:
                 metadata={
                     "downloader": "yt-dlp",
                     "media_file_count": len(media_files),
+                    "caption_tracks": len(caption_payloads),
                 },
                 limitations=tuple(limitations),
                 satisfied=not limitations,
@@ -353,6 +384,33 @@ class YtDlpTikTokAdapter:
             for artifact in artifacts:
                 artifact.stream.close()
             raise
+
+    def _caption_payloads(self, directory: Path) -> list[ArtifactPayload]:
+        payloads: list[ArtifactPayload] = []
+        try:
+            for path in sorted(directory.iterdir(), key=lambda item: item.name):
+                if len(payloads) >= self.config.max_caption_tracks:
+                    break
+                suffix = path.suffix.lower()
+                if not path.is_file() or suffix not in _CAPTION_SUFFIXES:
+                    continue
+                if path.stat().st_size == 0:
+                    continue
+                with path.open("rb") as stream:
+                    content = stream.read(self.config.max_caption_bytes)
+                payloads.append(
+                    ArtifactPayload(
+                        role=ArtifactRole.CAPTION_TEXT,
+                        media_type=_CAPTION_MEDIA_TYPES[suffix],
+                        stream=io.BytesIO(content),
+                        original_filename=path.name,
+                    )
+                )
+        except Exception:
+            for payload in payloads:
+                payload.stream.close()
+            raise
+        return payloads
 
     @staticmethod
     def _normalize_extensionless_media(directory: Path) -> None:
