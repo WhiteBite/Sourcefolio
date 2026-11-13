@@ -497,3 +497,50 @@ def test_ui_view_omits_registry_without_builder(tmp_path: Path) -> None:
     build_projection(archive, tmp_path).rebuild()
 
     assert "registry" not in extract_payload(read_page(tmp_path))
+
+
+def test_ui_view_has_view_switch_and_projects_container(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Ролик")
+
+    build_projection(archive, tmp_path).rebuild()
+    html = read_page(tmp_path)
+
+    assert html.count('id="view-archive"') == 1
+    assert 'id="view-projects"' in html
+    assert 'id="p-grid"' in html
+    assert 'id="p-project"' in html
+    assert 'data-view="archive"' in html
+    assert 'data-view="projects"' in html
+    assert ">Архив</button>" in html
+    assert ">Проекты</button>" in html
+    assert html.index('id="view-archive"') < html.index('id="view-projects"')
+
+
+def test_ui_view_projects_view_keeps_archive_and_registry_payload(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Ролик")
+    derived = tmp_path / "derived"
+    write_registry(derived)
+
+    build_projection(archive, tmp_path, registry=queue_builder(derived)).rebuild()
+    html = read_page(tmp_path)
+
+    assert 'id="view-archive"' in html
+    assert 'id="view-projects"' in html
+    assert 'id="p-grid"' in html
+    registry = extract_payload(html)["registry"]
+    candidate = registry["projects"][0]["candidates"][0]
+    assert candidate["candidate_id"].startswith("cand_")
+    assert set(candidate) == {
+        "candidate_id",
+        "title",
+        "kind",
+        "key",
+        "fit",
+        "mention_count",
+        "source_count",
+        "score",
+        "outcome",
+        "mentions",
+    }

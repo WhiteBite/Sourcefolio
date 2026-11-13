@@ -492,7 +492,18 @@ h1 { font-family: var(--serif); font-size: 17px; margin: 0; font-weight: 600; }
   background: var(--surface); color: var(--text);
 }
 .search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.vswitch {
+  display: inline-flex; gap: 2px; padding: 2px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+}
+.vswitch button {
+  font: inherit; font-size: 12.5px; padding: 5px 14px; border-radius: 999px;
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.vswitch button:hover { color: var(--text); }
+.vswitch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
 main.wrap { padding-top: 12px; padding-bottom: 80px; }
+main.wrap[hidden] { display: none; }
 .chipbar { display: flex; gap: 7px; flex-wrap: wrap; padding: 2px 0 10px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
@@ -539,6 +550,31 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 .tstat.done .sw { background: var(--accent); }
 .tstat.inbox .sw { background: var(--partial); }
 .triage-hint { font-size: 11.5px; color: var(--text-faint); font-family: var(--mono); }
+.pmeta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+  font-size: 11px; color: var(--text-faint);
+}
+.pcount { font-variant-numeric: tabular-nums; }
+.pfit {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.pfit.high {
+  color: var(--accent); background: var(--accent-soft); border-color: var(--accent);
+}
+.pfit.medium {
+  color: var(--partial); background: var(--partial-soft); border-color: var(--partial);
+}
+.pfit.low { color: var(--text-faint); }
+.obadge { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.obadge.accepted { color: var(--complete); background: var(--complete-soft); }
+.obadge.rejected { color: var(--drop); background: var(--drop-soft); }
+.obadge.deferred { color: var(--partial); background: var(--partial-soft); }
+.obadge.inbox { color: var(--text-faint); background: var(--surface-2); }
+.pquote {
+  margin: 6px 0 0; font-size: 11.5px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .grid {
   display: grid; gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
@@ -737,6 +773,26 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   background: var(--accent-soft); color: var(--accent); border-color: var(--accent);
 }
 .tbtn[disabled] { opacity: .45; cursor: not-allowed; }
+.tbtn.acc[aria-pressed="true"] {
+  background: var(--complete-soft); color: var(--complete); border-color: var(--complete);
+}
+.tbtn.rej[aria-pressed="true"] {
+  background: var(--drop-soft); color: var(--drop); border-color: var(--drop);
+}
+.tbtn.def[aria-pressed="true"] {
+  background: var(--partial-soft); color: var(--partial); border-color: var(--partial);
+}
+.cmen {
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 8px 10px; margin: 0 0 8px; background: var(--surface-2);
+}
+.cmen blockquote { margin: 0 0 6px; font-size: 12.5px; }
+.cmen blockquote p { margin: 0; }
+.cmen .src {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-faint);
+}
+.decide-by { margin: 8px 0 0; font-size: 11.5px; color: var(--text-faint); }
 .field { display: flex; flex-direction: column; gap: 4px; margin-top: 9px; }
 .field span {
   font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
@@ -809,6 +865,12 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
         <p class="sub" id="summary"></p>
       </div>
     </div>
+    <div class="vswitch" id="view-switch" role="group" aria-label="Представление">
+      <button type="button" id="v-archive" data-view="archive"
+        aria-pressed="true">Архив</button>
+      <button type="button" id="v-projects" data-view="projects"
+        aria-pressed="false">Проекты</button>
+    </div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -820,7 +882,7 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     </div>
   </div>
 </header>
-<main class="wrap">
+<main class="wrap" id="view-archive">
   <nav class="chipbar" id="chipbar" aria-label="Коллекции"></nav>
   <div class="filters">
     <label>Коллекция
@@ -870,6 +932,15 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   <div id="grid" class="grid"></div>
   <button id="show-more" class="show-more" hidden></button>
 </main>
+<main class="wrap" id="view-projects" hidden>
+  <div class="filters">
+    <label>Проект
+      <select id="p-project"></select>
+    </label>
+    <span class="result-count" id="p-result-count"></span>
+  </div>
+  <div id="p-grid" class="grid"></div>
+</main>
 <div id="backdrop" class="backdrop" hidden></div>
 <aside id="drawer" class="drawer" role="dialog" aria-modal="true" hidden></aside>
 <script id="sourcefolio-data" type="application/json">__SOURCEFOLIO_DATA__</script>
@@ -882,6 +953,9 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   var CAN_WRITE = location.protocol === 'http:' || location.protocol === 'https:';
   var SORT_KEY = 'sf.sort';
   var GROUP_KEY = 'sf.group';
+  var VIEW_KEY = 'sf.view';
+  var PROJECT_KEY = 'sf.project';
+  var USER_KEY = 'sf.user';
   var COLLATOR = new Intl.Collator('ru', { sensitivity: 'base' });
 
   var grid = document.getElementById('grid');
@@ -899,6 +973,12 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   var resultCount = document.getElementById('result-count');
   var showMore = document.getElementById('show-more');
   var summary = document.getElementById('summary');
+  var viewSwitch = document.getElementById('view-switch');
+  var viewArchive = document.getElementById('view-archive');
+  var viewProjects = document.getElementById('view-projects');
+  var pProject = document.getElementById('p-project');
+  var pGrid = document.getElementById('p-grid');
+  var pResultCount = document.getElementById('p-result-count');
 
   var KIND_LABELS = {
     video: 'видео', slideshow: 'слайдшоу', web_page: 'страница',
@@ -908,6 +988,21 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     inbox: 'в инбоксе', keep: 'оставить', drop: 'не нужно', done: 'разобрано',
     none: 'без пометки'
   };
+  var CAND_KIND_LABELS = {
+    tool: 'инструмент', library: 'библиотека', service: 'сервис',
+    technique: 'техника', pattern: 'паттерн', model: 'модель', dataset: 'датасет',
+    repository: 'репозиторий', topic: 'тема', other: 'прочее'
+  };
+  var FIT_LABELS = { high: 'высокий', medium: 'средний', low: 'низкий' };
+  var OUTCOME_LABELS = {
+    inbox: 'в инбоксе', accepted: 'принят', rejected: 'отклонён', deferred: 'отложен'
+  };
+  var DECISIONS = [
+    { status: 'accepted', label: 'Принять', cls: 'acc' },
+    { status: 'deferred', label: 'Отложить', cls: 'def' },
+    { status: 'rejected', label: 'Отклонить', cls: 'rej' },
+    { status: 'inbox', label: '\u0412 инбокс', cls: 'inbox' }
+  ];
   var MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль',
     'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
   var STATUS_ORDER = { '': 0, inbox: 1, keep: 2, done: 3, drop: 4 };
@@ -926,12 +1021,16 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     right: 'M9 6l6 6-6 6'
   };
 
-  var state = { shown: CHUNK, openId: null, list: [], index: -1 };
+  var state = { shown: CHUNK, openId: null, list: [], index: -1, candidateId: null,
+    view: 'archive', projectId: null };
   var cards = {};
   var chipEls = [];
 
   function kindLabel(k) { return KIND_LABELS[k] || k; }
   function statusLabel(s) { return STATUS_LABELS[s || 'none'] || s; }
+  function candKindLabel(k) { return CAND_KIND_LABELS[k] || k; }
+  function fitLabel(f) { return FIT_LABELS[f] || f; }
+  function outcomeLabel(o) { return OUTCOME_LABELS[o] || o; }
 
   function icon(name) {
     var s = document.createElementNS(NS, 'svg');
@@ -1214,6 +1313,91 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     }
   }
 
+  function projectsList() {
+    return (data.registry && data.registry.projects) || [];
+  }
+
+  function projectById(id) {
+    var list = projectsList();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].project_id === id) { return list[i]; }
+    }
+    return null;
+  }
+
+  function candidateById(id) {
+    var list = projectsList();
+    for (var i = 0; i < list.length; i++) {
+      var candidates = list[i].candidates || [];
+      for (var j = 0; j < candidates.length; j++) {
+        if (candidates[j].candidate_id === id) { return candidates[j]; }
+      }
+    }
+    return null;
+  }
+
+  function currentCandidate() {
+    return state.candidateId ? candidateById(state.candidateId) : null;
+  }
+
+  function currentUser() {
+    var stored = null;
+    try { stored = localStorage.getItem(USER_KEY); } catch (e) { stored = null; }
+    return stored && stored.trim() ? stored.trim() : 'user';
+  }
+
+  function buildCandidateCard(cand) {
+    var card = el('article', 'card');
+    var body = el('div', 'body');
+    body.appendChild(el('h2', 'title', cand.title));
+    var meta = el('div', 'pmeta');
+    meta.appendChild(el('span', 'tag', candKindLabel(cand.kind)));
+    meta.appendChild(el('span', 'pfit ' + cand.fit, 'фит: ' + fitLabel(cand.fit)));
+    meta.appendChild(el('span', 'pcount', cand.mention_count + ' упом.'));
+    meta.appendChild(el('span', 'obadge ' + cand.outcome, outcomeLabel(cand.outcome)));
+    body.appendChild(meta);
+    if (cand.mentions.length) {
+      body.appendChild(el('p', 'pquote', cand.mentions[0].quote));
+    }
+    card.appendChild(body);
+    card.tabIndex = 0;
+    card.addEventListener('click', function () { openCandidateDrawer(cand.candidate_id); });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openCandidateDrawer(cand.candidate_id);
+      }
+    });
+    return card;
+  }
+
+  function renderProjects() {
+    pGrid.textContent = '';
+    var project = projectById(state.projectId);
+    var candidates = project ? project.candidates : [];
+    if (!candidates.length) {
+      pGrid.appendChild(el('p', 'empty', 'Пока нет кандидатов — запусти registry-extract'));
+      pResultCount.textContent = '0 кандидатов';
+      return;
+    }
+    candidates.forEach(function (cand) { pGrid.appendChild(buildCandidateCard(cand)); });
+    pResultCount.textContent = 'Кандидатов: ' + candidates.length;
+  }
+
+  function switchView(view) {
+    state.view = view === 'projects' ? 'projects' : 'archive';
+    var archive = state.view === 'archive';
+    viewArchive.hidden = !archive;
+    viewProjects.hidden = archive;
+    var buttons = viewSwitch.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      var pressed = buttons[i].getAttribute('data-view') === state.view;
+      buttons[i].setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    }
+    try { localStorage.setItem(VIEW_KEY, state.view); } catch (e) { }
+    if (archive) { render(false); } else { renderProjects(); }
+  }
+
   function matches(item, term, collection, kind, status, noteStatus) {
     if (collection && item.collections.indexOf(collection) === -1) { return false; }
     if (kind && item.kind !== kind) { return false; }
@@ -1354,6 +1538,7 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   function openDrawer(sourceId) {
     state.openId = sourceId;
     state.index = -1;
+    state.candidateId = null;
     for (var i = 0; i < state.list.length; i++) {
       if (state.list[i].source_id === sourceId) { state.index = i; break; }
     }
@@ -1366,10 +1551,21 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   function closeDrawer() {
     state.openId = null;
     state.index = -1;
+    state.candidateId = null;
     drawer.hidden = true;
     backdrop.hidden = true;
     drawer.textContent = '';
     document.body.classList.remove('drawer-open');
+  }
+
+  function openCandidateDrawer(candidateId) {
+    state.openId = null;
+    state.index = -1;
+    state.candidateId = candidateId;
+    buildCandidateDrawer();
+    drawer.hidden = false;
+    backdrop.hidden = false;
+    document.body.classList.add('drawer-open');
   }
 
   function step(delta) {
@@ -1569,6 +1765,117 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     refreshDrawerHead();
   }
 
+  function buildCandidateDrawer() {
+    drawer.textContent = '';
+    var cand = currentCandidate();
+    if (!cand) { closeDrawer(); return; }
+    var head = el('div', 'drawer-head');
+    var close = el('button', 'nav close');
+    close.type = 'button';
+    close.title = 'закрыть';
+    close.appendChild(icon('close'));
+    close.addEventListener('click', closeDrawer);
+    head.appendChild(el('span', 'drawer-title', 'кандидат'));
+    head.appendChild(el('span', 'drawer-count'));
+    head.appendChild(close);
+    drawer.appendChild(head);
+
+    var body = el('div', 'drawer-body');
+    var info = el('section', 'dsec');
+    info.appendChild(el('h2', 'dtitle', cand.title));
+    var meta = el('div', 'dmeta');
+    meta.appendChild(el('span', 'tag', candKindLabel(cand.kind)));
+    meta.appendChild(el('span', 'pfit ' + cand.fit, 'фит: ' + fitLabel(cand.fit)));
+    var badge = el('span', 'obadge ' + cand.outcome, outcomeLabel(cand.outcome));
+    meta.appendChild(badge);
+    info.appendChild(meta);
+    body.appendChild(info);
+
+    var mentions = el('section', 'dsec block');
+    mentions.appendChild(el('h3', null, 'Упоминания (' + cand.mentions.length + ')'));
+    cand.mentions.forEach(function (mention) {
+      var box = el('div', 'cmen');
+      var quote = el('blockquote');
+      quote.appendChild(el('p', null, mention.quote));
+      box.appendChild(quote);
+      var src = el('div', 'src');
+      src.appendChild(el('span', null, mention.title || mention.url));
+      var go = el('button', 'btn', 'к источнику');
+      go.type = 'button';
+      go.addEventListener('click', function () {
+        switchView('archive');
+        openDrawer(mention.source_id);
+      });
+      src.appendChild(go);
+      box.appendChild(src);
+      mentions.appendChild(box);
+    });
+    body.appendChild(mentions);
+
+    var decision = el('section', 'dsec block');
+    decision.appendChild(el('h3', null, 'Решение'));
+    var row = el('div', 'triage-buttons');
+    DECISIONS.forEach(function (choice) {
+      var button = el('button', 'tbtn ' + choice.cls, choice.label);
+      button.type = 'button';
+      button.setAttribute('data-status', choice.status);
+      button.setAttribute('aria-pressed', cand.outcome === choice.status ? 'true' : 'false');
+      button.disabled = !CAN_WRITE;
+      button.addEventListener('click', function () { applyDecision(cand, choice.status); });
+      row.appendChild(button);
+    });
+    decision.appendChild(row);
+    decision.appendChild(el('p', 'save-note'));
+    if (CAN_WRITE) {
+      decision.appendChild(el('p', 'decide-by', 'принимает: ' + currentUser()));
+    }
+    body.appendChild(decision);
+
+    drawer.appendChild(body);
+  }
+
+  function syncCandidateStatus(cand) {
+    var badge = drawer.querySelector('.obadge');
+    if (badge) {
+      badge.className = 'obadge ' + cand.outcome;
+      badge.textContent = outcomeLabel(cand.outcome);
+    }
+    var buttons = drawer.querySelectorAll('.tbtn');
+    for (var i = 0; i < buttons.length; i++) {
+      var status = buttons[i].getAttribute('data-status');
+      buttons[i].setAttribute('aria-pressed', cand.outcome === status ? 'true' : 'false');
+    }
+  }
+
+  function applyDecision(cand, status) {
+    if (!CAN_WRITE || !cand) { return; }
+    var previous = cand.outcome;
+    cand.outcome = status;
+    syncCandidateStatus(cand);
+    renderProjects();
+    var note = drawer.querySelector('.save-note');
+    if (note) { note.className = 'save-note'; note.textContent = 'сохраняю…'; }
+    postCandidate({
+      candidate_id: cand.candidate_id,
+      status: status,
+      approved_by: currentUser(),
+      rationale: ''
+    }, function () {
+      renderProjects();
+      var fresh = drawer.querySelector('.save-note');
+      if (fresh) { fresh.textContent = 'сохранено'; }
+    }, function (message) {
+      cand.outcome = previous;
+      syncCandidateStatus(cand);
+      renderProjects();
+      var fresh = drawer.querySelector('.save-note');
+      if (fresh) {
+        fresh.className = 'save-note err';
+        fresh.textContent = message;
+      }
+    });
+  }
+
   function buildTriageSection(item) {
     var ann = annotation(item);
     var section = el('section', 'dsec block');
@@ -1705,9 +2012,9 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     }
   }
 
-  function postNote(body, onOk, onError) {
+  function postJson(path, body, onOk, onError) {
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/note', true);
+    xhr.open('POST', path, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('X-Sourcefolio', '1');
     xhr.onload = function () {
@@ -1721,6 +2028,14 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     };
     xhr.onerror = function () { onError('сервер не отвечает'); };
     xhr.send(JSON.stringify(body));
+  }
+
+  function postNote(body, onOk, onError) {
+    postJson('/api/note', body, onOk, onError);
+  }
+
+  function postCandidate(body, onOk, onError) {
+    postJson('/api/candidate', body, onOk, onError);
   }
 
   var annotated = 0;
@@ -1784,6 +2099,27 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     try { localStorage.setItem(key, select.value); } catch (e) { return; }
   }
 
+  function buildProjectOptions() {
+    var list = projectsList();
+    var fallback = '';
+    list.forEach(function (project) {
+      var option = document.createElement('option');
+      option.value = project.project_id;
+      option.textContent = project.name + ' (' + project.candidates.length + ')';
+      pProject.appendChild(option);
+      if (!fallback && project.candidates.length) { fallback = project.project_id; }
+    });
+    if (!fallback && list.length) { fallback = list[0].project_id; }
+    restoreSelect(pProject, PROJECT_KEY, fallback);
+    state.projectId = pProject.value || fallback || null;
+  }
+
+  function storedView() {
+    var stored = null;
+    try { stored = localStorage.getItem(VIEW_KEY); } catch (e) { stored = null; }
+    return stored === 'projects' ? 'projects' : 'archive';
+  }
+
   data.collections.forEach(function (c) {
     var o = document.createElement('option');
     o.value = c.name;
@@ -1804,6 +2140,18 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
 
   buildChips();
   buildTriage();
+  buildProjectOptions();
+
+  viewSwitch.addEventListener('click', function (e) {
+    var button = e.target.closest('button[data-view]');
+    if (!button) { return; }
+    switchView(button.getAttribute('data-view'));
+  });
+  pProject.addEventListener('change', function () {
+    persistSelect(pProject, PROJECT_KEY);
+    state.projectId = pProject.value;
+    renderProjects();
+  });
 
   q.addEventListener('input', function () { render(true); });
   fCollection.addEventListener('change', function () {
@@ -1829,10 +2177,21 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
   document.addEventListener('keydown', function (e) {
     var tag = e.target && e.target.tagName ? e.target.tagName : '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') { return; }
-    if (!state.openId) { return; }
     if (e.key === 'Escape') {
-      closeDrawer();
-    } else if (e.key === 'ArrowRight' || e.key === 'j') {
+      if (state.openId || state.candidateId) { closeDrawer(); }
+      return;
+    }
+    if (state.candidateId) {
+      if (!CAN_WRITE) { return; }
+      var decisions = { '1': 'accepted', '2': 'deferred', '3': 'rejected', '4': 'inbox' };
+      if (decisions[e.key]) {
+        e.preventDefault();
+        applyDecision(currentCandidate(), decisions[e.key]);
+      }
+      return;
+    }
+    if (!state.openId) { return; }
+    if (e.key === 'ArrowRight' || e.key === 'j') {
       e.preventDefault();
       step(1);
     } else if (e.key === 'ArrowLeft' || e.key === 'k') {
@@ -1847,7 +2206,7 @@ main.wrap { padding-top: 12px; padding-bottom: 80px; }
     }
   });
 
-  render(true);
+  switchView(storedView());
 })();
 </script>
 </body>
