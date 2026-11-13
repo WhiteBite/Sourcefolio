@@ -50,6 +50,7 @@
 31. `profile-draft`: черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`) с `create_if_absent` и без перезаписи.
 32. `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-obsidian` → `project-fit` (при `--fit`) с одним combined JSON; без daemon, расписание ручное.
 33. `serve`: локальный HTTP-сервер архива — отдаёт тот же браузер, что `render-ui`, вместе с превью-артефактами (Range) и записывает triage/заголовок/«зачем сохранил» прямо в human `ideas/` через `POST /api/note`.
+34. Реестр кандидатов: `registry-extract`/`registry-build`/`registry-queue`/`candidate-decide` превращают captures в per-project очередь разработок — заякоренные цитаты, трёхсостоянные вердикты, content-addressed append-only snapshots, human-решения с обязательным `approved_by` и browser-вид «Проекты» (`GET /api/registry`, `POST /api/candidate`). Без auto-accept и без межпроектного ранжирования.
 
 ## Быстрый старт
 
@@ -412,6 +413,52 @@ sourcefolio refresh \
 
 Daemon/watcher нет: расписание ручное — запускайте команду вручную или из планировщика с новым capture-файлом.
 
+## Реестр кандидатов
+
+Реестр превращает сохранённые captures в per-project очередь разработок, которые можно пустить в дело. Единица учёта — кандидат (инструмент, библиотека, репозиторий, техника, паттерн, модель, датасет, тема), а не видео. Полный контракт и калибровка — в [docs/REGISTRY.md](docs/REGISTRY.md).
+
+Извлечь заякоренные упоминания из latest captures для проектов:
+
+```bash
+sourcefolio registry-extract \
+  --projects data/projects.json \
+  --profiles data/vault/projects \
+  --collection Нейронки \
+  --project sourcefolio \
+  --archive-dir data/archive \
+  --derived-dir data/derived \
+  --limit 25
+```
+
+`registry-extract` на каждую пару (источник, проект) создаёт маршрут `registry-route/v1` с вердиктом `candidate`/`irrelevant`/`insufficient_signal`. Каждое упоминание обязано нести дословную цитату (8–500 символов), символьный span и типизированный локатор (`description`/`title`/`comment`+`comment_index`/`ocr`+`extraction_id`/`caption`+`artifact_id`); упоминание без валидного якоря отбрасывается и считается в `dropped_anchors`. Конфигурация модели и кэш — как у `llm-enrich`; повтор с тем же `route_id` пропускается, `--refresh` перезапрашивает, `--dry-run` печатает первые два промпта в stderr и ничего не пишет.
+
+Собрать снапшот, отрендерить очередь и записать решение:
+
+```bash
+sourcefolio registry-build \
+  --projects data/projects.json \
+  --derived-dir data/derived \
+  --vault data/vault
+
+sourcefolio registry-queue \
+  --projects data/projects.json \
+  --derived-dir data/derived \
+  --vault data/vault \
+  --project sourcefolio \
+  --status inbox \
+  --format markdown
+
+sourcefolio candidate-decide \
+  --candidate-id cand_<64-hex> \
+  --status accepted \
+  --approved-by Mind \
+  --rationale "беру в пилот OCR" \
+  --vault data/vault \
+  --derived-dir data/derived
+```
+
+`registry-build` дедуплицирует упоминания по детерминированным ключам (репозиторий — `repo:<host>/<owner>/<repo>`, остальное — slug имени) и пишет content-addressed append-only снапшот `registry-snapshot/v1` в `data/derived/registry/snapshots/` с атомарным указателем `latest.json`; повторный прогон не мутирует принятые записи, а исчезнувший accepted-кандидат выживает как `stale`. Ручное слияние двух ключей — через `candidate-decide --merge-into <candidate_id>`. `registry-queue` упорядочивает кандидатов только внутри проекта (outcome → fit → score → mention_count → свежесть) и пишет generated-заметки `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/`; межпроектного ранжирования нет. `candidate-decide` пишет human-заметку в `<vault>/candidates/<candidate_id>.md`: статус `inbox`/`accepted`/`rejected`/`deferred`, для любого кроме `inbox` обязателен `--approved-by` (auto-accept нет). Те же решения доступны в browser-виде «Проекты» через `GET /api/registry` и `POST /api/candidate` (заголовок `X-Sourcefolio: 1`).
+
 ## Локальный браузер архива
 
 `render-ui` пишет самодостаточную HTML-страницу без медиа. `serve` поднимает локальный HTTP-сервер и отдаёт тот же интерфейс вместе с артефактами (превью и видео через Range) и записывает triage прямо из браузера:
@@ -502,6 +549,7 @@ tests/             # домен, вертикальный срез, CLI и archi
 - [Продуктовая рамка](docs/PRODUCT.md)
 - [Архитектура и границы данных](docs/ARCHITECTURE.md)
 - [Доменные контракты](docs/DOMAIN.md)
+- [Реестр кандидатов](docs/REGISTRY.md)
 - [Дорожная карта и gates](docs/ROADMAP.md)
 - [План сравнительного пилота](docs/PILOT.md)
 - [Real Tesseract на synthetic golden slides](docs/pilots/synthetic-ocr/README.md)
