@@ -1161,6 +1161,7 @@ def _context(args: argparse.Namespace) -> int:
     generated_root = vault_root / "_generated" / "sourcefolio"
     projects_path = Path(args.projects)
     projects = _load_projects(projects_path) if projects_path.is_file() else ()
+    generated_prefix = generated_root.relative_to(vault_root).as_posix()
     builder = ContextBriefBuilder(
         packets=FileSystemSourcePacketRepository(archive_root),
         project_fit_index=FileSystemProjectFitIndex(derived_root),
@@ -1168,6 +1169,12 @@ def _context(args: argparse.Namespace) -> int:
         profiles=FileSystemHumanNoteStore(vault_root / "projects"),
         decisions=FileSystemHumanNoteStore(vault_root / "decisions"),
         ideas=FileSystemHumanNoteStore(vault_root / "ideas"),
+        registry=_registry_queue_builder(
+            projects_path=projects_path,
+            derived_root=derived_root,
+            vault_root=vault_root,
+        ),
+        generated_prefix=generated_prefix,
     )
     brief = builder.build()
     store = FileSystemProjectionStore(generated_root)
@@ -1176,7 +1183,7 @@ def _context(args: argparse.Namespace) -> int:
         ContextBriefProjection(store=store).render(brief),
     )
     if args.context_format == "markdown":
-        print(render_markdown(brief))
+        print(render_markdown(brief, generated_prefix=generated_prefix))
     else:
         print(render_json(brief))
     return 0

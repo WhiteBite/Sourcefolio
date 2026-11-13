@@ -107,6 +107,7 @@ def test_context_command_json_and_markdown(tmp_path: Path, capsys) -> None:
     assert brief["stats"]["decisions"] == 1
     assert brief["projects"][0]["id"] == "midas"
     assert brief["decisions"][0]["title"] == "Adopt SQLite"
+    assert brief["candidates"] == []
 
     assert main([*base, "--format", "markdown"]) == 0
     markdown = capsys.readouterr().out
@@ -138,7 +139,8 @@ def test_context_command_degrades_on_missing_projects_and_writes_brief(
         )
         == 0
     )
-    capsys.readouterr()
+    brief = json.loads(capsys.readouterr().out)
+    assert brief["candidates"] == []
 
     index = vault / "_generated" / "sourcefolio" / "context" / "index.md"
     assert index.is_file()

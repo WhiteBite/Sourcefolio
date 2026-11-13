@@ -18,11 +18,14 @@ from sourcefolio.application.project_fit import (
 )
 from sourcefolio.application.projection_ports import HumanNoteReader, ProjectionStore
 from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.registry_queue import RegistryQueueBuilder
 
 _MAX_MATCHES = 20
 _MAX_MATCHES_PER_PROJECT = 3
 _MAX_DECISIONS = 20
 _MAX_IDEAS = 20
+_MAX_REGISTRY_CANDIDATES = 10
+_MAX_REGISTRY_PER_PROJECT = 3
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,17 @@ class ContextStats:
 
 
 @dataclass(frozen=True)
+class ContextCandidate:
+    project_id: str
+    candidate_id: str
+    title: str
+    kind: str
+    fit: str
+    mention_count: int
+    outcome: str
+
+
+@dataclass(frozen=True)
 class ContextBrief:
     generated_at: str
     projects: tuple[ContextProject, ...]
@@ -75,6 +89,7 @@ class ContextBrief:
     decisions: tuple[ContextDecision, ...]
     ideas: tuple[ContextIdea, ...]
     stats: ContextStats
+    candidates: tuple[ContextCandidate, ...] = ()
 
 
 def _profile(profiles: HumanNoteReader | None, project_id: str) -> str | None:
@@ -190,6 +205,32 @@ def _idea_count(ideas: HumanNoteReader | None) -> int:
     return sum(1 for path, _ in ideas.iter_notes() if path.endswith(".md"))
 
 
+def _context_candidates(
+    registry: RegistryQueueBuilder | None,
+) -> tuple[ContextCandidate, ...]:
+    if registry is None:
+        return ()
+    selected: list[ContextCandidate] = []
+    for project in registry.build().projects:
+        for taken, candidate in enumerate(project.candidates):
+            if taken >= _MAX_REGISTRY_PER_PROJECT or len(selected) >= _MAX_REGISTRY_CANDIDATES:
+                break
+            selected.append(
+                ContextCandidate(
+                    project_id=project.project_id,
+                    candidate_id=candidate.candidate_id,
+                    title=candidate.title,
+                    kind=candidate.kind.value,
+                    fit=candidate.fit.value,
+                    mention_count=candidate.mention_count,
+                    outcome=candidate.outcome,
+                )
+            )
+        if len(selected) >= _MAX_REGISTRY_CANDIDATES:
+            break
+    return tuple(selected)
+
+
 class ContextBriefBuilder:
     def __init__(
         self,
@@ -201,6 +242,9 @@ class ContextBriefBuilder:
         decisions_prefix: str = "",
         ideas: HumanNoteReader | None = None,
         clock: Callable[[], datetime] | None = None,
+        *,
+        registry: RegistryQueueBuilder | None = None,
+        generated_prefix: str | None = "_generated/sourcefolio",
     ) -> None:
         self._packets = packets
         self._project_fit_index = project_fit_index
@@ -210,6 +254,10 @@ class ContextBriefBuilder:
         self._decisions_prefix = decisions_prefix
         self._ideas = ideas
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._registry = registry
+        self._generated_prefix = (
+            generated_prefix.strip("/") if generated_prefix is not None else None
+        )
 
     def build(self) -> ContextBrief:
         latest = latest_capture_per_source(self._packets.iter_packets())
@@ -230,20 +278,25 @@ class ContextBriefBuilder:
             decisions=all_decisions[:_MAX_DECISIONS],
             ideas=_context_ideas(self._ideas),
             stats=stats,
+            candidates=_context_candidates(self._registry),
         )
 
     def to_json(self) -> str:
         return render_json(self.build())
 
     def to_markdown(self) -> str:
-        return render_markdown(self.build())
+        return render_markdown(self.build(), generated_prefix=self._generated_prefix)
 
 
 def render_json(brief: ContextBrief) -> str:
     return json.dumps(asdict(brief), ensure_ascii=False, indent=2, sort_keys=True)
 
 
-def render_markdown(brief: ContextBrief) -> str:
+def render_markdown(
+    brief: ContextBrief,
+    *,
+    generated_prefix: str | None = "_generated/sourcefolio",
+) -> str:
     lines = [
         "# Session context brief",
         "",
@@ -287,6 +340,20 @@ def render_markdown(brief: ContextBrief) -> str:
             lines.append(f"- {escape(idea.title, table=True)} (`{escape(idea.path, table=True)}`)")
     else:
         lines.append("None.")
+    if brief.candidates:
+        lines.extend(["", f"## Registry candidates ({len(brief.candidates)})", ""])
+        for candidate in brief.candidates:
+            line = (
+                f"- [{escape(candidate.project_id, table=True)}] "
+                f"{escape(candidate.title, table=True)} "
+                f"({escape(candidate.kind, table=True)}, {escape(candidate.fit, table=True)}, "
+                f"mentions {candidate.mention_count}, "
+                f"{escape(candidate.outcome, table=True)})"
+            )
+            if generated_prefix is not None:
+                target = f"{generated_prefix.strip('/')}/registry/{candidate.project_id}"
+                line += f" — [[{target}|registry]]"
+            lines.append(line)
     lines.extend(
         [
             "",

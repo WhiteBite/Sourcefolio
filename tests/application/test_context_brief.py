@@ -9,6 +9,8 @@ from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemHumanNoteStore,
     FileSystemProjectFitIndex,
+    FileSystemRegistryRouteStore,
+    FileSystemRegistrySnapshotStore,
     FileSystemSourcePacketRepository,
 )
 from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
@@ -16,7 +18,20 @@ from sourcefolio.application.archive_capture import ArchiveCapture
 from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
 from sourcefolio.application.context_brief import ContextBriefBuilder, ContextBriefProjection
 from sourcefolio.application.project_fit import Project
-from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
+from sourcefolio.application.registry_queue import RegistryQueueBuilder
+from sourcefolio.domain.common import ActorKind, Approval, Provenance, content_id
+from sourcefolio.domain.registry import (
+    AnchorField,
+    CandidateDecision,
+    CandidateKind,
+    CandidateMention,
+    DecisionStatus,
+    FitLevel,
+    MentionAnchor,
+    RegistryRoute,
+    RouteVerdict,
+)
 from sourcefolio.domain.source import (
     ArtifactRole,
     CollectionMembership,
@@ -97,6 +112,102 @@ def save_fit_index(root: Path, entries: list[dict[str, object]]) -> None:
     )
 
 
+def make_mention(
+    key: str,
+    title: str,
+    *,
+    fit: FitLevel = FitLevel.HIGH,
+) -> CandidateMention:
+    quote = f"mention of {key}"
+    payload: dict[str, object] = {
+        "candidate_key": key,
+        "kind": CandidateKind.TOOL,
+        "title": title,
+        "fit": fit,
+        "anchor": MentionAnchor(
+            field=AnchorField.DESCRIPTION,
+            quote=quote,
+            start_char=0,
+            end_char=len(quote),
+        ).model_dump(mode="json"),
+    }
+    return CandidateMention(mention_id=content_id("men", payload), **payload)
+
+
+def make_route(
+    index: int,
+    *,
+    project_id: str,
+    key: str,
+    title: str,
+    fit: FitLevel = FitLevel.HIGH,
+    pre_rank: int = 0,
+) -> RegistryRoute:
+    identity = {
+        "source_id": f"src_{index:064x}",
+        "capture_id": f"cap_{index + 100:064x}",
+        "project_id": project_id,
+        "model": "test-model",
+        "prompt_fingerprint": "0123456789abcdef",
+    }
+    return RegistryRoute(
+        route_id=content_id("rt", identity),
+        source_id=identity["source_id"],
+        capture_id=identity["capture_id"],
+        project_id=project_id,
+        model=identity["model"],
+        prompt_fingerprint=identity["prompt_fingerprint"],
+        verdict=RouteVerdict.CANDIDATE,
+        mentions=(make_mention(key, title, fit=fit),),
+        pre_rank=pre_rank,
+        captured_at=NOW,
+        provenance=Provenance(actor_kind=ActorKind.AGENT, actor_id="agent", method="registry-test"),
+        created_at=NOW,
+    )
+
+
+def make_accepted(project_id: str, key: str, title: str) -> CandidateDecision:
+    return CandidateDecision(
+        candidate_id=content_id("cand", {"project_id": project_id, "key": key}),
+        project_id=project_id,
+        key=key,
+        kind=CandidateKind.TOOL,
+        title=title,
+        status=DecisionStatus.ACCEPTED,
+        decided_at=NOW,
+        provenance=Provenance(actor_kind=ActorKind.USER, actor_id="user", method="candidate-note"),
+        approval=Approval(approved_by="user", approved_at=NOW),
+    )
+
+
+def registry_builder(
+    root: Path,
+    routes: list[RegistryRoute],
+    *,
+    decisions: tuple[CandidateDecision, ...] = (),
+) -> RegistryQueueBuilder:
+    derived = root / "derived"
+    route_store = FileSystemRegistryRouteStore(derived)
+    for route in routes:
+        route_store.save(route)
+    snapshot_store = FileSystemRegistrySnapshotStore(derived)
+    projects = {"alpha": "Alpha", "beta": "Beta", "gamma": "Gamma", "delta": "Delta"}
+    reported = RegistryBuilder(
+        routes=route_store,
+        snapshots=snapshot_store,
+        projects=projects,
+        decisions=decisions,
+        clock=lambda: NOW,
+    )
+    reported.run(RegistryBuildQuery())
+    return RegistryQueueBuilder(
+        routes=route_store,
+        snapshots=snapshot_store,
+        decisions=decisions,
+        projects=projects,
+    )
+
+
 def builder(
     root: Path,
     *,
@@ -104,6 +215,7 @@ def builder(
     profiles: FileSystemHumanNoteStore | None = None,
     decisions: FileSystemHumanNoteStore | None = None,
     ideas: FileSystemHumanNoteStore | None = None,
+    registry: RegistryQueueBuilder | None = None,
 ) -> ContextBriefBuilder:
     return ContextBriefBuilder(
         packets=FileSystemSourcePacketRepository(root),
@@ -113,6 +225,7 @@ def builder(
         decisions=decisions,
         ideas=ideas,
         clock=lambda: NOW,
+        registry=registry,
     )
 
 
@@ -175,7 +288,15 @@ def test_json_and_markdown_render(tmp_path: Path) -> None:
     brief_builder = builder(tmp_path)
 
     payload = json.loads(brief_builder.to_json())
-    assert set(payload) == {"generated_at", "projects", "matches", "decisions", "ideas", "stats"}
+    assert set(payload) == {
+        "generated_at",
+        "projects",
+        "matches",
+        "decisions",
+        "ideas",
+        "stats",
+        "candidates",
+    }
 
     markdown = brief_builder.to_markdown()
     assert markdown.startswith("# ")
@@ -291,3 +412,104 @@ def test_builder_writes_nothing(tmp_path: Path) -> None:
 
     after = sorted(path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*"))
     assert before == after
+
+
+def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> None:
+    routes = [
+        make_route(1, project_id="alpha", key="tool/accepted", title="Adopted tool"),
+        make_route(
+            2,
+            project_id="alpha",
+            key="tool/inbox",
+            title="Inbox tool",
+            pre_rank=100,
+        ),
+    ]
+    decisions = (make_accepted("alpha", "tool/accepted", "Adopted tool"),)
+    registry = registry_builder(tmp_path, routes, decisions=decisions)
+
+    brief_builder = builder(tmp_path, registry=registry)
+    brief = brief_builder.build()
+
+    assert [candidate.title for candidate in brief.candidates] == ["Adopted tool", "Inbox tool"]
+    assert [candidate.outcome for candidate in brief.candidates] == ["accepted", "inbox"]
+
+    payload = json.loads(brief_builder.to_json())
+    assert payload["candidates"][0] == {
+        "project_id": "alpha",
+        "candidate_id": content_id("cand", {"project_id": "alpha", "key": "tool/accepted"}),
+        "title": "Adopted tool",
+        "kind": "tool",
+        "fit": "high",
+        "mention_count": 1,
+        "outcome": "accepted",
+    }
+
+    markdown = brief_builder.to_markdown()
+    assert "## Registry candidates (2)" in markdown
+    assert "- [alpha] Adopted tool (tool, high, mentions 1, accepted)" in markdown
+    assert "[[_generated/sourcefolio/registry/alpha|registry]]" in markdown
+
+
+def test_registry_candidates_respect_per_project_and_global_caps(tmp_path: Path) -> None:
+    routes = []
+    index = 0
+    for project_id in ("alpha", "beta", "gamma", "delta"):
+        for position in range(4):
+            index += 1
+            routes.append(
+                make_route(
+                    index,
+                    project_id=project_id,
+                    key=f"{project_id}/tool-{position}",
+                    title=f"{project_id} tool {position}",
+                )
+            )
+    registry = registry_builder(tmp_path, routes)
+
+    candidates = builder(tmp_path, registry=registry).build().candidates
+
+    assert len(candidates) == 10
+    per_project = {
+        project_id: sum(candidate.project_id == project_id for candidate in candidates)
+        for project_id in ("alpha", "beta", "gamma", "delta")
+    }
+    assert per_project == {"alpha": 3, "beta": 3, "gamma": 1, "delta": 3}
+    assert [candidate.project_id for candidate in candidates] == (
+        ["alpha"] * 3 + ["beta"] * 3 + ["delta"] * 3 + ["gamma"]
+    )
+
+
+def test_registry_candidates_keep_project_order_without_global_resort(tmp_path: Path) -> None:
+    routes = [
+        make_route(
+            1,
+            project_id="beta",
+            key="beta/tool",
+            title="Beta tool",
+            pre_rank=100,
+        ),
+        make_route(
+            2,
+            project_id="alpha",
+            key="alpha/tool",
+            title="Alpha tool",
+            pre_rank=0,
+        ),
+    ]
+    registry = registry_builder(tmp_path, routes)
+
+    candidates = builder(tmp_path, registry=registry).build().candidates
+
+    assert [candidate.project_id for candidate in candidates] == ["alpha", "beta"]
+
+
+def test_registry_without_snapshot_yields_no_candidates_and_no_section(tmp_path: Path) -> None:
+    registry = registry_builder(tmp_path, [])
+
+    brief_builder = builder(tmp_path, registry=registry)
+    brief = brief_builder.build()
+
+    assert brief.candidates == ()
+    assert "## Registry candidates" not in brief_builder.to_markdown()
+    assert json.loads(brief_builder.to_json())["candidates"] == []
