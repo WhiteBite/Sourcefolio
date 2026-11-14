@@ -89,8 +89,8 @@ def _citation(source: EvidencePackSource) -> AskCitation:
     )
 
 
-def _cache_key(query: AskQuery, model: str) -> str:
-    material = f"{query.query}\x00{model}\x00{query.project or ''}"
+def _cache_key(model: str, user_prompt: str) -> str:
+    material = f"{model}\x00{user_prompt}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
 
@@ -180,7 +180,8 @@ class AskRunner:
                 citations=citations,
                 limitations=limitations,
             )
-        key = _cache_key(query, self._model)
+        user_prompt = _build_user_prompt(query.query, pack.sources, project_context)
+        key = _cache_key(self._model, user_prompt)
         cached = self._load_cache(key)
         if cached is not None:
             return self._report(
@@ -192,7 +193,6 @@ class AskRunner:
                 citations=citations,
                 limitations=limitations,
             )
-        user_prompt = _build_user_prompt(query.query, pack.sources, project_context)
         answer, error = self._complete(client, user_prompt)
         if answer is None:
             limitations.append(

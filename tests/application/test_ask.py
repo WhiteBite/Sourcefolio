@@ -119,14 +119,45 @@ def test_ask_grounded_with_client(tmp_path: Path) -> None:
 
 def test_ask_cache_hit_skips_client(tmp_path: Path) -> None:
     add_packet(tmp_path / "archive", "one")
-    runner(tmp_path, FakeChatClient("cached answer")).run(AskQuery(query="trading bot"))
+    client = FakeChatClient("cached answer")
 
-    second = FakeChatClient("other answer")
-    report = runner(tmp_path, second).run(AskQuery(query="trading bot"))
+    runner(tmp_path, client).run(AskQuery(query="trading bot"))
+    report = runner(tmp_path, client).run(AskQuery(query="trading bot"))
 
-    assert second.calls == 0
+    assert client.calls == 1
     assert report.status == "ok"
     assert report.answer == "cached answer"
+
+
+def test_ask_changed_pack_misses_cache(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("first answer")
+    runner(tmp_path, client).run(AskQuery(query="trading bot"))
+
+    add_packet(tmp_path / "archive", "two")
+    report = runner(tmp_path, client).run(AskQuery(query="trading bot"))
+
+    assert client.calls == 2
+    assert report.status == "ok"
+    assert report.answer == "first answer"
+
+
+def test_ask_changed_project_context_misses_cache(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("first answer")
+    runner(tmp_path, client).run(
+        AskQuery(query="trading bot"),
+        project_context="first context",
+    )
+
+    report = runner(tmp_path, client).run(
+        AskQuery(query="trading bot"),
+        project_context="second context",
+    )
+
+    assert client.calls == 2
+    assert report.status == "ok"
+    assert report.answer == "first answer"
 
 
 def test_ask_degraded_on_client_failure(tmp_path: Path) -> None:
