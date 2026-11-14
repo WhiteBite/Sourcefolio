@@ -323,6 +323,7 @@ def test_candidate_decide_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) ->
         rationale="why",
         approved_by="me",
         merge_into="cand_2",
+        outcome="piloted",
         projects="p.json",
         derived_dir="der",
         vault="v",
@@ -347,8 +348,19 @@ def test_candidate_decide_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) ->
             "me",
             "--merge-into",
             "cand_2",
+            "--outcome",
+            "piloted",
         ]
     ]
+
+
+def test_candidate_decide_tool_forwards_empty_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.candidate_decide(candidate_id="cand_1", outcome="")
+
+    assert calls[0][-2:] == ["--outcome", ""]
 
 
 def test_candidate_decide_tool_omits_optional_flags(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -372,6 +384,7 @@ def test_candidate_decide_tool_omits_optional_flags(monkeypatch: pytest.MonkeyPa
             "data/vault",
         ]
     ]
+    assert "--outcome" not in calls[0]
 
 
 def test_registry_tools_surface_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -396,3 +409,4 @@ def test_registry_tool_annotations() -> None:
         assert annotations is not None
         assert annotations.read_only_hint is False
     assert "candidate_id" in tools["candidate_decide"].input_schema["required"]
+    assert "outcome" not in tools["candidate_decide"].input_schema["required"]

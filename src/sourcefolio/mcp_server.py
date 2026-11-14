@@ -415,11 +415,12 @@ def candidate_decide(
     rationale: str | None = None,
     approved_by: str | None = None,
     merge_into: str | None = None,
+    outcome: str | None = None,
     projects: str = "data/projects.json",
     derived_dir: str = "data/derived",
     vault: str = "data/vault",
 ) -> str:
-    """Record a human decision on one registry candidate."""
+    """Record a human decision and optional outcome on one registry candidate."""
     arguments = [
         "candidate-decide",
         "--candidate-id",
@@ -439,6 +440,8 @@ def candidate_decide(
         arguments += ["--approved-by", approved_by]
     if merge_into is not None:
         arguments += ["--merge-into", merge_into]
+    if outcome is not None:
+        arguments += ["--outcome", outcome]
     return _run(arguments)
 
 
