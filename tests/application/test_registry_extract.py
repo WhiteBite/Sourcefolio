@@ -70,16 +70,20 @@ class FakeChatClient:
 
 
 class FakeRecord:
-    def __init__(self, text: str) -> None:
+    def __init__(self, extraction_id: str, text: str) -> None:
+        self.extraction_id = extraction_id
         self.text = text
 
 
 class FakeExtractions:
-    def __init__(self, texts_by_capture: dict[str, list[str]]) -> None:
+    def __init__(self, texts_by_capture: dict[str, list[tuple[str, str]]]) -> None:
         self._texts_by_capture = texts_by_capture
 
     def iter_for_capture(self, capture_id: str) -> object:
-        return iter(FakeRecord(text) for text in self._texts_by_capture.get(capture_id, []))
+        return iter(
+            FakeRecord(extraction_id, text)
+            for extraction_id, text in self._texts_by_capture.get(capture_id, [])
+        )
 
 
 def add_packet(
@@ -90,6 +94,7 @@ def add_packet(
     desc: str = "текст",
     caption: bytes = b"caption",
     comments: list[dict[str, object]] | None = None,
+    title: str | None = None,
     captured_at: datetime = NOW,
 ) -> SourcePacket:
     saved: dict[str, object] = {
@@ -115,6 +120,7 @@ def add_packet(
                 captured_at=captured_at,
                 collector=Provenance(actor_kind=ActorKind.TOOL, actor_id="test", method="test"),
                 collections=(CollectionMembership(name=collection),),
+                title=title,
                 artifacts=(
                     ArtifactPayload(
                         role=ArtifactRole.CAPTION_TEXT,
@@ -380,14 +386,15 @@ def test_dry_run_writes_nothing_and_returns_two_previews(tmp_path: Path) -> None
     assert list((tmp_path / "derived").rglob("*.json")) == []
 
 
-def test_ocr_and_caption_mentions_are_dropped_and_counted(tmp_path: Path) -> None:
+def test_ocr_and_caption_mentions_use_typed_locators(tmp_path: Path) -> None:
     packet = add_packet(
         tmp_path,
         "one",
         desc=DESCRIPTION,
-        caption=b"WEBVTT\n\n00:00 --> 00:01\nCaption alpha text",
+        caption=b"WEBVTT\n\n00:00.000 --> 00:01.000\nCaption alpha text\n",
     )
-    extractions = FakeExtractions({packet.capture_id: ["Slide alpha tool text"]})
+    extraction_id = "ext_" + "a" * 64
+    extractions = FakeExtractions({packet.capture_id: [(extraction_id, "Slide alpha tool text")]})
     response = candidate(
         [
             {
@@ -422,9 +429,152 @@ def test_ocr_and_caption_mentions_are_dropped_and_counted(tmp_path: Path) -> Non
         RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
     )
 
-    assert report.dropped_anchors == 2
-    assert report.mentions == 1
+    assert report.dropped_anchors == 0
+    assert report.mentions == 3
     route = stored_routes(tmp_path)[0]
     assert route.verdict == RouteVerdict.CANDIDATE
-    assert len(route.mentions) == 1
-    assert route.mentions[0].anchor.field == AnchorField.DESCRIPTION
+    anchors = {mention.anchor.field: mention.anchor for mention in route.mentions}
+    assert anchors[AnchorField.DESCRIPTION].extraction_id is None
+    assert anchors[AnchorField.DESCRIPTION].artifact_id is None
+    ocr_anchor = anchors[AnchorField.OCR]
+    assert ocr_anchor.extraction_id == extraction_id
+    assert ocr_anchor.artifact_id is None
+    assert ocr_anchor.start_char == 0
+    assert ocr_anchor.end_char == len("Slide alpha tool text")
+    caption_anchor = anchors[AnchorField.CAPTION]
+    assert caption_anchor.artifact_id is not None
+    assert caption_anchor.extraction_id is None
+    assert caption_anchor.quote == "Caption alpha text"
+    assert caption_anchor.start_char == 0
+    assert caption_anchor.end_char == len("Caption alpha text")
+
+
+def test_invalid_ocr_quote_is_dropped_and_counted(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extraction_id = "ext_" + "b" * 64
+    extractions = FakeExtractions({packet.capture_id: [(extraction_id, "Slide alpha tool text")]})
+    response = candidate(
+        [
+            {
+                "name": "Slide alpha",
+                "kind": "technique",
+                "fit": "medium",
+                "quote": "Slide beta tool text",
+                "field": "ocr",
+                "comment_index": None,
+            }
+        ]
+    )
+    client = FakeChatClient({"Slide alpha": response})
+
+    report = extractor(tmp_path, client, extractions=extractions).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert report.dropped_anchors == 1
+    assert report.mentions == 0
+    route = stored_routes(tmp_path)[0]
+    assert route.verdict == RouteVerdict.INSUFFICIENT_SIGNAL
+    assert route.reason == "no verbatim anchor"
+
+
+def test_repository_url_in_ocr_and_caption_becomes_typed_mention(tmp_path: Path) -> None:
+    packet = add_packet(
+        tmp_path,
+        "one",
+        desc=DESCRIPTION,
+        caption=b"WEBVTT\n\n00:00.000 --> 00:01.000\nSee https://github.com/Acme/Caption\n",
+    )
+    extraction_id = "ext_" + "c" * 64
+    extractions = FakeExtractions(
+        {packet.capture_id: [(extraction_id, "Repo https://github.com/Acme/Ocr is useful")]}
+    )
+    client = FakeChatClient({"Alpha Tool": candidate([])})
+
+    report = extractor(tmp_path, client, extractions=extractions).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert report.mentions == 2
+    route = stored_routes(tmp_path)[0]
+    anchors = {mention.candidate_key: mention.anchor for mention in route.mentions}
+    ocr_anchor = anchors["repo:github.com/acme/ocr"]
+    assert ocr_anchor.field == AnchorField.OCR
+    assert ocr_anchor.extraction_id == extraction_id
+    assert ocr_anchor.artifact_id is None
+    caption_anchor = anchors["repo:github.com/acme/caption"]
+    assert caption_anchor.field == AnchorField.CAPTION
+    assert caption_anchor.artifact_id is not None
+    assert caption_anchor.extraction_id is None
+
+
+def test_title_mention_uses_title_anchor(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION, title="Alpha Tool overview")
+    client = FakeChatClient(
+        {
+            "Alpha Tool": candidate(
+                [
+                    {
+                        "name": "Alpha Tool",
+                        "kind": "tool",
+                        "fit": "high",
+                        "quote": "Alpha Tool",
+                        "field": "title",
+                        "comment_index": None,
+                    }
+                ]
+            )
+        }
+    )
+
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert report.dropped_anchors == 0
+    assert report.mentions == 1
+    route = stored_routes(tmp_path)[0]
+    anchor = route.mentions[0].anchor
+    assert anchor.field == AnchorField.TITLE
+    assert anchor.start_char == 0
+    assert anchor.end_char == len("Alpha Tool")
+    assert anchor.extraction_id is None
+    assert anchor.artifact_id is None
+    assert anchor.comment_index is None
+
+
+def test_ocr_budget_keeps_whole_segments_only(tmp_path: Path) -> None:
+    packet = add_packet(tmp_path, "one", desc=DESCRIPTION)
+    first = "ext_" + "d" * 64
+    second = "ext_" + "e" * 64
+    extractions = FakeExtractions(
+        {
+            packet.capture_id: [
+                (first, "A" * 600),
+                (second, "B" * 600),
+            ]
+        }
+    )
+    client = FakeChatClient(
+        {
+            "Alpha Tool": candidate(
+                [
+                    {
+                        "name": "Second",
+                        "kind": "tool",
+                        "fit": "high",
+                        "quote": "B" * 600,
+                        "field": "ocr",
+                        "comment_index": None,
+                    }
+                ]
+            )
+        }
+    )
+
+    report = extractor(tmp_path, client, extractions=extractions).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), max_ocr_kb=1)
+    )
+
+    assert report.dropped_anchors == 1
+    assert report.mentions == 0

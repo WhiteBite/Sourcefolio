@@ -107,8 +107,8 @@ class RegistryExtractReport:
 class _FieldTexts:
     description: str
     comments: tuple[str, ...]
-    ocr: str
-    caption: str
+    ocr: tuple[tuple[str, str], ...]
+    caption: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -121,13 +121,6 @@ class _Outcome:
 
 def _as_str(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
-
-
-def _truncate_utf8(text: str, max_bytes: int) -> str:
-    encoded = text.encode("utf-8")
-    if len(encoded) <= max_bytes:
-        return text
-    return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
 def _strip_caption(text: str) -> str:
@@ -153,8 +146,8 @@ def _signal_length(texts: _FieldTexts) -> int:
     return (
         len(texts.description.strip())
         + sum(len(comment.strip()) for comment in texts.comments)
-        + len(texts.ocr.strip())
-        + len(texts.caption.strip())
+        + sum(len(text.strip()) for _, text in texts.ocr)
+        + sum(len(text.strip()) for _, text in texts.caption)
     )
 
 
@@ -164,6 +157,8 @@ def _build_user_prompt(packet: SourcePacket, project: Project, texts: _FieldText
     if profile:
         lines.append(f"  Profile: {profile}")
     lines.append(f"URL: {packet.source.canonical_url or 'unknown'}")
+    if packet.title:
+        lines.append(f"Title: {packet.title}")
     lines.append(f"Description: {texts.description}")
     if any(comment.strip() for comment in texts.comments):
         lines.append("Comments:")
@@ -172,10 +167,10 @@ def _build_user_prompt(packet: SourcePacket, project: Project, texts: _FieldText
                 lines.append(f"[{index}] {comment}")
     if texts.ocr:
         lines.append("OCR:")
-        lines.append(texts.ocr)
+        lines.append("\n\n".join(text for _, text in texts.ocr))
     if texts.caption:
         lines.append("Captions:")
-        lines.append(texts.caption)
+        lines.append("\n\n".join(text for _, text in texts.caption))
     return "\n".join(lines)
 
 
@@ -224,6 +219,16 @@ def _candidate_key(name: str) -> str:
     return slugify(name)[:_MAX_KEY]
 
 
+def _find_segment(
+    segments: tuple[tuple[str, str], ...],
+    quote: str,
+) -> tuple[str, str] | None:
+    for segment_id, text in segments:
+        if quote in text:
+            return segment_id, text
+    return None
+
+
 def _mention(
     item: Mapping[str, object],
     texts: _FieldTexts,
@@ -241,6 +246,8 @@ def _mention(
     if len(quote) < _MIN_QUOTE or len(quote) > _MAX_QUOTE:
         return None
     comment_index: int | None = None
+    extraction_id: str | None = None
+    artifact_id: str | None = None
     if field == AnchorField.COMMENT:
         raw_index = item.get("comment_index")
         if isinstance(raw_index, bool) or not isinstance(raw_index, int):
@@ -256,6 +263,18 @@ def _mention(
         cited = texts.comments[comment_index]
     elif field == AnchorField.TITLE:
         cited = packet.title or ""
+    elif field == AnchorField.OCR:
+        found = _find_segment(texts.ocr, quote)
+        if found is None:
+            return None
+        segment_id, cited = found
+        extraction_id = segment_id
+    elif field == AnchorField.CAPTION:
+        found = _find_segment(texts.caption, quote)
+        if found is None:
+            return None
+        segment_id, cited = found
+        artifact_id = segment_id
     else:
         return None
     start = cited.find(quote)
@@ -267,6 +286,8 @@ def _mention(
         start_char=start,
         end_char=start + len(quote),
         comment_index=comment_index,
+        extraction_id=extraction_id,
+        artifact_id=artifact_id,
     )
     key = _candidate_key(name)
     body: dict[str, object] = {
@@ -312,14 +333,21 @@ def _repository_mentions(
     existing: set[str],
 ) -> tuple[CandidateMention, ...]:
     seen = set(existing)
-    sources: list[tuple[AnchorField, int | None, str]] = [
-        (AnchorField.DESCRIPTION, None, texts.description)
+    sources: list[tuple[AnchorField, int | None, str | None, str | None, str]] = [
+        (AnchorField.DESCRIPTION, None, None, None, texts.description)
     ]
     sources.extend(
-        (AnchorField.COMMENT, index, comment) for index, comment in enumerate(texts.comments)
+        (AnchorField.COMMENT, index, None, None, comment)
+        for index, comment in enumerate(texts.comments)
+    )
+    sources.extend(
+        (AnchorField.OCR, None, segment_id, None, text) for segment_id, text in texts.ocr
+    )
+    sources.extend(
+        (AnchorField.CAPTION, None, None, segment_id, text) for segment_id, text in texts.caption
     )
     mentions: list[CandidateMention] = []
-    for field, comment_index, text in sources:
+    for field, comment_index, extraction_id, artifact_id, text in sources:
         for match in iter_repositories(text):
             ref = parse_repo_ref(match.url)
             if ref is None:
@@ -337,6 +365,8 @@ def _repository_mentions(
                 start_char=match.start_char,
                 end_char=match.end_char,
                 comment_index=comment_index,
+                extraction_id=extraction_id,
+                artifact_id=artifact_id,
             )
             body: dict[str, object] = {
                 "candidate_key": key,
@@ -639,16 +669,25 @@ class RegistryExtractor:
             caption=self._caption(packet, query.max_caption_kb),
         )
 
-    def _ocr(self, capture_id: CaptureId, max_ocr_kb: int) -> str:
-        parts: list[str] = []
+    def _ocr(self, capture_id: CaptureId, max_ocr_kb: int) -> tuple[tuple[str, str], ...]:
+        segments: list[tuple[str, str]] = []
+        budget = max_ocr_kb * 1024
+        used = 0
         for record in self._extractions.iter_for_capture(capture_id):
             text = record.text.strip()
-            if text:
-                parts.append(text)
-        return _truncate_utf8("\n".join(parts), max_ocr_kb * 1024)
+            if not text:
+                continue
+            size = len(text.encode("utf-8")) + (1 if segments else 0)
+            if used + size > budget:
+                break
+            used += size
+            segments.append((record.extraction_id, text))
+        return tuple(segments)
 
-    def _caption(self, packet: SourcePacket, max_caption_kb: int) -> str:
-        parts: list[str] = []
+    def _caption(self, packet: SourcePacket, max_caption_kb: int) -> tuple[tuple[str, str], ...]:
+        segments: list[tuple[str, str]] = []
+        budget = max_caption_kb * 1024
+        used = 0
         for artifact in packet.artifacts:
             if artifact.role != ArtifactRole.CAPTION_TEXT:
                 continue
@@ -657,8 +696,15 @@ class RegistryExtractor:
                 raw = stream.read()
             finally:
                 stream.close()
-            parts.append(raw.decode("utf-8", errors="replace"))
-        return _truncate_utf8(_strip_caption("\n".join(parts)), max_caption_kb * 1024)
+            text = _strip_caption(raw.decode("utf-8", errors="replace"))
+            if not text:
+                continue
+            size = len(text.encode("utf-8")) + (1 if segments else 0)
+            if used + size > budget:
+                break
+            used += size
+            segments.append((artifact.artifact_id, text))
+        return tuple(segments)
 
     def _select(self, query: RegistryExtractQuery) -> tuple[list[SourcePacket], dict[str, int]]:
         latest = latest_capture_per_source(self._packets.iter_packets())
