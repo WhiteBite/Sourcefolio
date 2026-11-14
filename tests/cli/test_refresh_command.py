@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+import pytest
+
 from sourcefolio import cli
 from sourcefolio.cli import main
 
@@ -329,3 +331,78 @@ def test_refresh_passes_projects_to_render_ui(tmp_path: Path, capsys, monkeypatc
     capsys.readouterr()
 
     assert recorded[-1].projects == str(projects)
+
+
+def _stub_refresh_handlers(monkeypatch: pytest.MonkeyPatch) -> list[argparse.Namespace]:
+    recorded: list[argparse.Namespace] = []
+
+    def fake_registry_extract(args: argparse.Namespace) -> int:
+        recorded.append(args)
+        return 0
+
+    def noop(args: argparse.Namespace) -> int:
+        return 0
+
+    monkeypatch.setattr(cli, "_registry_extract", fake_registry_extract)
+    monkeypatch.setattr(cli, "_registry_build", noop)
+    monkeypatch.setattr(cli, "_project_obsidian", noop)
+    monkeypatch.setattr(cli, "_context", noop)
+    monkeypatch.setattr(cli, "_render_ui", noop)
+    return recorded
+
+
+def test_refresh_registry_extract_uses_new_and_default_profiles(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    recorded = _stub_refresh_handlers(monkeypatch)
+
+    assert (
+        main(
+            [
+                "refresh",
+                "--registry",
+                "--archive-dir",
+                str(tmp_path / "archive"),
+                "--derived-dir",
+                str(tmp_path / "derived"),
+                "--vault",
+                str(tmp_path / "vault"),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert len(recorded) == 1
+    assert recorded[0].new is True
+    assert recorded[0].profiles == "data/vault/projects"
+
+
+def test_refresh_registry_extract_keeps_explicit_profiles(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    recorded = _stub_refresh_handlers(monkeypatch)
+    profiles = tmp_path / "profiles"
+
+    assert (
+        main(
+            [
+                "refresh",
+                "--registry",
+                "--profiles",
+                str(profiles),
+                "--archive-dir",
+                str(tmp_path / "archive"),
+                "--derived-dir",
+                str(tmp_path / "derived"),
+                "--vault",
+                str(tmp_path / "vault"),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert len(recorded) == 1
+    assert recorded[0].new is True
+    assert recorded[0].profiles == str(profiles)

@@ -341,6 +341,7 @@ def registry_extract(
     max_ocr_kb: int = 20,
     max_caption_kb: int = 20,
     refresh: bool = False,
+    new: bool = False,
     dry_run: bool = False,
     base_url: str | None = None,
     api_key: str | None = None,
@@ -372,6 +373,8 @@ def registry_extract(
         arguments += ["--limit", str(limit)]
     if refresh:
         arguments.append("--refresh")
+    if new:
+        arguments.append("--new")
     if dry_run:
         arguments.append("--dry-run")
     if base_url is not None:
@@ -387,9 +390,11 @@ def registry_extract(
 def registry_build(
     projects: str = "data/projects.json",
     profiles: str = "data/vault/projects",
+    archive_dir: str = "data/archive",
     derived_dir: str = "data/derived",
     vault: str = "data/vault",
     dry_run: bool = False,
+    show_unrouted: bool = False,
 ) -> str:
     """Aggregate extracted routes into a registry candidate snapshot."""
     arguments = [
@@ -398,6 +403,8 @@ def registry_build(
         projects,
         "--profiles",
         profiles,
+        "--archive-dir",
+        archive_dir,
         "--derived-dir",
         derived_dir,
         "--vault",
@@ -405,6 +412,8 @@ def registry_build(
     ]
     if dry_run:
         arguments.append("--dry-run")
+    if show_unrouted:
+        arguments.append("--show-unrouted")
     return _run(arguments)
 
 

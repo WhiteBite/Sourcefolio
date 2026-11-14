@@ -192,6 +192,7 @@ def test_registry_extract_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) ->
         max_ocr_kb=11,
         max_caption_kb=7,
         refresh=True,
+        new=True,
         dry_run=True,
         base_url="http://llm",
         api_key="k",
@@ -226,6 +227,7 @@ def test_registry_extract_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) ->
             "--limit",
             "5",
             "--refresh",
+            "--new",
             "--dry-run",
             "--base-url",
             "http://llm",
@@ -271,9 +273,11 @@ def test_registry_build_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> N
     mcp_server.registry_build(
         projects="p.json",
         profiles="profiles",
+        archive_dir="arch",
         derived_dir="der",
         vault="v",
         dry_run=True,
+        show_unrouted=True,
     )
 
     assert calls == [
@@ -283,11 +287,14 @@ def test_registry_build_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> N
             "p.json",
             "--profiles",
             "profiles",
+            "--archive-dir",
+            "arch",
             "--derived-dir",
             "der",
             "--vault",
             "v",
             "--dry-run",
+            "--show-unrouted",
         ]
     ]
 
@@ -305,6 +312,8 @@ def test_registry_build_tool_omits_dry_run(monkeypatch: pytest.MonkeyPatch) -> N
             "data/projects.json",
             "--profiles",
             "data/vault/projects",
+            "--archive-dir",
+            "data/archive",
             "--derived-dir",
             "data/derived",
             "--vault",

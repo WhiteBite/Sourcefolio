@@ -991,7 +991,9 @@ def _render_ui(args: argparse.Namespace) -> int:
     items = projection.rebuild()
     store.replace_namespace(
         RegistryViewProjection.NAMESPACE,
-        RegistryViewProjection().render(builder.build()),
+        RegistryViewProjection(
+            generated_prefix=generated_root.relative_to(vault_root).as_posix()
+        ).render(builder.build()),
     )
     output_path = generated_root / UiViewProjection.NAMESPACE / "index.html"
     if args.open:
@@ -1582,7 +1584,7 @@ def _registry_build(args: argparse.Namespace) -> int:
         merges=reader.merges(),
         latest_captures=latest_captures,
     ).run(RegistryBuildQuery(dry_run=args.dry_run))
-    output = {
+    output: dict[str, object] = {
         "snapshot_id": report.snapshot_id,
         "snapshot_path": report.snapshot_path,
         "latest_path": report.latest_path,
@@ -1594,8 +1596,10 @@ def _registry_build(args: argparse.Namespace) -> int:
         "dropped": report.dropped,
         "dry_run": report.dry_run,
         "routes_ignored": report.routes_ignored,
-        "unrouted_captures": list(report.unrouted_captures),
+        "unrouted_captures": len(report.unrouted_captures),
     }
+    if args.show_unrouted:
+        output["unrouted_capture_ids"] = list(report.unrouted_captures)
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
 
@@ -1614,7 +1618,7 @@ def _registry_queue(args: argparse.Namespace) -> int:
         status=DecisionStatus(args.status) if args.status else None,
         limit=args.limit,
     )
-    documents = RegistryViewProjection().render(queue)
+    documents = RegistryViewProjection(generated_prefix="_generated/sourcefolio").render(queue)
     if not args.dry_run:
         FileSystemProjectionStore(vault_root / "_generated" / "sourcefolio").replace_namespace(
             RegistryViewProjection.NAMESPACE,
@@ -1721,7 +1725,7 @@ def _refresh(args: argparse.Namespace) -> int:
                 _registry_extract,
                 argparse.Namespace(
                     projects=args.projects,
-                    profiles=args.profiles,
+                    profiles=args.profiles or "data/vault/projects",
                     base_url=args.base_url,
                     api_key=args.api_key,
                     model=args.model,
@@ -1732,7 +1736,7 @@ def _refresh(args: argparse.Namespace) -> int:
                     limit=args.limit,
                     max_ocr_kb=args.max_ocr_kb,
                     max_caption_kb=20,
-                    new=False,
+                    new=True,
                     refresh=args.refresh,
                     dry_run=args.dry_run,
                 ),
@@ -1749,6 +1753,7 @@ def _refresh(args: argparse.Namespace) -> int:
                 derived_dir=args.derived_dir,
                 vault=args.vault,
                 dry_run=args.dry_run,
+                show_unrouted=False,
             ),
         )
     )
@@ -2577,6 +2582,11 @@ def _build_parser() -> argparse.ArgumentParser:
     registry_build.add_argument("--derived-dir", default="data/derived")
     registry_build.add_argument("--vault", default="data/vault")
     registry_build.add_argument("--dry-run", action="store_true", help="report without writing")
+    registry_build.add_argument(
+        "--show-unrouted",
+        action="store_true",
+        help="include ids of captures without a route",
+    )
     registry_build.set_defaults(handler=_registry_build)
 
     registry_queue = subcommands.add_parser(

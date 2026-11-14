@@ -168,7 +168,7 @@ class RegistryBuilder:
         ]
         built_ids = {candidate.candidate_id for candidate in candidates}
 
-        outcomes = {
+        statuses = {
             candidate_id: decision.status for candidate_id, decision in decisions_by_id.items()
         }
         stale: list[Candidate] = []
@@ -197,11 +197,11 @@ class RegistryBuilder:
                 candidate for candidate in ordered if candidate.project_id == project_id
             ]
             accepted = sum(
-                outcomes.get(candidate.candidate_id) == DecisionStatus.ACCEPTED
+                statuses.get(candidate.candidate_id) == DecisionStatus.ACCEPTED
                 for candidate in project_candidates
             )
             rejected = sum(
-                outcomes.get(candidate.candidate_id) == DecisionStatus.REJECTED
+                statuses.get(candidate.candidate_id) == DecisionStatus.REJECTED
                 for candidate in project_candidates
             )
             stale_count = sum(candidate.stale for candidate in project_candidates)

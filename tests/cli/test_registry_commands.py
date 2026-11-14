@@ -468,13 +468,14 @@ def test_registry_build_reports_freshness_counters(tmp_path: Path, capsys, monke
     prepare(tmp_path, monkeypatch)
     assert main(extract_arguments(tmp_path)) == 0
     capsys.readouterr()
-    unrouted = add_packet(tmp_path / "archive", "two")
+    add_packet(tmp_path / "archive", "two")
 
     assert main(build_arguments(tmp_path, "--archive-dir", str(tmp_path / "archive"))) == 0
     output = json.loads(capsys.readouterr().out)
 
     assert output["routes_ignored"] == 0
-    assert output["unrouted_captures"] == [unrouted.capture_id]
+    assert output["unrouted_captures"] == 1
+    assert "unrouted_capture_ids" not in output
 
     assert (
         main(build_arguments(tmp_path, "--archive-dir", str(tmp_path / "missing"), "--dry-run"))
@@ -483,7 +484,32 @@ def test_registry_build_reports_freshness_counters(tmp_path: Path, capsys, monke
     output = json.loads(capsys.readouterr().out)
 
     assert output["routes_ignored"] == 0
-    assert output["unrouted_captures"] == []
+    assert output["unrouted_captures"] == 0
+
+
+def test_registry_build_show_unrouted_lists_capture_ids(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    prepare(tmp_path, monkeypatch)
+    assert main(extract_arguments(tmp_path)) == 0
+    capsys.readouterr()
+    unrouted = add_packet(tmp_path / "archive", "two")
+
+    assert (
+        main(
+            build_arguments(
+                tmp_path,
+                "--archive-dir",
+                str(tmp_path / "archive"),
+                "--show-unrouted",
+            )
+        )
+        == 0
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["unrouted_captures"] == 1
+    assert output["unrouted_capture_ids"] == [unrouted.capture_id]
 
 
 def test_registry_queue_links_latest_capture_card(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -503,6 +529,9 @@ def test_registry_queue_links_latest_capture_card(tmp_path: Path, capsys, monkey
     ).read_text(encoding="utf-8")
     assert f"source-cards/{old.source_id}/{latest.capture_id}" in project_note
     assert f"source-cards/{old.source_id}/{old.capture_id}" not in project_note
+    assert f"[[_generated/sourcefolio/source-cards/{old.source_id}/{latest.capture_id}|" in (
+        project_note
+    )
 
 
 def test_registry_extract_fails_when_route_fails(tmp_path: Path, capsys, monkeypatch) -> None:
