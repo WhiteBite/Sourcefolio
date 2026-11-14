@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
+import pytest
+
 from sourcefolio.adapters.filesystem import (
     FileSystemArtifactStore,
     FileSystemRegistryRouteStore,
     FileSystemSourcePacketRepository,
 )
 from sourcefolio.adapters.filesystem.llm_cache import FileSystemLlmCache
+from sourcefolio.application import registry_extract
 from sourcefolio.application.archive_capture import ArchiveCapture
 from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
 from sourcefolio.application.project_fit import Project
@@ -152,6 +155,7 @@ def extractor(
     projects: tuple[Project, ...] = PROJECTS,
     extractions: FakeExtractions | None = None,
     clock: Callable[[], datetime] | None = None,
+    model: str = "test-model",
 ) -> RegistryExtractor:
     return RegistryExtractor(
         packets=FileSystemSourcePacketRepository(root),
@@ -161,7 +165,7 @@ def extractor(
         cache=FileSystemLlmCache(root / "derived", namespace="registry-extract"),
         routes=FileSystemRegistryRouteStore(root / "derived"),
         projects=projects,
-        model="test-model",
+        model=model,
         clock=clock or (lambda: NOW),
         retry_backoff_seconds=0.0,
     )
@@ -537,6 +541,81 @@ def test_new_only_with_refresh_still_skips_routed_pair(tmp_path: Path) -> None:
     assert client.calls == 0
     assert report.routes_processed == 0
     assert report.skipped_cached == 1
+
+
+def test_changed_system_prompt_creates_new_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient({"Alpha Tool": candidate([])})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+    first_route = stored_routes(tmp_path)[0]
+
+    monkeypatch.setattr(registry_extract, "SYSTEM_PROMPT", registry_extract.SYSTEM_PROMPT + "\nnew")
+    client = FakeChatClient({"Alpha Tool": candidate([])})
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert client.calls == 1
+    assert report.routes_processed == 1
+    routes = stored_routes(tmp_path)
+    assert len(routes) == 2
+    assert len({route.route_id for route in routes}) == 2
+    assert len({route.prompt_fingerprint for route in routes}) == 2
+    assert first_route.route_id in {route.route_id for route in routes}
+
+
+def test_unchanged_system_prompt_skips_existing_route(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient({"Alpha Tool": candidate([])})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient({"Alpha Tool": candidate([])})
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert client.calls == 0
+    assert report.routes_processed == 0
+    assert report.skipped_cached == 1
+    assert len(stored_routes(tmp_path)) == 1
+
+
+def test_new_only_processes_pair_without_route_for_current_model(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient({"Alpha Tool": candidate([])})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient({"Alpha Tool": candidate([])})
+    report = extractor(tmp_path, client, model="other-model").run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), new_only=True)
+    )
+
+    assert client.calls == 1
+    assert report.routes_processed == 1
+    assert report.skipped_cached == 0
+    assert {route.model for route in stored_routes(tmp_path)} == {"test-model", "other-model"}
+
+
+def test_new_only_skips_pair_with_route_for_current_model(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient({"Alpha Tool": candidate([])})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient({"Alpha Tool": candidate([])})
+    report = extractor(tmp_path, client, model="test-model").run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), new_only=True)
+    )
+
+    assert client.calls == 0
+    assert report.routes_processed == 0
+    assert report.skipped_cached == 1
+    assert len(stored_routes(tmp_path)) == 1
 
 
 def test_repository_url_in_description_becomes_repo_mention(tmp_path: Path) -> None:

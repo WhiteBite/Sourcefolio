@@ -139,7 +139,7 @@ def _strip_caption(text: str) -> str:
 
 
 def _fingerprint(model: str, user_prompt: str) -> str:
-    material = f"{model}\x00{user_prompt}"
+    material = f"{model}\x00{SYSTEM_PROMPT}\x00{user_prompt}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
 
@@ -448,6 +448,7 @@ class RegistryExtractor:
             routed = {
                 (route.source_id, route.capture_id, route.project_id)
                 for route in self._routes.iter_all()
+                if route.model == self._model
             }
         selected, pre_ranks, routed_packets = self._select(query, projects, routed)
         verdicts = {verdict.value: 0 for verdict in RouteVerdict}
