@@ -30,7 +30,7 @@ def _inference_callout() -> list[str]:
 
 def _accepted_count(candidates: Iterable[QueueCandidate]) -> int:
     accepted = DecisionStatus.ACCEPTED.value
-    return sum(1 for candidate in candidates if candidate.outcome == accepted)
+    return sum(1 for candidate in candidates if candidate.status == accepted)
 
 
 def _project_slugs(projects: Iterable[ProjectQueue]) -> dict[str, str]:
@@ -49,10 +49,11 @@ def _project_slugs(projects: Iterable[ProjectQueue]) -> dict[str, str]:
 
 def _quote_lines(mention: QueueMention, generated_prefix: str, alias: str) -> list[str]:
     lines = [f"> {line}" for line in mention.quote.splitlines() or [""]]
+    link = card_link_ids(generated_prefix, mention.source_id, mention.card_capture_id, alias)
     lines.extend(
         [
             ">",
-            f"> {card_link_ids(generated_prefix, mention.source_id, mention.capture_id, alias)}",
+            f"> {link}",
             "",
         ]
     )
@@ -66,9 +67,11 @@ def _candidate_lines(candidate: QueueCandidate, generated_prefix: str) -> list[s
         f"- Kind: {candidate.kind.value}",
         f"- Fit: {candidate.fit.value}",
         f"- Mentions: {candidate.mention_count}",
-        f"- Outcome: **{candidate.outcome}**",
+        f"- Status: **{candidate.status}**",
         "",
     ]
+    if candidate.outcome:
+        lines.insert(-1, f"- Outcome: {candidate.outcome}")
     for mention in candidate.mentions[:_MAX_QUOTES]:
         alias = mention.title or candidate.title
         lines.extend(_quote_lines(mention, generated_prefix, alias))

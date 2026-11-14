@@ -140,6 +140,7 @@ def make_decision(
     key: str = "owner/repo",
     title: str = "Example tool",
     status: DecisionStatus = DecisionStatus.INBOX,
+    outcome: str | None = None,
 ) -> CandidateDecision:
     candidate_id = content_id("cand", {"project_id": project_id, "key": key})
     if status == DecisionStatus.INBOX:
@@ -162,6 +163,8 @@ def make_decision(
         title=title,
         status=status,
         decided_at=NOW,
+        outcome=outcome,
+        outcome_at=NOW if outcome is not None else None,
         provenance=Provenance(actor_kind=ActorKind.USER, actor_id="user", method="candidate-note"),
         approval=Approval(approved_by="user", approved_at=NOW),
     )
@@ -494,6 +497,79 @@ def test_no_snapshot_yields_empty_queue() -> None:
     assert queue == RegistryQueue(snapshot_id=None, generated_at=None, projects=())
 
 
+def test_accepted_with_outcome_sorts_after_rejected() -> None:
+    routes = [
+        make_route(
+            index=1,
+            mentions=(make_mention(key="tool/accepted", quote="accepted mention"),),
+        ),
+        make_route(
+            index=2,
+            mentions=(make_mention(key="tool/rejected", quote="rejected mention"),),
+        ),
+    ]
+    decisions = [
+        make_decision(
+            key="tool/accepted",
+            status=DecisionStatus.ACCEPTED,
+            outcome="shipped in pilot",
+        ),
+        make_decision(key="tool/rejected", status=DecisionStatus.REJECTED),
+    ]
+    snapshot = build_snapshot(routes, decisions=decisions)
+
+    queue = make_queue_builder(snapshot, routes, decisions=decisions).build()
+
+    assert candidate_keys(queue) == ["tool/rejected", "tool/accepted"]
+    accepted = queue.projects[0].candidates[-1]
+    assert accepted.status == DecisionStatus.ACCEPTED.value
+    assert accepted.outcome == "shipped in pilot"
+    assert accepted.outcome_at == NOW.isoformat()
+
+
+def test_callable_decisions_are_resolved_per_build() -> None:
+    routes = [
+        make_route(
+            index=1,
+            mentions=(make_mention(key="tool/live", quote="live mention"),),
+        ),
+    ]
+    snapshot = build_snapshot(routes)
+    decisions: list[CandidateDecision] = []
+
+    builder = RegistryQueueBuilder(
+        snapshots=FakeSnapshotStore(snapshot),
+        routes=FakeRouteStore(routes),
+        decision_provider=lambda: tuple(decisions),
+    )
+
+    assert builder.build().projects[0].candidates[0].status == DecisionStatus.INBOX.value
+
+    decisions.append(make_decision(key="tool/live", status=DecisionStatus.ACCEPTED))
+
+    assert builder.build().projects[0].candidates[0].status == DecisionStatus.ACCEPTED.value
+
+
+def test_latest_captures_drive_card_capture_id() -> None:
+    routes = [
+        make_route(
+            index=1,
+            mentions=(make_mention(key="tool/card", quote="card mention"),),
+        ),
+    ]
+    snapshot = build_snapshot(routes)
+    builder = RegistryQueueBuilder(
+        snapshots=FakeSnapshotStore(snapshot),
+        routes=FakeRouteStore(routes),
+        latest_captures={source_id(1): "cap_latest"},
+    )
+
+    mention = builder.build().projects[0].candidates[0].mentions[0]
+
+    assert mention.capture_id == capture_id(1)
+    assert mention.card_capture_id == "cap_latest"
+
+
 def test_mentions_join_route_fields_and_skip_missing_ids() -> None:
     routes = [
         make_route(
@@ -522,6 +598,7 @@ def test_mentions_join_route_fields_and_skip_missing_ids() -> None:
         QueueMention(
             source_id=source_id(1),
             capture_id=capture_id(1),
+            card_capture_id=capture_id(1),
             url="https://example.com/one",
             title="First source",
             quote="first join quote",

@@ -19,6 +19,7 @@ def make_mention(
     *,
     source_id: str = "src_1",
     capture_id: str = "cap_1",
+    card_capture_id: str | None = None,
     title: str = "Source",
     quote: str = "Candidate quote text",
     fit: FitLevel = FitLevel.HIGH,
@@ -26,6 +27,7 @@ def make_mention(
     return QueueMention(
         source_id=source_id,
         capture_id=capture_id,
+        card_capture_id=card_capture_id if card_capture_id is not None else capture_id,
         url=f"https://example.test/{source_id}",
         title=title,
         quote=quote,
@@ -41,7 +43,8 @@ def make_candidate(
     kind: CandidateKind = CandidateKind.TOOL,
     fit: FitLevel = FitLevel.HIGH,
     mention_count: int = 1,
-    outcome: str = DecisionStatus.INBOX.value,
+    status: str = DecisionStatus.INBOX.value,
+    outcome: str | None = None,
     mentions: tuple[QueueMention, ...] | None = None,
 ) -> QueueCandidate:
     resolved = (make_mention(),) if mentions is None else mentions
@@ -54,6 +57,7 @@ def make_candidate(
         mention_count=mention_count,
         source_count=1,
         score=1,
+        status=status,
         outcome=outcome,
         mentions=resolved,
     )
@@ -163,14 +167,47 @@ def test_accepted_candidate_is_marked() -> None:
         ProjectQueue(
             project_id="alpha",
             name="Alpha",
-            candidates=(make_candidate(outcome=DecisionStatus.ACCEPTED.value),),
+            candidates=(make_candidate(status=DecisionStatus.ACCEPTED.value),),
         )
     )
 
     documents = RegistryViewProjection().render(queue)
 
-    assert "Outcome: **accepted**" in documents[1].content
+    assert "Status: **accepted**" in documents[1].content
     assert "accepted_count: 1" in documents[0].content
+
+
+def test_recorded_outcome_is_rendered() -> None:
+    queue = make_queue(
+        ProjectQueue(
+            project_id="alpha",
+            name="Alpha",
+            candidates=(
+                make_candidate(status=DecisionStatus.ACCEPTED.value, outcome="shipped in pilot"),
+            ),
+        )
+    )
+
+    content = RegistryViewProjection().render(queue)[1].content
+
+    assert "Status: **accepted**" in content
+    assert "Outcome: shipped in pilot" in content
+
+
+def test_quote_links_to_latest_card_capture() -> None:
+    mentions = (make_mention(source_id="src_9", capture_id="cap_9", card_capture_id="cap_latest"),)
+    queue = make_queue(
+        ProjectQueue(
+            project_id="alpha",
+            name="Alpha",
+            candidates=(make_candidate(mentions=mentions),),
+        )
+    )
+
+    content = RegistryViewProjection().render(queue)[1].content
+
+    assert "sourcefolio/source-cards/src_9/cap_latest" in content
+    assert "sourcefolio/source-cards/src_9/cap_9" not in content
 
 
 def test_empty_queue_yields_single_index_with_zero_counts() -> None:

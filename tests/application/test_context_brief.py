@@ -432,7 +432,8 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
     brief = brief_builder.build()
 
     assert [candidate.title for candidate in brief.candidates] == ["Adopted tool", "Inbox tool"]
-    assert [candidate.outcome for candidate in brief.candidates] == ["accepted", "inbox"]
+    assert [candidate.status for candidate in brief.candidates] == ["accepted", "inbox"]
+    assert [candidate.outcome for candidate in brief.candidates] == [None, None]
 
     payload = json.loads(brief_builder.to_json())
     assert payload["candidates"][0] == {
@@ -442,7 +443,8 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
         "kind": "tool",
         "fit": "high",
         "mention_count": 1,
-        "outcome": "accepted",
+        "status": "accepted",
+        "outcome": None,
     }
 
     markdown = brief_builder.to_markdown()

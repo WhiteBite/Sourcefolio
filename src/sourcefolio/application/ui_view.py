@@ -215,7 +215,9 @@ def registry_view(queue: RegistryQueue) -> dict[str, object]:
                         "mention_count": candidate.mention_count,
                         "source_count": candidate.source_count,
                         "score": candidate.score,
+                        "status": candidate.status,
                         "outcome": candidate.outcome,
+                        "outcome_at": candidate.outcome_at,
                         "mentions": [
                             {
                                 "source_id": mention.source_id,
@@ -994,7 +996,7 @@ main.wrap[hidden] { display: none; }
     repository: 'репозиторий', topic: 'тема', other: 'прочее'
   };
   var FIT_LABELS = { high: 'высокий', medium: 'средний', low: 'низкий' };
-  var OUTCOME_LABELS = {
+  var CANDIDATE_STATUS_LABELS = {
     inbox: 'в инбоксе', accepted: 'принят', rejected: 'отклонён', deferred: 'отложен'
   };
   var DECISIONS = [
@@ -1030,7 +1032,7 @@ main.wrap[hidden] { display: none; }
   function statusLabel(s) { return STATUS_LABELS[s || 'none'] || s; }
   function candKindLabel(k) { return CAND_KIND_LABELS[k] || k; }
   function fitLabel(f) { return FIT_LABELS[f] || f; }
-  function outcomeLabel(o) { return OUTCOME_LABELS[o] || o; }
+  function candidateStatusLabel(o) { return CANDIDATE_STATUS_LABELS[o] || o; }
 
   function icon(name) {
     var s = document.createElementNS(NS, 'svg');
@@ -1354,7 +1356,7 @@ main.wrap[hidden] { display: none; }
     meta.appendChild(el('span', 'tag', candKindLabel(cand.kind)));
     meta.appendChild(el('span', 'pfit ' + cand.fit, 'фит: ' + fitLabel(cand.fit)));
     meta.appendChild(el('span', 'pcount', cand.mention_count + ' упом.'));
-    meta.appendChild(el('span', 'obadge ' + cand.outcome, outcomeLabel(cand.outcome)));
+    meta.appendChild(el('span', 'obadge ' + cand.status, candidateStatusLabel(cand.status)));
     body.appendChild(meta);
     if (cand.mentions.length) {
       body.appendChild(el('p', 'pquote', cand.mentions[0].quote));
@@ -1786,9 +1788,12 @@ main.wrap[hidden] { display: none; }
     var meta = el('div', 'dmeta');
     meta.appendChild(el('span', 'tag', candKindLabel(cand.kind)));
     meta.appendChild(el('span', 'pfit ' + cand.fit, 'фит: ' + fitLabel(cand.fit)));
-    var badge = el('span', 'obadge ' + cand.outcome, outcomeLabel(cand.outcome));
+    var badge = el('span', 'obadge ' + cand.status, candidateStatusLabel(cand.status));
     meta.appendChild(badge);
     info.appendChild(meta);
+    if (cand.outcome) {
+      info.appendChild(el('p', 'save-note', 'результат: ' + cand.outcome));
+    }
     body.appendChild(info);
 
     var mentions = el('section', 'dsec block');
@@ -1819,7 +1824,7 @@ main.wrap[hidden] { display: none; }
       var button = el('button', 'tbtn ' + choice.cls, choice.label);
       button.type = 'button';
       button.setAttribute('data-status', choice.status);
-      button.setAttribute('aria-pressed', cand.outcome === choice.status ? 'true' : 'false');
+      button.setAttribute('aria-pressed', cand.status === choice.status ? 'true' : 'false');
       button.disabled = !CAN_WRITE;
       button.addEventListener('click', function () { applyDecision(cand, choice.status); });
       row.appendChild(button);
@@ -1837,20 +1842,20 @@ main.wrap[hidden] { display: none; }
   function syncCandidateStatus(cand) {
     var badge = drawer.querySelector('.obadge');
     if (badge) {
-      badge.className = 'obadge ' + cand.outcome;
-      badge.textContent = outcomeLabel(cand.outcome);
+      badge.className = 'obadge ' + cand.status;
+      badge.textContent = candidateStatusLabel(cand.status);
     }
     var buttons = drawer.querySelectorAll('.tbtn');
     for (var i = 0; i < buttons.length; i++) {
       var status = buttons[i].getAttribute('data-status');
-      buttons[i].setAttribute('aria-pressed', cand.outcome === status ? 'true' : 'false');
+      buttons[i].setAttribute('aria-pressed', cand.status === status ? 'true' : 'false');
     }
   }
 
   function applyDecision(cand, status) {
     if (!CAN_WRITE || !cand) { return; }
-    var previous = cand.outcome;
-    cand.outcome = status;
+    var previous = cand.status;
+    cand.status = status;
     syncCandidateStatus(cand);
     renderProjects();
     var note = drawer.querySelector('.save-note');
@@ -1865,7 +1870,7 @@ main.wrap[hidden] { display: none; }
       var fresh = drawer.querySelector('.save-note');
       if (fresh) { fresh.textContent = 'сохранено'; }
     }, function (message) {
-      cand.outcome = previous;
+      cand.status = previous;
       syncCandidateStatus(cand);
       renderProjects();
       var fresh = drawer.querySelector('.save-note');

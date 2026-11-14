@@ -78,7 +78,8 @@ class ContextCandidate:
     kind: str
     fit: str
     mention_count: int
-    outcome: str
+    status: str
+    outcome: str | None = None
 
 
 @dataclass(frozen=True)
@@ -223,6 +224,7 @@ def _context_candidates(
                     kind=candidate.kind.value,
                     fit=candidate.fit.value,
                     mention_count=candidate.mention_count,
+                    status=candidate.status,
                     outcome=candidate.outcome,
                 )
             )
@@ -348,8 +350,10 @@ def render_markdown(
                 f"{escape(candidate.title, table=True)} "
                 f"({escape(candidate.kind, table=True)}, {escape(candidate.fit, table=True)}, "
                 f"mentions {candidate.mention_count}, "
-                f"{escape(candidate.outcome, table=True)})"
+                f"{escape(candidate.status, table=True)})"
             )
+            if candidate.outcome:
+                line += f" — outcome: {escape(candidate.outcome, table=True)}"
             if generated_prefix is not None:
                 target = f"{generated_prefix.strip('/')}/registry/{candidate.project_id}"
                 line += f" — [[{target}|registry]]"

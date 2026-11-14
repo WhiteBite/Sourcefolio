@@ -459,7 +459,9 @@ def test_ui_view_embeds_registry_queue(tmp_path: Path) -> None:
         "mention_count",
         "source_count",
         "score",
+        "status",
         "outcome",
+        "outcome_at",
         "mentions",
     }
     assert candidate["title"] == "Alpha Tool"
@@ -469,7 +471,9 @@ def test_ui_view_embeds_registry_queue(tmp_path: Path) -> None:
     assert candidate["mention_count"] == 1
     assert candidate["source_count"] == 1
     assert candidate["score"] == 5
-    assert candidate["outcome"] == "inbox"
+    assert candidate["status"] == "inbox"
+    assert candidate["outcome"] is None
+    assert candidate["outcome_at"] is None
 
     mentions = candidate["mentions"]
     assert isinstance(mentions, list) and len(mentions) == 1
@@ -541,6 +545,8 @@ def test_ui_view_projects_view_keeps_archive_and_registry_payload(tmp_path: Path
         "mention_count",
         "source_count",
         "score",
+        "status",
         "outcome",
+        "outcome_at",
         "mentions",
     }

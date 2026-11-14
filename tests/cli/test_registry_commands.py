@@ -244,7 +244,7 @@ def test_registry_queue_prints_queue(tmp_path: Path, capsys, monkeypatch) -> Non
     assert project["name"] == "Sourcefolio"
     candidate = project["candidates"][0]
     assert candidate["title"] == "Alpha Tool"
-    assert candidate["outcome"] == "inbox"
+    assert candidate["status"] == "inbox"
     registry_root = tmp_path / "vault" / "_generated" / "sourcefolio" / "registry"
     assert (registry_root / "index.md").is_file()
 
