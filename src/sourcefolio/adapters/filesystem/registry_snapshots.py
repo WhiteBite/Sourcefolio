@@ -18,6 +18,16 @@ class FileSystemRegistrySnapshotStore:
         self._snapshots.mkdir(parents=True, exist_ok=True)
 
     def save(self, snapshot: RegistrySnapshot) -> bool:
+        existing = self.load(snapshot.snapshot_id)
+        if existing is not None:
+            existing_payload = existing.model_dump(mode="json")
+            incoming_payload = snapshot.model_dump(mode="json")
+            existing_payload.pop("generated_at", None)
+            incoming_payload.pop("generated_at", None)
+            if existing_payload == incoming_payload:
+                latest = canonical_json({"snapshot_id": snapshot.snapshot_id}) + "\n"
+                write_atomic_bytes(self._root / "latest.json", latest.encode("utf-8"))
+                return False
         body = canonical_json(snapshot.model_dump(mode="json")) + "\n"
         created = write_immutable_bytes(
             self._snapshots / f"{snapshot.snapshot_id}.json",

@@ -523,6 +523,15 @@ class RegistryExtractor:
         user_prompt = _build_user_prompt(packet, project, texts)
         prompt_fingerprint = _fingerprint(self._model, user_prompt)
         route_id = _route_id(packet, project.id, self._model, prompt_fingerprint)
+        try:
+            existing = self._routes.get(route_id)
+        except Exception:
+            existing = None
+        if existing is not None:
+            return _Outcome(
+                item=_item(packet, project.id, "skipped", existing.verdict),
+                mentions=len(existing.mentions),
+            )
         if _signal_length(texts) < _MIN_SIGNAL_CHARS:
             route = self._route(
                 packet=packet,
@@ -543,16 +552,6 @@ class RegistryExtractor:
             return _Outcome(
                 item=_item(packet, project.id, "processed", RouteVerdict.INSUFFICIENT_SIGNAL)
             )
-        if not query.refresh:
-            try:
-                existing = self._routes.get(route_id)
-            except Exception:
-                existing = None
-            if existing is not None:
-                return _Outcome(
-                    item=_item(packet, project.id, "skipped", existing.verdict),
-                    mentions=len(existing.mentions),
-                )
         cache_key = f"{packet.capture_id}__{project.id}__{prompt_fingerprint}"
         payload: Mapping[str, JsonValue] | None = None
         if not query.refresh:

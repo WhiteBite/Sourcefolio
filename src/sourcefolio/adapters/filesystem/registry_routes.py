@@ -29,6 +29,14 @@ class FileSystemRegistryRouteStore:
             return None
 
     def save(self, route: RegistryRoute) -> bool:
+        existing = self.get(route.route_id)
+        if existing is not None:
+            existing_payload = existing.model_dump(mode="json")
+            incoming_payload = route.model_dump(mode="json")
+            existing_payload.pop("created_at", None)
+            incoming_payload.pop("created_at", None)
+            if existing_payload == incoming_payload:
+                return False
         body = canonical_json(route.model_dump(mode="json")) + "\n"
         return write_immutable_bytes(
             self._root / f"{route.route_id}.json",

@@ -4,6 +4,9 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
+from sourcefolio.adapters.filesystem.atomic import ImmutableStoreConflict
 from sourcefolio.adapters.filesystem.registry_routes import FileSystemRegistryRouteStore
 from sourcefolio.adapters.filesystem.registry_snapshots import FileSystemRegistrySnapshotStore
 from sourcefolio.domain.common import ActorKind, Provenance, content_id
@@ -50,7 +53,12 @@ def mention() -> CandidateMention:
     return CandidateMention(mention_id=content_id("men", payload), **payload)
 
 
-def make_route(*, model: str = "test-model", source_id: str = SOURCE_ID) -> RegistryRoute:
+def make_route(
+    *,
+    model: str = "test-model",
+    source_id: str = SOURCE_ID,
+    created_at: datetime = NOW,
+) -> RegistryRoute:
     identity: dict[str, str] = {
         "source_id": source_id,
         "capture_id": CAPTURE_ID,
@@ -65,7 +73,7 @@ def make_route(*, model: str = "test-model", source_id: str = SOURCE_ID) -> Regi
         mentions=(mention(),),
         captured_at=NOW,
         provenance=provenance(),
-        created_at=NOW,
+        created_at=created_at,
     )
 
 
@@ -99,7 +107,11 @@ def snapshot_payload(
     }
 
 
-def make_snapshot(*, route_count: int = 1) -> RegistrySnapshot:
+def make_snapshot(
+    *,
+    route_count: int = 1,
+    generated_at: datetime = NOW,
+) -> RegistrySnapshot:
     projects = (
         SnapshotProject(
             project_id=PROJECT_ID,
@@ -113,7 +125,7 @@ def make_snapshot(*, route_count: int = 1) -> RegistrySnapshot:
     candidates = (make_candidate(),)
     return RegistrySnapshot(
         snapshot_id=content_id("snap", snapshot_payload(projects, candidates, route_count)),
-        generated_at=NOW,
+        generated_at=generated_at,
         projects=projects,
         candidates=candidates,
         route_count=route_count,
@@ -140,6 +152,29 @@ def test_route_first_save_and_identical_resave(tmp_path: Path) -> None:
     assert store.save(route) is False
     assert route_path(tmp_path, route).read_bytes() == original
     assert store.get(route.route_id) == route
+
+
+def test_route_resave_with_different_created_at_is_idempotent(tmp_path: Path) -> None:
+    store = FileSystemRegistryRouteStore(tmp_path)
+    route = make_route()
+    changed = make_route(created_at=NOW.replace(second=1))
+
+    assert store.save(route) is True
+    original = route_path(tmp_path, route).read_bytes()
+
+    assert store.save(changed) is False
+    assert route_path(tmp_path, route).read_bytes() == original
+
+
+def test_route_divergent_content_under_same_id_conflicts(tmp_path: Path) -> None:
+    store = FileSystemRegistryRouteStore(tmp_path)
+    route = make_route()
+    changed = route.model_copy(update={"reason": "different reason"})
+
+    store.save(route)
+
+    with pytest.raises(ImmutableStoreConflict):
+        store.save(changed)
 
 
 def test_route_get_returns_none_for_invalid_payloads(tmp_path: Path) -> None:
@@ -181,6 +216,29 @@ def test_snapshot_first_save_and_identical_resave(tmp_path: Path) -> None:
     assert store.load(snapshot.snapshot_id) == snapshot
 
 
+def test_snapshot_resave_with_different_generated_at_is_idempotent(tmp_path: Path) -> None:
+    store = FileSystemRegistrySnapshotStore(tmp_path)
+    snapshot = make_snapshot()
+    changed = make_snapshot(generated_at=NOW.replace(second=1))
+
+    assert store.save(snapshot) is True
+    original = snapshot_path(tmp_path, snapshot).read_bytes()
+
+    assert store.save(changed) is False
+    assert snapshot_path(tmp_path, snapshot).read_bytes() == original
+
+
+def test_snapshot_divergent_content_under_same_id_conflicts(tmp_path: Path) -> None:
+    store = FileSystemRegistrySnapshotStore(tmp_path)
+    snapshot = make_snapshot()
+    changed = snapshot.model_copy(update={"route_count": 2})
+
+    store.save(snapshot)
+
+    with pytest.raises(ImmutableStoreConflict):
+        store.save(changed)
+
+
 def test_snapshot_load_returns_none_for_invalid_payloads(tmp_path: Path) -> None:
     store = FileSystemRegistrySnapshotStore(tmp_path)
     snapshot = make_snapshot()
@@ -220,6 +278,20 @@ def test_latest_follows_newest_snapshot(tmp_path: Path) -> None:
 
     latest = json.loads((tmp_path / "registry" / "latest.json").read_text(encoding="utf-8"))
     assert latest == {"snapshot_id": second.snapshot_id}
+
+
+def test_latest_follows_resaved_snapshot(tmp_path: Path) -> None:
+    store = FileSystemRegistrySnapshotStore(tmp_path)
+    first = make_snapshot(route_count=1)
+    second = make_snapshot(route_count=2)
+
+    store.save(first)
+    store.save(second)
+    store.save(first.model_copy(update={"generated_at": NOW.replace(second=1)}))
+
+    latest = json.loads((tmp_path / "registry" / "latest.json").read_text(encoding="utf-8"))
+    assert latest == {"snapshot_id": first.snapshot_id}
+    assert store.load_latest() == first
 
 
 def test_iter_snapshots_is_sorted(tmp_path: Path) -> None:

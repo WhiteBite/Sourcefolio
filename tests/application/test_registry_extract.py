@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -44,6 +45,15 @@ PROJECTS = (
 SINGLE = (PROJECTS[0],)
 
 DESCRIPTION = "Alpha Tool is a useful library for working with text"
+
+
+class AdvancingClock:
+    def __init__(self) -> None:
+        self._current = datetime.now(UTC)
+
+    def __call__(self) -> datetime:
+        self._current = max(datetime.now(UTC), self._current + datetime.resolution)
+        return self._current
 
 
 class FakeChatClient:
@@ -141,6 +151,7 @@ def extractor(
     *,
     projects: tuple[Project, ...] = PROJECTS,
     extractions: FakeExtractions | None = None,
+    clock: Callable[[], datetime] | None = None,
 ) -> RegistryExtractor:
     return RegistryExtractor(
         packets=FileSystemSourcePacketRepository(root),
@@ -151,7 +162,7 @@ def extractor(
         routes=FileSystemRegistryRouteStore(root / "derived"),
         projects=projects,
         model="test-model",
-        clock=lambda: NOW,
+        clock=clock or (lambda: NOW),
         retry_backoff_seconds=0.0,
     )
 
@@ -305,7 +316,68 @@ def test_cache_hit_skips_client(tmp_path: Path) -> None:
     assert len(stored_routes(tmp_path)) == 1
 
 
-def test_refresh_calls_client_again(tmp_path: Path) -> None:
+def test_repeated_short_text_extraction_is_idempotent(tmp_path: Path) -> None:
+    add_packet(
+        tmp_path,
+        "one",
+        desc="",
+        comments=[],
+        caption=b"WEBVTT\n\n00:00 --> 00:01\n\n1\n",
+    )
+    clock = AdvancingClock()
+    client = FakeChatClient()
+
+    first = extractor(tmp_path, client, clock=clock).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+    second = extractor(tmp_path, client, clock=clock).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert first.routes_processed == 1
+    assert second.routes_processed == 0
+    assert second.skipped_cached == 1
+    assert second.results[0].status == "skipped"
+    assert second.results[0].verdict == RouteVerdict.INSUFFICIENT_SIGNAL.value
+    assert client.calls == 0
+    assert len(stored_routes(tmp_path)) == 1
+
+
+def test_repeated_normal_extraction_is_idempotent(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    response = candidate(
+        [
+            {
+                "name": "Alpha Tool",
+                "kind": "tool",
+                "fit": "high",
+                "quote": "Alpha Tool",
+                "field": "description",
+                "comment_index": None,
+            }
+        ]
+    )
+    clock = AdvancingClock()
+    client = FakeChatClient({"Alpha Tool": response})
+
+    first = extractor(tmp_path, client, clock=clock).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+    second = extractor(tmp_path, client, clock=clock).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert first.routes_processed == 1
+    assert second.routes_processed == 0
+    assert second.skipped_cached == 1
+    assert second.results[0].status == "skipped"
+    assert second.results[0].verdict == RouteVerdict.CANDIDATE.value
+    assert second.mentions == 1
+    assert client.calls == 1
+    assert len(stored_routes(tmp_path)) == 1
+
+
+def test_refresh_with_stored_route_does_not_call_client(tmp_path: Path) -> None:
     add_packet(tmp_path, "one", desc=DESCRIPTION)
     extractor(tmp_path, FakeChatClient({"Alpha Tool": candidate([])})).run(
         RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
@@ -316,8 +388,41 @@ def test_refresh_calls_client_again(tmp_path: Path) -> None:
         RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), refresh=True)
     )
 
+    assert client.calls == 0
+    assert report.routes_processed == 0
+    assert report.skipped_cached == 1
+    assert report.results[0].status == "skipped"
+    assert report.results[0].verdict == RouteVerdict.INSUFFICIENT_SIGNAL.value
+
+
+def test_refresh_with_cache_only_calls_client_again(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    response = candidate(
+        [
+            {
+                "name": "Alpha Tool",
+                "kind": "tool",
+                "fit": "high",
+                "quote": "Alpha Tool",
+                "field": "description",
+                "comment_index": None,
+            }
+        ]
+    )
+    extractor(tmp_path, FakeChatClient({"Alpha Tool": response})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+    for path in (tmp_path / "derived" / "registry" / "routes").glob("*.json"):
+        path.unlink()
+
+    client = FakeChatClient({"Alpha Tool": response})
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), refresh=True)
+    )
+
     assert client.calls == 1
     assert report.routes_processed == 1
+    assert report.skipped_cached == 0
 
 
 def test_new_only_skips_existing_route_without_client_call(tmp_path: Path) -> None:
