@@ -85,7 +85,7 @@ def _candidate_lines(candidate: QueueCandidate, generated_prefix: str) -> list[s
 class RegistryViewProjection:
     NAMESPACE = "registry"
 
-    def __init__(self, *, generated_prefix: str = "sourcefolio") -> None:
+    def __init__(self, *, generated_prefix: str = "_generated/sourcefolio") -> None:
         self._generated_prefix = generated_prefix.strip("/")
 
     def render(self, queue: RegistryQueue) -> tuple[GeneratedDocument, ...]:
