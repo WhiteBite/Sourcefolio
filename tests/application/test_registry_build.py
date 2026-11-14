@@ -97,10 +97,14 @@ def make_route(
     mentions: tuple[CandidateMention, ...] = (),
     verdict: RouteVerdict = RouteVerdict.CANDIDATE,
     reason: str = "",
+    source_index: int | None = None,
+    capture_index: int | None = None,
+    captured_at: datetime = NOW,
+    created_at: datetime = NOW,
 ) -> RegistryRoute:
     identity = {
-        "source_id": source_id(index),
-        "capture_id": capture_id(index),
+        "source_id": source_id(index if source_index is None else source_index),
+        "capture_id": capture_id(index if capture_index is None else capture_index),
         "project_id": project_id,
         "model": MODEL,
         "prompt_fingerprint": PROMPT_FINGERPRINT,
@@ -115,9 +119,9 @@ def make_route(
         verdict=verdict,
         reason=reason,
         mentions=mentions,
-        captured_at=NOW,
+        captured_at=captured_at,
         provenance=Provenance(actor_kind=ActorKind.AGENT, actor_id="agent", method="registry-test"),
-        created_at=NOW,
+        created_at=created_at,
     )
 
 
@@ -160,6 +164,7 @@ def make_builder(
     decisions: Iterable[CandidateDecision] = (),
     merges: Mapping[str, str] | None = None,
     projects: Mapping[str, str] | None = None,
+    latest_captures: Mapping[str, str] | None = None,
 ) -> tuple[RegistryBuilder, FakeSnapshotStore]:
     store = FakeSnapshotStore()
     builder = RegistryBuilder(
@@ -168,6 +173,7 @@ def make_builder(
         projects=projects if projects is not None else {"sourcefolio": "Sourcefolio"},
         decisions=decisions,
         merges=merges,
+        latest_captures=latest_captures,
         clock=lambda: NOW,
     )
     return builder, store
@@ -344,3 +350,197 @@ def test_non_candidate_routes_are_dropped() -> None:
     assert snapshot.route_count == 3
     assert snapshot.dropped_claims == 2
     assert snapshot.insufficient_signal_routes == 1
+
+
+def test_newest_capture_route_replaces_older_route_for_source_project() -> None:
+    older = make_route(
+        index=1,
+        source_index=10,
+        capture_index=20,
+        mentions=(make_mention(quote="older capture mention"),),
+        captured_at=NOW,
+    )
+    newer = make_route(
+        index=2,
+        source_index=10,
+        capture_index=21,
+        mentions=(make_mention(quote="newer capture mention"),),
+        captured_at=NOW.replace(minute=1),
+    )
+    builder, store = make_builder([older, newer])
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.routes_ignored == 1
+    assert report.mentions == 1
+    assert report.projects["sourcefolio"]["candidates"] == 1
+    assert store.saved[0].route_count == 1
+    assert store.saved[0].candidates[0].mention_ids == (newer.mentions[0].mention_id,)
+
+
+def test_newest_created_at_wins_when_capture_times_match() -> None:
+    older = make_route(
+        index=1,
+        source_index=10,
+        capture_index=20,
+        mentions=(make_mention(quote="older created mention"),),
+        created_at=NOW,
+    )
+    newer = make_route(
+        index=2,
+        source_index=10,
+        capture_index=21,
+        mentions=(make_mention(quote="newer created mention"),),
+        created_at=NOW.replace(minute=1),
+    )
+    builder, store = make_builder([older, newer])
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.routes_ignored == 1
+    assert store.saved[0].candidates[0].mention_count == 1
+    assert store.saved[0].candidates[0].mention_ids[0] != older.mentions[0].mention_id
+
+
+def test_route_id_breaks_equal_timestamp_ties() -> None:
+    first = make_route(
+        index=1,
+        source_index=10,
+        capture_index=20,
+        mentions=(make_mention(quote="first tie mention"),),
+    )
+    second = make_route(
+        index=2,
+        source_index=10,
+        capture_index=21,
+        mentions=(make_mention(quote="second tie mention"),),
+    )
+    expected = max(first, second, key=lambda route: route.route_id)
+    builder, store = make_builder([first, second])
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.routes_ignored == 1
+    assert store.saved[0].candidates[0].mention_ids == (expected.mentions[0].mention_id,)
+
+
+def test_accepted_candidate_only_in_ignored_route_survives_as_stale() -> None:
+    older = make_route(
+        index=1,
+        source_index=10,
+        capture_index=20,
+        mentions=(make_mention(key="retired/tool", quote="retired tool mention"),),
+    )
+    newer = make_route(
+        index=2,
+        source_index=10,
+        capture_index=21,
+        mentions=(make_mention(key="current/tool", quote="current tool mention"),),
+        captured_at=NOW.replace(minute=1),
+    )
+    decisions = [
+        make_decision(
+            key="retired/tool",
+            title="Retired tool",
+            status=DecisionStatus.ACCEPTED,
+        )
+    ]
+    builder, store = make_builder([older, newer], decisions=decisions)
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.routes_ignored == 1
+    assert report.stale_accepted == 1
+    stale = next(
+        candidate for candidate in store.saved[0].candidates if candidate.key == "retired/tool"
+    )
+    assert stale.stale is True
+    assert stale.mention_count == 0
+
+
+def test_unrouted_captures_reports_latest_capture_missing_a_project() -> None:
+    route = make_route(
+        index=1,
+        source_index=10,
+        capture_index=20,
+        project_id="sourcefolio",
+        mentions=(make_mention(quote="routed mention"),),
+    )
+    builder, _ = make_builder(
+        [route],
+        projects={"sourcefolio": "Sourcefolio", "midas": "MidasAI"},
+        latest_captures={source_id(10): capture_id(20)},
+    )
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.unrouted_captures == (capture_id(20),)
+
+
+def test_unrouted_captures_is_empty_when_fully_routed() -> None:
+    routes = [
+        make_route(
+            index=1,
+            source_index=10,
+            capture_index=20,
+            project_id="sourcefolio",
+            mentions=(make_mention(quote="sourcefolio mention"),),
+        ),
+        make_route(
+            index=2,
+            source_index=10,
+            capture_index=20,
+            project_id="midas",
+            mentions=(make_mention(quote="midas mention"),),
+        ),
+    ]
+    builder, _ = make_builder(
+        routes,
+        projects={"sourcefolio": "Sourcefolio", "midas": "MidasAI"},
+        latest_captures={source_id(10): capture_id(20)},
+    )
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.unrouted_captures == ()
+
+
+def test_unrouted_captures_is_empty_without_latest_captures() -> None:
+    builder, _ = make_builder(
+        [make_route(index=1, mentions=(make_mention(quote="candidate mention"),))]
+    )
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.unrouted_captures == ()
+
+
+def test_snapshot_id_ignores_latest_capture_injection() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="stable mention"),))]
+    without_latest, _ = make_builder(routes)
+    with_latest, _ = make_builder(
+        routes,
+        latest_captures={source_id(1): capture_id(1)},
+    )
+
+    without_report = without_latest.run(RegistryBuildQuery())
+    with_report = with_latest.run(RegistryBuildQuery())
+
+    assert without_report.snapshot_id == with_report.snapshot_id
+
+
+def test_snapshot_id_is_unchanged_when_only_decision_metadata_changes() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="stable mention"),))]
+    original_builder, _ = make_builder(
+        routes,
+        decisions=[make_decision(title="Original title")],
+    )
+    changed_builder, _ = make_builder(
+        routes,
+        decisions=[make_decision(title="Changed title")],
+    )
+
+    original_report = original_builder.run(RegistryBuildQuery())
+    changed_report = changed_builder.run(RegistryBuildQuery())
+
+    assert original_report.snapshot_id == changed_report.snapshot_id

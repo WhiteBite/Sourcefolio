@@ -65,6 +65,8 @@ class RegistryBuildReport:
     stale_accepted: int
     dropped: int
     dry_run: bool
+    routes_ignored: int = 0
+    unrouted_captures: tuple[str, ...] = ()
 
 
 class RegistryBuilder:
@@ -76,6 +78,7 @@ class RegistryBuilder:
         projects: Mapping[str, str],
         decisions: Iterable[CandidateDecision] = (),
         merges: Mapping[str, str] | None = None,
+        latest_captures: Mapping[str, str] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._routes = routes
@@ -83,17 +86,49 @@ class RegistryBuilder:
         self._projects = dict(projects)
         self._decisions = tuple(decisions)
         self._merges = dict(merges or {})
+        self._latest_captures = dict(latest_captures or {})
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def run(self, query: RegistryBuildQuery) -> RegistryBuildReport:
         routes_list = list(self._routes.iter_all())
-        dropped = sum(route.verdict != RouteVerdict.CANDIDATE for route in routes_list)
+        newest_routes: dict[tuple[str, str], RegistryRoute] = {}
+        for route in routes_list:
+            key = (route.source_id, route.project_id)
+            current = newest_routes.get(key)
+            if current is None or (
+                route.captured_at,
+                route.created_at,
+                route.route_id,
+            ) > (
+                current.captured_at,
+                current.created_at,
+                current.route_id,
+            ):
+                newest_routes[key] = route
+        kept_routes = list(newest_routes.values())
+        routes_ignored = len(routes_list) - len(kept_routes)
+        routed_keys = {
+            (route.source_id, route.capture_id, route.project_id) for route in kept_routes
+        }
+        unrouted_captures = tuple(
+            sorted(
+                {
+                    capture_id
+                    for source_id, capture_id in self._latest_captures.items()
+                    if any(
+                        (source_id, capture_id, project_id) not in routed_keys
+                        for project_id in self._projects
+                    )
+                }
+            )
+        )
+        dropped = sum(route.verdict != RouteVerdict.CANDIDATE for route in kept_routes)
         insufficient = sum(
-            route.verdict == RouteVerdict.INSUFFICIENT_SIGNAL for route in routes_list
+            route.verdict == RouteVerdict.INSUFFICIENT_SIGNAL for route in kept_routes
         )
 
         mentions_by_key: dict[tuple[str, str], list[tuple[RegistryRoute, CandidateMention]]] = {}
-        for route in routes_list:
+        for route in kept_routes:
             if route.verdict != RouteVerdict.CANDIDATE:
                 continue
             for mention in route.mentions:
@@ -191,7 +226,7 @@ class RegistryBuilder:
             "schema_version": "registry-snapshot/v1",
             "projects": [project.model_dump(mode="json") for project in snapshot_projects],
             "candidates": [candidate.model_dump(mode="json") for candidate in ordered],
-            "route_count": len(routes_list),
+            "route_count": len(kept_routes),
             "insufficient_signal_routes": insufficient,
             "dropped_claims": dropped,
         }
@@ -201,7 +236,7 @@ class RegistryBuilder:
             generated_at=self._clock(),
             projects=tuple(snapshot_projects),
             candidates=ordered,
-            route_count=len(routes_list),
+            route_count=len(kept_routes),
             insufficient_signal_routes=insufficient,
             dropped_claims=dropped,
         )
@@ -222,6 +257,8 @@ class RegistryBuilder:
             stale_accepted=len(stale),
             dropped=dropped,
             dry_run=query.dry_run,
+            routes_ignored=routes_ignored,
+            unrouted_captures=unrouted_captures,
         )
 
     @staticmethod
