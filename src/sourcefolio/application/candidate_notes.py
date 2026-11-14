@@ -34,6 +34,9 @@ def render_candidate_note(decision: CandidateDecision) -> str:
         properties["rationale"] = decision.rationale
     if decision.decided_at is not None:
         properties["decided_at"] = decision.decided_at.isoformat()
+    if decision.outcome is not None and decision.outcome_at is not None:
+        properties["outcome"] = decision.outcome
+        properties["outcome_at"] = decision.outcome_at.isoformat()
     if decision.approval is not None:
         properties["approved_by"] = decision.approval.approved_by
         properties["approval_at"] = decision.approval.approved_at.isoformat()
@@ -59,9 +62,12 @@ class CandidateDecisionWriter:
         rationale: str = "",
         approved_by: str | None = None,
         merge_into: str | None = None,
+        outcome: str | None = None,
     ) -> CandidateNoteResult:
         if merge_into == candidate_id:
             raise ValueError("candidate cannot be merged into itself")
+        if outcome and status == DecisionStatus.INBOX:
+            raise ValueError("outcome requires a decided status")
         updates: dict[str, object | None]
         if merge_into is not None:
             updates = {"merged_into": merge_into}
@@ -71,6 +77,8 @@ class CandidateDecisionWriter:
                 "decided_at": None,
                 "approved_by": None,
                 "approval_at": None,
+                "outcome": None,
+                "outcome_at": None,
             }
             if rationale.strip():
                 updates["rationale"] = rationale
@@ -84,6 +92,12 @@ class CandidateDecisionWriter:
             updates["decided_at"] = now.isoformat()
             updates["approved_by"] = approved_by.strip()
             updates["approval_at"] = now.isoformat()
+            if outcome == "":
+                updates["outcome"] = None
+                updates["outcome_at"] = None
+            elif outcome is not None:
+                updates["outcome"] = outcome
+                updates["outcome_at"] = now.isoformat()
         path = f"{candidate_id}.md"
         base = CandidateDecision(
             candidate_id=candidate_id,
@@ -146,6 +160,28 @@ class CandidateDecisionReader:
         )
         decided_at = properties.get("decided_at")
         rationale = properties.get("rationale")
+        outcome = properties.get("outcome")
+        outcome_at = properties.get("outcome_at")
+        normalized_outcome = outcome if isinstance(outcome, str) and outcome else None
+        normalized_outcome_at: datetime | None = None
+        if isinstance(outcome_at, datetime):
+            parsed_outcome_at = outcome_at
+        elif isinstance(outcome_at, str):
+            try:
+                parsed_outcome_at = datetime.fromisoformat(outcome_at)
+            except ValueError:
+                parsed_outcome_at = None
+        else:
+            parsed_outcome_at = None
+        if (
+            parsed_outcome_at is not None
+            and parsed_outcome_at.tzinfo is not None
+            and parsed_outcome_at.utcoffset() is not None
+        ):
+            normalized_outcome_at = parsed_outcome_at
+        if normalized_outcome is None or normalized_outcome_at is None:
+            normalized_outcome = None
+            normalized_outcome_at = None
         return CandidateDecision(
             candidate_id=str(properties.get("candidate_id", "")),
             project_id=str(properties.get("project_id", "")),
@@ -155,6 +191,8 @@ class CandidateDecisionReader:
             status=DecisionStatus(str(properties.get("status", DecisionStatus.INBOX.value))),
             rationale="" if rationale is None else str(rationale),
             decided_at=None if decided_at is None else str(decided_at),
+            outcome=normalized_outcome,
+            outcome_at=normalized_outcome_at,
             provenance=Provenance(
                 actor_kind=ActorKind.USER,
                 actor_id=str(approved_by or "user"),

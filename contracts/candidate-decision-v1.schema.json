@@ -152,6 +152,33 @@
     "kind": {
       "$ref": "#/$defs/CandidateKind"
     },
+    "outcome": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcome"
+    },
+    "outcome_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcome At"
+    },
     "project_id": {
       "pattern": "^[a-z0-9][a-z0-9-]*$",
       "title": "Project Id",

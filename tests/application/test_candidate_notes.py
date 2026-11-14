@@ -50,6 +50,7 @@ def set_candidate(
     rationale: str = "",
     approved_by: str | None = "mitya",
     merge_into: str | None = None,
+    outcome: str | None = None,
 ) -> CandidateNoteResult:
     return writer.set(
         candidate_id=candidate_id,
@@ -61,6 +62,7 @@ def set_candidate(
         rationale=rationale,
         approved_by=approved_by,
         merge_into=merge_into,
+        outcome=outcome,
     )
 
 
@@ -121,12 +123,16 @@ def test_inbox_clears_decided_fields_and_ignores_approved_by(tmp_path: Path) -> 
         "decided_at": None,
         "approved_by": None,
         "approval_at": None,
+        "outcome": None,
+        "outcome_at": None,
     }
     properties = read_properties(tmp_path)
     assert properties["status"] == "inbox"
     assert "decided_at" not in properties
     assert "approved_by" not in properties
     assert "approval_at" not in properties
+    assert "outcome" not in properties
+    assert "outcome_at" not in properties
 
 
 def test_rationale_rendered_only_when_provided(tmp_path: Path) -> None:
@@ -142,8 +148,97 @@ def test_rationale_rendered_only_when_provided(tmp_path: Path) -> None:
     assert read_properties(tmp_path, OTHER_ID)["rationale"] == "separate slideshow path"
 
 
+def test_accepted_write_sets_outcome_fields(tmp_path: Path) -> None:
+    result = set_candidate(build_writer(tmp_path), outcome="shipped in pilot")
+
+    assert result.applied["outcome"] == "shipped in pilot"
+    assert result.applied["outcome_at"] == NOW.isoformat()
+    properties = read_properties(tmp_path)
+    assert properties["outcome"] == "shipped in pilot"
+    assert properties["outcome_at"] == NOW.isoformat()
+
+
+def test_second_write_without_outcome_preserves_outcome_fields(tmp_path: Path) -> None:
+    writer = build_writer(tmp_path)
+    set_candidate(writer, outcome="shipped in pilot")
+
+    result = set_candidate(writer, status=DecisionStatus.DEFERRED)
+
+    assert "outcome" not in result.applied
+    assert "outcome_at" not in result.applied
+    properties = read_properties(tmp_path)
+    assert properties["outcome"] == "shipped in pilot"
+    assert properties["outcome_at"] == NOW.isoformat()
+
+
+def test_empty_outcome_clears_outcome_fields(tmp_path: Path) -> None:
+    writer = build_writer(tmp_path)
+    set_candidate(writer, outcome="shipped in pilot")
+
+    result = set_candidate(writer, outcome="")
+
+    assert result.applied["outcome"] is None
+    assert result.applied["outcome_at"] is None
+    properties = read_properties(tmp_path)
+    assert "outcome" not in properties
+    assert "outcome_at" not in properties
+
+
+def test_inbox_reset_clears_outcome_fields(tmp_path: Path) -> None:
+    writer = build_writer(tmp_path)
+    set_candidate(writer, outcome="shipped in pilot")
+
+    set_candidate(writer, status=DecisionStatus.INBOX, approved_by=None)
+
+    properties = read_properties(tmp_path)
+    assert "outcome" not in properties
+    assert "outcome_at" not in properties
+
+
+def test_inbox_rejects_non_empty_outcome(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="outcome requires a decided status"):
+        set_candidate(
+            build_writer(tmp_path),
+            status=DecisionStatus.INBOX,
+            approved_by=None,
+            outcome="shipped in pilot",
+        )
+
+    assert not (tmp_path / f"{CANDIDATE_ID}.md").exists()
+
+
+def test_old_note_without_outcome_loads_as_none(tmp_path: Path) -> None:
+    write_note(
+        tmp_path,
+        "---\n"
+        "type: candidate\n"
+        f"candidate_id: {CANDIDATE_ID}\n"
+        "project_id: sourcefolio\n"
+        "key: tool:gallery-dl\n"
+        "kind: tool\n"
+        "title: gallery-dl\n"
+        "status: accepted\n"
+        f"decided_at: {NOW.isoformat()}\n"
+        "approved_by: mitya\n"
+        f"approval_at: {NOW.isoformat()}\n"
+        "---\n"
+        "\n"
+        "## Решение\n",
+    )
+
+    decisions = list(build_reader(tmp_path).iter_decisions())
+
+    assert len(decisions) == 1
+    assert decisions[0].outcome is None
+    assert decisions[0].outcome_at is None
+
+
 def test_iter_decisions_round_trip(tmp_path: Path) -> None:
-    set_candidate(build_writer(tmp_path), rationale="separate slideshow path")
+    set_candidate(
+        build_writer(tmp_path),
+        rationale="separate slideshow path",
+        outcome="shipped in pilot",
+    )
 
     decisions = list(build_reader(tmp_path).iter_decisions())
 
@@ -157,6 +252,8 @@ def test_iter_decisions_round_trip(tmp_path: Path) -> None:
     assert decision.status == DecisionStatus.ACCEPTED
     assert decision.rationale == "separate slideshow path"
     assert decision.decided_at == NOW
+    assert decision.outcome == "shipped in pilot"
+    assert decision.outcome_at == NOW
     assert decision.provenance.actor_kind == ActorKind.USER
     assert decision.provenance.actor_id == "mitya"
     assert decision.provenance.method == "candidate-note"

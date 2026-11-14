@@ -238,11 +238,17 @@ class CandidateDecision(ContractModel):
     status: DecisionStatus = DecisionStatus.INBOX
     rationale: str = ""
     decided_at: UtcDateTime | None = None
+    outcome: str | None = Field(default=None, min_length=1, max_length=2000)
+    outcome_at: UtcDateTime | None = None
     provenance: Provenance
     approval: Approval | None = None
 
     @model_validator(mode="after")
     def decision_ownership_is_explicit(self) -> CandidateDecision:
+        if (self.outcome is None) != (self.outcome_at is None):
+            raise ValueError("outcome and outcome_at must be set together")
+        if self.outcome is not None and self.status == DecisionStatus.INBOX:
+            raise ValueError("outcome requires a decided status")
         if self.status == DecisionStatus.INBOX:
             if self.decided_at is not None or self.approval is not None:
                 raise ValueError("inbox decision requires no decided_at or approval")

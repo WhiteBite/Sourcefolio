@@ -414,6 +414,57 @@ def test_inbox_candidate_rejects_approval() -> None:
         decision(approval=Approval(approved_by="user", approved_at=NOW))
 
 
+def test_candidate_decision_accepts_outcome_with_decided_status() -> None:
+    value = decision(
+        status=DecisionStatus.ACCEPTED,
+        decided_at=NOW,
+        approval=Approval(approved_by="user", approved_at=NOW),
+        outcome="shipped in pilot",
+        outcome_at=NOW,
+    )
+
+    assert value.outcome == "shipped in pilot"
+    assert value.outcome_at == NOW
+
+
+def test_candidate_decision_rejects_outcome_without_outcome_at() -> None:
+    with pytest.raises(ValidationError, match="must be set together"):
+        decision(
+            status=DecisionStatus.ACCEPTED,
+            decided_at=NOW,
+            approval=Approval(approved_by="user", approved_at=NOW),
+            outcome="shipped in pilot",
+        )
+
+
+def test_candidate_decision_rejects_outcome_at_without_outcome() -> None:
+    with pytest.raises(ValidationError, match="must be set together"):
+        decision(
+            status=DecisionStatus.ACCEPTED,
+            decided_at=NOW,
+            approval=Approval(approved_by="user", approved_at=NOW),
+            outcome_at=NOW,
+        )
+
+
+def test_inbox_candidate_rejects_outcome() -> None:
+    with pytest.raises(ValidationError, match="outcome requires a decided status"):
+        decision(outcome="shipped in pilot", outcome_at=NOW)
+
+
+def test_accepted_candidate_accepts_outcome_with_approval() -> None:
+    value = decision(
+        status=DecisionStatus.ACCEPTED,
+        decided_at=NOW,
+        approval=Approval(approved_by="user", approved_at=NOW),
+        outcome="shipped in pilot",
+        outcome_at=NOW,
+    )
+
+    assert value.approval is not None
+    assert value.outcome == "shipped in pilot"
+
+
 def test_content_ids_are_deterministic() -> None:
     first_route = route()
     second_route = route()
