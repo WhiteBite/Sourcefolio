@@ -41,7 +41,7 @@ class FakeChatClient:
         )
 
 
-def add_packet(root: Path, external_id: str) -> None:
+def add_packet(root: Path, external_id: str, *, collection: str = "Фильмы") -> None:
     ArchiveCapture(
         artifacts=FileSystemArtifactStore(root),
         packets=FileSystemSourcePacketRepository(root),
@@ -55,7 +55,7 @@ def add_packet(root: Path, external_id: str) -> None:
             ),
             captured_at=NOW,
             collector=Provenance(actor_kind=ActorKind.TOOL, actor_id="test", method="test"),
-            collections=(CollectionMembership(name="Фильмы"),),
+            collections=(CollectionMembership(name=collection),),
             artifacts=(
                 ArtifactPayload(
                     role=ArtifactRole.CAPTION_TEXT,
@@ -140,3 +140,37 @@ def test_llm_catalog_cli_dry_run_writes_nothing(tmp_path: Path, capsys, monkeypa
     assert output["note_path"] is None
     assert not (derived / "llm-catalog").exists()
     assert not vault.exists()
+
+
+def test_llm_catalog_keeps_other_collection_note(tmp_path: Path, capsys, monkeypatch) -> None:
+    archive = tmp_path / "archive"
+    derived = tmp_path / "derived"
+    vault = tmp_path / "vault"
+    add_packet(archive, "one", collection="Фильмы")
+    add_packet(archive, "two", collection="Кино")
+    monkeypatch.setattr(cli, "OpenAIChatClient", FakeChatClient)
+    base = [
+        "llm-catalog",
+        "--archive-dir",
+        str(archive),
+        "--derived-dir",
+        str(derived),
+        "--vault",
+        str(vault),
+        "--api-key",
+        "test-key",
+    ]
+
+    assert main([*base, "--collection", "Фильмы"]) == 0
+    first = json.loads(capsys.readouterr().out)
+    first_note = Path(first["note_path"])
+    first_content = first_note.read_text(encoding="utf-8")
+
+    assert main([*base, "--collection", "Кино"]) == 0
+    second = json.loads(capsys.readouterr().out)
+    second_note = Path(second["note_path"])
+
+    assert first_note.is_file()
+    assert second_note.is_file()
+    assert first_note != second_note
+    assert first_note.read_text(encoding="utf-8") == first_content

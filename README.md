@@ -48,7 +48,7 @@
 29. Knowledge-base surfaces: human `ideas/`/`projects/`/`decisions/`, generated `entities/` (repo nodes), `graph/` (Mermaid), `decisions/` index и `projects/` briefs; команды `scaffold-projects`, `decision-new`, `decision-search`, `context` и `project-fit --profiles`.
 30. `ask`: единая точка входа — retrieval через search + evidence-pack и optional grounded LLM synthesis только по excerpts; immutable per-run note `answer/v1` в `answers/` с `provenance: agent_inference`, citations и human decision stub.
 31. `profile-draft`: черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`) с `create_if_absent` и без перезаписи.
-32. `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-obsidian` → `project-fit` (при `--fit`) с одним combined JSON; без daemon, расписание ручное.
+32. `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-fit` (при `--fit`) → `registry-extract` (при `--registry`) → `registry-build` → `project-obsidian` → `context` → `render-ui` с одним combined JSON; без daemon, расписание ручное.
 33. `serve`: локальный HTTP-сервер архива — отдаёт тот же браузер, что `render-ui`, вместе с превью-артефактами (Range) и записывает triage/заголовок/«зачем сохранил» прямо в human `ideas/` через `POST /api/note`.
 34. Реестр кандидатов: `registry-extract`/`registry-build`/`registry-queue`/`candidate-decide` превращают captures в per-project очередь разработок — заякоренные цитаты, трёхсостоянные вердикты, content-addressed append-only snapshots, human-решения с обязательным `approved_by` и browser-вид «Проекты» (`GET /api/registry`, `POST /api/candidate`). Без auto-accept и без межпроектного ранжирования.
 
@@ -395,7 +395,7 @@ sourcefolio profile-draft \
 
 Заметка пишется в `<vault>/projects/<id>.md` через `create_if_absent` и никогда не перезаписывает human-заметку. JSON-вывод: `{created, skipped, created_paths, projects_root, errors}`; нечитаемый репозиторий даёт exit code 1.
 
-`refresh` — одна команда, которая последовательно переиспользует существующие handlers: `import-collections` (только при `--capture <file>`) → `project-obsidian` (всегда) → `project-fit` (только при `--fit`). stdout каждого шага захватывается, печатается один combined JSON `{"steps": [{"step", "exit", "output"}, ...]}`; шаг с ошибкой даёт `{"step", "error"}`. Exit code ненулевой, если упал любой шаг.
+`refresh` — одна команда, которая последовательно переиспользует существующие handlers: `import-collections` (только при `--capture <file>`) → `project-fit` (только при `--fit`) → `registry-extract` (только при `--registry`, нужна настроенная модель) → `registry-build` (всегда) → `project-obsidian` (всегда) → `context` (всегда) → `render-ui` (всегда последним). `project-fit` идёт до `project-obsidian`, `context` и `render-ui`, поэтому эти views читают уже обновлённый индекс совпадений. stdout каждого шага захватывается, печатается один combined JSON `{"steps": [{"step", "exit", "output"}, ...]}`; шаг с ошибкой даёт `{"step", "error"}` и не останавливает остальные. Exit code ненулевой, если упал любой шаг. Отсутствие конфигурации модели для `--registry` даёт ошибку шага `registry-extract`, а не падение команды.
 
 ```bash
 sourcefolio refresh \
@@ -406,6 +406,12 @@ sourcefolio refresh \
 
 sourcefolio refresh \
   --fit \
+  --collection Нейронки \
+  --projects data/projects.json \
+  --vault data/vault
+
+sourcefolio refresh \
+  --registry \
   --collection Нейронки \
   --projects data/projects.json \
   --vault data/vault

@@ -57,7 +57,9 @@ def reset_fake() -> None:
     FakeGitHubRepoClient.instances.clear()
 
 
-def add_packet(root: Path, external_id: str, *, desc: str = "текст") -> None:
+def add_packet(
+    root: Path, external_id: str, *, desc: str = "текст", collection: str = "Нейронки"
+) -> None:
     ArchiveCapture(
         artifacts=FileSystemArtifactStore(root),
         packets=FileSystemSourcePacketRepository(root),
@@ -71,7 +73,7 @@ def add_packet(root: Path, external_id: str, *, desc: str = "текст") -> Non
             ),
             captured_at=NOW,
             collector=Provenance(actor_kind=ActorKind.TOOL, actor_id="test", method="test"),
-            collections=(CollectionMembership(name="Нейронки"),),
+            collections=(CollectionMembership(name=collection),),
             artifacts=(
                 ArtifactPayload(
                     role=ArtifactRole.CAPTION_TEXT,
@@ -84,11 +86,11 @@ def add_packet(root: Path, external_id: str, *, desc: str = "текст") -> Non
     )
 
 
-def arguments(tmp_path: Path, *extra: str) -> list[str]:
+def arguments(tmp_path: Path, *extra: str, collection: str = "Нейронки") -> list[str]:
     return [
         "repo-catalog",
         "--collection",
-        "Нейронки",
+        collection,
         "--archive-dir",
         str(tmp_path / "archive"),
         "--derived-dir",
@@ -167,3 +169,25 @@ def test_repo_catalog_cli_dry_run_writes_nothing(tmp_path: Path, capsys, monkeyp
     assert FakeGitHubRepoClient.instances[-1].calls == []
     assert not (tmp_path / "derived" / "repos").exists()
     assert not (tmp_path / "vault").exists()
+
+
+def test_repo_catalog_keeps_other_collection_note(tmp_path: Path, capsys, monkeypatch) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "one", desc="https://github.com/owner/first", collection="Нейронки")
+    add_packet(archive, "two", desc="https://github.com/owner/second", collection="Фильмы")
+    monkeypatch.setattr(cli, "GitHubRepoClient", FakeGitHubRepoClient)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    assert main(arguments(tmp_path, collection="Нейронки")) == 0
+    first = json.loads(capsys.readouterr().out)
+    first_note = Path(first["note_path"])
+    first_content = first_note.read_text(encoding="utf-8")
+
+    assert main(arguments(tmp_path, collection="Фильмы")) == 0
+    second = json.loads(capsys.readouterr().out)
+    second_note = Path(second["note_path"])
+
+    assert first_note.is_file()
+    assert second_note.is_file()
+    assert first_note != second_note
+    assert first_note.read_text(encoding="utf-8") == first_content

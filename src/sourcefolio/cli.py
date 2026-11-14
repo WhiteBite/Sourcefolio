@@ -1257,7 +1257,7 @@ def _llm_enrich(args: argparse.Namespace) -> int:
     )
     note_path: str | None = None
     if report.note is not None:
-        FileSystemProjectionStore(generated_root).replace_namespace(
+        FileSystemProjectionStore(generated_root).merge_namespace(
             LlmEnrichRunner.NAMESPACE,
             [report.note],
         )
@@ -1316,7 +1316,7 @@ def _llm_catalog(args: argparse.Namespace) -> int:
     )
     note_path: str | None = None
     if report.note is not None:
-        FileSystemProjectionStore(generated_root).replace_namespace(
+        FileSystemProjectionStore(generated_root).merge_namespace(
             LlmCatalogRunner.NAMESPACE,
             [report.note],
         )
@@ -1366,7 +1366,7 @@ def _repo_catalog(args: argparse.Namespace) -> int:
     )
     note_path: str | None = None
     if report.note is not None:
-        FileSystemProjectionStore(generated_root).replace_namespace(
+        FileSystemProjectionStore(generated_root).merge_namespace(
             RepoCatalogRunner.NAMESPACE,
             [report.note],
         )
@@ -1692,32 +1692,6 @@ def _refresh(args: argparse.Namespace) -> int:
                 ),
             )
         )
-    plan.append(
-        (
-            "project-obsidian",
-            _project_obsidian,
-            argparse.Namespace(
-                archive_dir=args.archive_dir,
-                derived_dir=args.derived_dir,
-                vault=args.vault,
-                projects=args.projects,
-                scaffold_ideas=args.scaffold_ideas,
-            ),
-        )
-    )
-    plan.append(
-        (
-            "render-ui",
-            _render_ui,
-            argparse.Namespace(
-                archive_dir=args.archive_dir,
-                derived_dir=args.derived_dir,
-                vault=args.vault,
-                limit=None,
-                open=False,
-            ),
-        )
-    )
     if args.fit:
         plan.append(
             (
@@ -1740,6 +1714,84 @@ def _refresh(args: argparse.Namespace) -> int:
                 ),
             )
         )
+    if args.registry:
+        plan.append(
+            (
+                "registry-extract",
+                _registry_extract,
+                argparse.Namespace(
+                    projects=args.projects,
+                    profiles=args.profiles,
+                    base_url=args.base_url,
+                    api_key=args.api_key,
+                    model=args.model,
+                    archive_dir=args.archive_dir,
+                    derived_dir=args.derived_dir,
+                    project=None,
+                    collection=args.collection,
+                    limit=args.limit,
+                    max_ocr_kb=args.max_ocr_kb,
+                    max_caption_kb=20,
+                    new=False,
+                    refresh=args.refresh,
+                    dry_run=args.dry_run,
+                ),
+            )
+        )
+    plan.append(
+        (
+            "registry-build",
+            _registry_build,
+            argparse.Namespace(
+                projects=args.projects,
+                profiles=args.profiles,
+                archive_dir=args.archive_dir,
+                derived_dir=args.derived_dir,
+                vault=args.vault,
+                dry_run=args.dry_run,
+            ),
+        )
+    )
+    plan.append(
+        (
+            "project-obsidian",
+            _project_obsidian,
+            argparse.Namespace(
+                archive_dir=args.archive_dir,
+                derived_dir=args.derived_dir,
+                vault=args.vault,
+                projects=args.projects,
+                scaffold_ideas=args.scaffold_ideas,
+            ),
+        )
+    )
+    plan.append(
+        (
+            "context",
+            _context,
+            argparse.Namespace(
+                archive_dir=args.archive_dir,
+                derived_dir=args.derived_dir,
+                vault=args.vault,
+                projects=args.projects,
+                context_format="json",
+            ),
+        )
+    )
+    plan.append(
+        (
+            "render-ui",
+            _render_ui,
+            argparse.Namespace(
+                archive_dir=args.archive_dir,
+                derived_dir=args.derived_dir,
+                vault=args.vault,
+                projects=args.projects,
+                limit=None,
+                open=False,
+            ),
+        )
+    )
     steps: list[dict[str, object]] = []
     failed = False
     for name, handler, namespace in plan:
@@ -2589,6 +2641,11 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--concurrency", type=int, default=4)
     refresh.add_argument(
         "--fit", action="store_true", help="also run project-fit over --collection"
+    )
+    refresh.add_argument(
+        "--registry",
+        action="store_true",
+        help="also run registry-extract before rebuilding views; needs model config",
     )
     refresh.add_argument(
         "--collection", action="append", help="collection for project-fit; repeatable"
