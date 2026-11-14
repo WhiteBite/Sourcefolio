@@ -11,8 +11,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
 
 from sourcefolio.application.candidate_notes import CandidateDecisionWriter
+from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.note import NoteWriter
-from sourcefolio.application.ports import ArtifactStore
+from sourcefolio.application.ports import ArtifactStore, SourcePacketRepository
 from sourcefolio.application.registry_queue import (
     QueueCandidate,
     RegistryQueueBuilder,
@@ -47,6 +48,7 @@ class _Context:
         packets: Mapping[str, SourcePacket],
         registry: RegistryQueueBuilder | None = None,
         outcomes: CandidateDecisionWriter | None = None,
+        packets_repository: SourcePacketRepository | None = None,
     ) -> None:
         self.projection = projection
         self.artifacts = artifacts
@@ -54,6 +56,7 @@ class _Context:
         self.packets = dict(packets)
         self.registry = registry
         self.outcomes = outcomes
+        self.packets_repository = packets_repository
         self.media_types = {
             artifact.artifact_id: artifact.media_type
             for packet in packets.values()
@@ -62,6 +65,20 @@ class _Context:
         self.render_lock = threading.Lock()
         self.note_lock = threading.Lock()
         self.decision_lock = threading.Lock()
+
+    def refresh_packets(self) -> None:
+        repository = self.packets_repository
+        if repository is None:
+            return
+        packets = latest_capture_per_source(repository.iter_packets())
+        media_types = {
+            artifact.artifact_id: artifact.media_type
+            for packet in packets.values()
+            for artifact in packet.artifacts
+        }
+        with self.render_lock:
+            self.packets = dict(packets)
+            self.media_types = media_types
 
 
 def _parse_range(header: str | None, size: int) -> tuple[int, int, bool] | None:
@@ -99,6 +116,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
+            self._context.refresh_packets()
             with self._context.render_lock:
                 document = self._context.projection.render()
             self._send(HTTPStatus.OK, "text/html; charset=utf-8", document.content.encode())
@@ -200,7 +218,14 @@ class _Handler(BaseHTTPRequestHandler):
         if approved_by is not None and not isinstance(approved_by, str):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid approved_by"})
             return
+        raw_outcome = payload.get("outcome")
+        if raw_outcome is not None and not isinstance(raw_outcome, str):
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid outcome"})
+            return
         status = DecisionStatus(raw_status)
+        if raw_outcome and status == DecisionStatus.INBOX:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid outcome"})
+            return
         if status != DecisionStatus.INBOX and (approved_by is None or not approved_by.strip()):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "approved_by is required"})
             return
@@ -220,6 +245,7 @@ class _Handler(BaseHTTPRequestHandler):
                     status=status,
                     rationale=rationale or "",
                     approved_by=approved_by,
+                    outcome=raw_outcome,
                 )
         except ValueError as error:
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
@@ -230,6 +256,7 @@ class _Handler(BaseHTTPRequestHandler):
         )
 
     def _update_note(self, payload: dict[str, object]) -> None:
+        self._context.refresh_packets()
         source_id = payload.get("source_id")
         if not isinstance(source_id, str) or not source_id:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "source_id is required"})
@@ -286,6 +313,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown artifact"})
             return
         media_type = self._context.media_types.get(artifact_id)
+        if media_type is None:
+            self._context.refresh_packets()
+            media_type = self._context.media_types.get(artifact_id)
         if media_type is None:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown artifact"})
             return
@@ -366,6 +396,7 @@ class UiHttpServer:
         packets: Mapping[str, SourcePacket],
         registry: RegistryQueueBuilder | None = None,
         outcomes: CandidateDecisionWriter | None = None,
+        packets_repository: SourcePacketRepository | None = None,
         host: str = "127.0.0.1",
         port: int = 8765,
     ) -> None:
@@ -376,6 +407,7 @@ class UiHttpServer:
             packets=packets,
             registry=registry,
             outcomes=outcomes,
+            packets_repository=packets_repository,
         )
         self._server = _UiHttpServer((host, port), self._context)
 

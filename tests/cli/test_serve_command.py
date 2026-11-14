@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,8 @@ from sourcefolio.adapters.filesystem import (
     FileSystemSourcePacketRepository,
 )
 from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStore
+from sourcefolio.application.archive_capture import ArchiveCapture
+from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
 from sourcefolio.application.note import NoteWriter
 from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
 from sourcefolio.application.ui_serve import UiHttpServer
@@ -34,6 +37,12 @@ from sourcefolio.domain.registry import (
     MentionAnchor,
     RegistryRoute,
     RouteVerdict,
+)
+from sourcefolio.domain.source import (
+    ArtifactRole,
+    CaptureStatus,
+    SourceIdentity,
+    SourceKind,
 )
 
 MANIFEST = Path(__file__).parents[2] / "examples" / "manual-capture" / "manifest.json"
@@ -106,6 +115,39 @@ def write_registry(derived: Path, *, project_id: str = "sourcefolio") -> str:
         clock=lambda: NOW,
     ).run(RegistryBuildQuery())
     return content_id("cand", {"project_id": project_id, "key": "tool/alpha"})
+
+
+def add_packet(root: Path, external_id: str, title: str) -> str:
+    result = ArchiveCapture(
+        artifacts=FileSystemArtifactStore(root),
+        packets=FileSystemSourcePacketRepository(root),
+    ).handle(
+        ArchiveCaptureCommand(
+            source=SourceIdentity(
+                platform="tiktok",
+                kind=SourceKind.VIDEO,
+                external_id=external_id,
+                canonical_url=f"https://www.tiktok.com/@x/video/{external_id}",
+            ),
+            captured_at=NOW,
+            collector=Provenance(
+                actor_kind=ActorKind.TOOL,
+                actor_id="yt-dlp",
+                method="download",
+                version="2026.1",
+            ),
+            status=CaptureStatus.COMPLETE,
+            title=title,
+            artifacts=(
+                ArtifactPayload(
+                    role=ArtifactRole.CAPTION_TEXT,
+                    media_type="text/plain",
+                    stream=BytesIO(f"payload {external_id}".encode()),
+                ),
+            ),
+        )
+    )
+    return result.packet.source_id
 
 
 @pytest.fixture()
@@ -398,6 +440,103 @@ def test_candidate_api_writes_note(served_registry: tuple[str, Path, str]) -> No
     note = (vault / "candidates" / f"{candidate_id}.md").read_text(encoding="utf-8")
     assert "status: accepted" in note
     assert "approved_by: mitya" in note
+
+
+def test_candidate_decision_is_visible_on_same_server(
+    served_registry: tuple[str, Path, str],
+) -> None:
+    url, _, candidate_id = served_registry
+
+    status, _ = _post(
+        url,
+        {
+            "candidate_id": candidate_id,
+            "status": "accepted",
+            "approved_by": "mitya",
+        },
+        {"X-Sourcefolio": "1"},
+        "api/candidate",
+    )
+    assert status == 200
+
+    status, _, body = _request(url + "api/registry")
+    assert status == 200
+    payload = json.loads(body)
+    candidates = payload["projects"][0]["candidates"]
+    assert candidates[0]["candidate_id"] == candidate_id
+    assert candidates[0]["status"] == "accepted"
+
+
+def test_candidate_api_writes_outcome(served_registry: tuple[str, Path, str]) -> None:
+    url, vault, candidate_id = served_registry
+
+    status, body = _post(
+        url,
+        {
+            "candidate_id": candidate_id,
+            "status": "accepted",
+            "approved_by": "mitya",
+            "outcome": "piloted",
+        },
+        {"X-Sourcefolio": "1"},
+        "api/candidate",
+    )
+
+    assert status == 200
+    applied = body["applied"]
+    assert isinstance(applied, dict)
+    assert applied["outcome"] == "piloted"
+    note = (vault / "candidates" / f"{candidate_id}.md").read_text(encoding="utf-8")
+    assert "outcome: piloted" in note
+
+
+def test_candidate_api_rejects_outcome_for_inbox(served_registry: tuple[str, Path, str]) -> None:
+    url, _, candidate_id = served_registry
+
+    status, body = _post(
+        url,
+        {
+            "candidate_id": candidate_id,
+            "status": "inbox",
+            "outcome": "piloted",
+        },
+        {"X-Sourcefolio": "1"},
+        "api/candidate",
+    )
+
+    assert status == 400
+    assert body == {"error": "invalid outcome"}
+
+
+def test_late_packet_becomes_visible(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    vault = tmp_path / "vault"
+    args = argparse.Namespace(
+        archive_dir=str(archive),
+        derived_dir=str(tmp_path / "derived"),
+        vault=str(vault),
+        host="127.0.0.1",
+        port=0,
+    )
+    server = _build_serve_server(args)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        source_id = add_packet(archive, "late-1", "Поздний ролик")
+
+        status, _, body = _request(server.url)
+        assert status == 200
+        assert source_id in body.decode("utf-8")
+
+        status, _ = _post(
+            server.url,
+            {"source_id": source_id, "status": "keep"},
+            {"X-Sourcefolio": "1"},
+        )
+        assert status == 200
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
 
 
 def test_registry_endpoints_unconfigured(unconfigured: str) -> None:

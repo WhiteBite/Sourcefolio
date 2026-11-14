@@ -794,7 +794,6 @@ main.wrap[hidden] { display: none; }
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   font-size: 11px; color: var(--text-faint);
 }
-.decide-by { margin: 8px 0 0; font-size: 11.5px; color: var(--text-faint); }
 .field { display: flex; flex-direction: column; gap: 4px; margin-top: 9px; }
 .field span {
   font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
@@ -1345,7 +1344,7 @@ main.wrap[hidden] { display: none; }
   function currentUser() {
     var stored = null;
     try { stored = localStorage.getItem(USER_KEY); } catch (e) { stored = null; }
-    return stored && stored.trim() ? stored.trim() : 'user';
+    return stored && stored.trim() ? stored.trim() : '';
   }
 
   function buildCandidateCard(cand) {
@@ -1831,9 +1830,35 @@ main.wrap[hidden] { display: none; }
     });
     decision.appendChild(row);
     decision.appendChild(el('p', 'save-note'));
-    if (CAN_WRITE) {
-      decision.appendChild(el('p', 'decide-by', 'принимает: ' + currentUser()));
-    }
+
+    var approverField = el('label', 'field');
+    approverField.appendChild(el('span', null, 'принимает'));
+    var approverInput = el('input');
+    approverInput.type = 'text';
+    approverInput.id = 'approver-input';
+    approverInput.value = currentUser();
+    approverInput.disabled = !CAN_WRITE;
+    approverField.appendChild(approverInput);
+    decision.appendChild(approverField);
+
+    var rationaleField = el('label', 'field');
+    rationaleField.appendChild(el('span', null, 'почему'));
+    var rationaleInput = el('textarea');
+    rationaleInput.id = 'rationale-input';
+    rationaleInput.disabled = !CAN_WRITE;
+    rationaleField.appendChild(rationaleInput);
+    decision.appendChild(rationaleField);
+
+    var outcomeField = el('label', 'field');
+    outcomeField.appendChild(el('span', null, 'результат'));
+    var outcomeInput = el('input');
+    outcomeInput.type = 'text';
+    outcomeInput.id = 'outcome-input';
+    outcomeInput.value = cand.outcome || '';
+    outcomeInput.disabled = !CAN_WRITE;
+    outcomeField.appendChild(outcomeInput);
+    decision.appendChild(outcomeField);
+
     body.appendChild(decision);
 
     drawer.appendChild(body);
@@ -1854,18 +1879,37 @@ main.wrap[hidden] { display: none; }
 
   function applyDecision(cand, status) {
     if (!CAN_WRITE || !cand) { return; }
+    var note = drawer.querySelector('.save-note');
+    var approverInput = drawer.querySelector('#approver-input');
+    var rationaleInput = drawer.querySelector('#rationale-input');
+    var outcomeInput = drawer.querySelector('#outcome-input');
+    var approver = approverInput ? approverInput.value.trim() : '';
+    if (status !== 'inbox' && !approver) {
+      if (note) { note.className = 'save-note err'; note.textContent = 'нужен кто принимает'; }
+      return;
+    }
     var previous = cand.status;
     cand.status = status;
     syncCandidateStatus(cand);
     renderProjects();
-    var note = drawer.querySelector('.save-note');
     if (note) { note.className = 'save-note'; note.textContent = 'сохраняю…'; }
-    postCandidate({
+    var body = {
       candidate_id: cand.candidate_id,
       status: status,
-      approved_by: currentUser(),
-      rationale: ''
-    }, function () {
+      approved_by: status === 'inbox' ? null : approver,
+      rationale: rationaleInput ? rationaleInput.value : ''
+    };
+    var outcome = outcomeInput ? outcomeInput.value.trim() : '';
+    if (outcome) {
+      body.outcome = outcome;
+    } else if (cand.outcome) {
+      body.outcome = '';
+    }
+    postCandidate(body, function () {
+      if (approver) {
+        try { localStorage.setItem(USER_KEY, approver); } catch (e) { }
+      }
+      cand.outcome = outcome || null;
       renderProjects();
       var fresh = drawer.querySelector('.save-note');
       if (fresh) { fresh.textContent = 'сохранено'; }

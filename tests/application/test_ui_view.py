@@ -521,6 +521,18 @@ def test_ui_view_has_view_switch_and_projects_container(tmp_path: Path) -> None:
     assert html.index('id="view-archive"') < html.index('id="view-projects"')
 
 
+def test_ui_view_has_decision_fields(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    add_packet(archive, "1", "Ролик")
+
+    build_projection(archive, tmp_path).rebuild()
+    html = read_page(tmp_path)
+
+    assert "approver-input" in html
+    assert "rationale-input" in html
+    assert "outcome-input" in html
+
+
 def test_ui_view_projects_view_keeps_archive_and_registry_payload(tmp_path: Path) -> None:
     archive = tmp_path / "archive"
     add_packet(archive, "1", "Ролик")

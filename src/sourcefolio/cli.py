@@ -256,12 +256,28 @@ def _registry_queue_builder(
     projects_path: Path,
     derived_root: Path,
     vault_root: Path,
+    archive_root: Path | None = None,
 ) -> RegistryQueueBuilder:
     reader = CandidateDecisionReader(notes=FileSystemHumanNoteStore(vault_root / "candidates"))
+    latest_captures_provider: Callable[[], Mapping[str, str]] | None = None
+    if archive_root is not None:
+        repository = FileSystemSourcePacketRepository(archive_root)
+
+        def load_latest_captures() -> Mapping[str, str]:
+            return {
+                source_id: packet.capture_id
+                for source_id, packet in latest_capture_per_source(
+                    repository.iter_packets()
+                ).items()
+            }
+
+        latest_captures_provider = load_latest_captures
+
     return RegistryQueueBuilder(
         routes=FileSystemRegistryRouteStore(derived_root),
         snapshots=FileSystemRegistrySnapshotStore(derived_root),
-        decisions=reader.iter_decisions(),
+        decision_provider=reader.iter_decisions,
+        latest_captures_provider=latest_captures_provider,
         projects=_project_names(projects_path),
     )
 
@@ -961,6 +977,7 @@ def _render_ui(args: argparse.Namespace) -> int:
         projects_path=Path(getattr(args, "projects", "data/projects.json")),
         derived_root=derived_root,
         vault_root=vault_root,
+        archive_root=archive_root,
     )
     projection = UiViewProjection(
         packets=FileSystemSourcePacketRepository(archive_root),
@@ -997,6 +1014,7 @@ def _build_serve_server(args: argparse.Namespace) -> UiHttpServer:
         projects_path=Path(getattr(args, "projects", "data/projects.json")),
         derived_root=derived_root,
         vault_root=vault_root,
+        archive_root=archive_root,
     )
     projection = UiViewProjection(
         packets=packets_repository,
@@ -1012,6 +1030,7 @@ def _build_serve_server(args: argparse.Namespace) -> UiHttpServer:
         artifacts=FileSystemArtifactStore(archive_root),
         notes=NoteWriter(notes=FileSystemHumanNoteStore(vault_root / "ideas")),
         packets=latest_capture_per_source(packets_repository.iter_packets()),
+        packets_repository=packets_repository,
         registry=builder,
         outcomes=CandidateDecisionWriter(
             notes=FileSystemHumanNoteStore(vault_root / "candidates"),
