@@ -320,6 +320,120 @@ def test_refresh_calls_client_again(tmp_path: Path) -> None:
     assert report.routes_processed == 1
 
 
+def test_new_only_skips_existing_route_without_client_call(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient({"Alpha Tool": candidate([])})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient({"Alpha Tool": candidate([])})
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), new_only=True)
+    )
+
+    assert client.calls == 0
+    assert report.routes_processed == 0
+    assert report.skipped_cached == 1
+    assert report.results[0].status == "skipped"
+    assert report.results[0].verdict is None
+    assert report.results[0].error is None
+
+
+def test_new_only_limit_frees_slot_for_new_packet(tmp_path: Path) -> None:
+    older = add_packet(
+        tmp_path,
+        "older",
+        desc="Repository https://github.com/Acme/Tool is useful for text and data work",
+    )
+    newer = add_packet(
+        tmp_path,
+        "newer",
+        desc="Beta Tool is a useful library for working with text and data",
+        captured_at=datetime(2026, 11, 4, 12, 0, tzinfo=UTC),
+    )
+    first = extractor(tmp_path, FakeChatClient()).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), limit=1)
+    )
+    assert first.results[0].capture_id == older.capture_id
+
+    client = FakeChatClient()
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(
+            projects=SINGLE,
+            collections=("Нейронки",),
+            limit=1,
+            new_only=True,
+        )
+    )
+
+    assert client.calls == 1
+    assert report.routes_processed == 1
+    assert report.skipped_cached == 1
+    processed = [item for item in report.results if item.status == "processed"]
+    skipped = [item for item in report.results if item.status == "skipped"]
+    assert [item.capture_id for item in processed] == [newer.capture_id]
+    assert [item.capture_id for item in skipped] == [older.capture_id]
+
+
+def test_new_only_skips_routed_project_and_processes_unrouted_project(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient()).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient()
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=PROJECTS, collections=("Нейронки",), new_only=True)
+    )
+
+    assert client.calls == 1
+    assert report.routes_processed == 1
+    assert report.skipped_cached == 1
+    by_project = {item.project_id: item for item in report.results}
+    assert by_project["sourcefolio"].status == "skipped"
+    assert by_project["sourcefolio"].verdict is None
+    assert by_project["mafiin"].status == "processed"
+
+
+def test_new_only_false_keeps_existing_route_skip_behavior(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient()).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient()
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",), new_only=False)
+    )
+
+    assert client.calls == 0
+    assert report.routes_processed == 0
+    assert report.skipped_cached == 1
+    assert report.results[0].status == "skipped"
+    assert report.results[0].verdict == RouteVerdict.INSUFFICIENT_SIGNAL.value
+
+
+def test_new_only_with_refresh_still_skips_routed_pair(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    extractor(tmp_path, FakeChatClient()).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    client = FakeChatClient()
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(
+            projects=SINGLE,
+            collections=("Нейронки",),
+            new_only=True,
+            refresh=True,
+        )
+    )
+
+    assert client.calls == 0
+    assert report.routes_processed == 0
+    assert report.skipped_cached == 1
+
+
 def test_repository_url_in_description_becomes_repo_mention(tmp_path: Path) -> None:
     desc = "Repository https://github.com/Acme/Tool is useful for text and data work"
     add_packet(tmp_path, "one", desc=desc)

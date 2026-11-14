@@ -74,6 +74,7 @@ class RegistryExtractQuery:
     max_ocr_kb: int = 20
     max_caption_kb: int = 20
     refresh: bool = False
+    new_only: bool = False
     dry_run: bool = False
 
 
@@ -441,15 +442,27 @@ class RegistryExtractor:
         self._progress = progress
 
     def run(self, query: RegistryExtractQuery) -> RegistryExtractReport:
-        selected, pre_ranks = self._select(query)
         projects = self._selected_projects(query)
+        routed: set[tuple[str, str, str]] = set()
+        if query.new_only:
+            routed = {
+                (route.source_id, route.capture_id, route.project_id)
+                for route in self._routes.iter_all()
+            }
+        selected, pre_ranks, routed_packets = self._select(query, projects, routed)
         verdicts = {verdict.value: 0 for verdict in RouteVerdict}
         results: list[RegistryExtractItem] = []
         previews: list[tuple[str, str]] = []
         mentions_total = 0
         dropped_total = 0
-        total = len(selected) * len(projects)
+        total = (len(selected) + len(routed_packets)) * len(projects)
         position = 0
+        for packet in routed_packets:
+            for project in projects:
+                position += 1
+                item = _item(packet, project.id, "skipped", None)
+                results.append(item)
+                self._emit_progress(position, total, item)
         for packet in selected:
             texts = self._texts(packet, query)
             for project in projects:
@@ -461,6 +474,7 @@ class RegistryExtractor:
                     pre_rank=pre_ranks[packet.capture_id],
                     query=query,
                     previews=previews,
+                    routed=routed,
                 )
                 results.append(outcome.item)
                 if outcome.preview is not None:
@@ -494,7 +508,18 @@ class RegistryExtractor:
         pre_rank: int,
         query: RegistryExtractQuery,
         previews: list[tuple[str, str]],
+        routed: set[tuple[str, str, str]],
     ) -> _Outcome:
+        if (
+            query.new_only
+            and (
+                packet.source_id,
+                packet.capture_id,
+                project.id,
+            )
+            in routed
+        ):
+            return _Outcome(item=_item(packet, project.id, "skipped", None))
         user_prompt = _build_user_prompt(packet, project, texts)
         prompt_fingerprint = _fingerprint(self._model, user_prompt)
         route_id = _route_id(packet, project.id, self._model, prompt_fingerprint)
@@ -706,7 +731,12 @@ class RegistryExtractor:
             segments.append((artifact.artifact_id, text))
         return tuple(segments)
 
-    def _select(self, query: RegistryExtractQuery) -> tuple[list[SourcePacket], dict[str, int]]:
+    def _select(
+        self,
+        query: RegistryExtractQuery,
+        projects: tuple[Project, ...],
+        routed: set[tuple[str, str, str]],
+    ) -> tuple[list[SourcePacket], dict[str, int], list[SourcePacket]]:
         latest = latest_capture_per_source(self._packets.iter_packets())
         candidates = list(latest.values())
         if query.collections:
@@ -716,6 +746,24 @@ class RegistryExtractor:
                 for packet in candidates
                 if wanted & {item.name.casefold() for item in packet.collections}
             ]
+        routed_packets: list[SourcePacket] = []
+        if query.new_only and projects:
+            routed_packets = [
+                packet
+                for packet in candidates
+                if all(
+                    (packet.source_id, packet.capture_id, project.id) in routed
+                    for project in projects
+                )
+            ]
+            candidates = [
+                packet
+                for packet in candidates
+                if not all(
+                    (packet.source_id, packet.capture_id, project.id) in routed
+                    for project in projects
+                )
+            ]
         ranked = rank_captures(candidates, self._extractions, max_ocr_kb=query.max_ocr_kb)
         by_capture = {packet.capture_id: packet for packet in candidates}
         scores = {score.capture_id: score.score for score in ranked}
@@ -724,7 +772,7 @@ class RegistryExtractor:
         ]
         if query.limit is not None:
             ordered = ordered[: query.limit]
-        return ordered, scores
+        return ordered, scores, routed_packets
 
     def _selected_projects(self, query: RegistryExtractQuery) -> tuple[Project, ...]:
         if not query.project_ids:
