@@ -43,6 +43,45 @@ class FileSystemProjectionStore:
             Path(temp_name).unlink(missing_ok=True)
             raise
 
+    def merge_namespace(
+        self,
+        namespace: str,
+        documents: Iterable[GeneratedDocument],
+    ) -> int:
+        if _NAMESPACE.fullmatch(namespace) is None:
+            raise ValueError("invalid generated namespace")
+        document_list = list(documents)
+        relative_paths = [self._relative_path(document.path) for document in document_list]
+        namespace_root = self._root / namespace
+        for document, relative in zip(document_list, relative_paths, strict=True):
+            self._write_atomic(namespace_root / relative, document.content)
+
+        manifest_path = namespace_root / "manifest.json"
+        previous_paths: list[str] = []
+        try:
+            manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest_data = None
+        if isinstance(manifest_data, dict):
+            previous_documents = manifest_data.get("documents")
+            if isinstance(previous_documents, list) and all(
+                isinstance(path, str) for path in previous_documents
+            ):
+                previous_paths = previous_documents
+
+        manifest = {
+            "schema_version": "generated-projection/v1",
+            "namespace": namespace,
+            "documents": sorted(
+                set(previous_paths) | {document.path for document in document_list}
+            ),
+        }
+        self._write_atomic(
+            manifest_path,
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        )
+        return len(document_list)
+
     def replace_namespace(
         self,
         namespace: str,

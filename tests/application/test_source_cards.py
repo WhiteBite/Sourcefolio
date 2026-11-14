@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -218,6 +219,46 @@ def test_projection_store_removes_only_its_generated_namespace(tmp_path: Path) -
     assert (root / "cards" / "a.md").read_text(encoding="utf-8") == "A2"
     assert not (root / "cards" / "nested" / "b.md").exists()
     assert outside.read_text(encoding="utf-8") == "manual"
+
+
+def test_projection_store_merge_preserves_sibling_and_unions_manifest(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "generated"
+    store = FileSystemProjectionStore(root)
+    store.merge_namespace("cards", [GeneratedDocument("a.md", "A")])
+    sibling = root / "cards" / "sibling.md"
+    sibling.write_bytes(b"sibling\x00bytes")
+
+    assert store.merge_namespace("cards", [GeneratedDocument("b.md", "B")]) == 1
+    assert (root / "cards" / "a.md").read_text(encoding="utf-8") == "A"
+    assert sibling.read_bytes() == b"sibling\x00bytes"
+    manifest = json.loads((root / "cards" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest == {
+        "schema_version": "generated-projection/v1",
+        "namespace": "cards",
+        "documents": ["a.md", "b.md"],
+    }
+
+
+def test_projection_store_merge_overwrites_path_once(tmp_path: Path) -> None:
+    root = tmp_path / "generated"
+    store = FileSystemProjectionStore(root)
+
+    assert store.merge_namespace("cards", [GeneratedDocument("a.md", "A")]) == 1
+    assert store.merge_namespace("cards", [GeneratedDocument("a.md", "A2")]) == 1
+    assert (root / "cards" / "a.md").read_text(encoding="utf-8") == "A2"
+    manifest = json.loads((root / "cards" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["documents"] == ["a.md"]
+
+
+def test_projection_store_merge_rejects_invalid_namespace_and_path(tmp_path: Path) -> None:
+    store = FileSystemProjectionStore(tmp_path / "generated")
+
+    with pytest.raises(ValueError, match="invalid generated namespace"):
+        store.merge_namespace("Invalid", [GeneratedDocument("a.md", "A")])
+    with pytest.raises(ValueError, match="escapes"):
+        store.merge_namespace("cards", [GeneratedDocument("../manual.md", "bad")])
 
 
 def test_projection_store_rejects_path_escape(tmp_path: Path) -> None:
