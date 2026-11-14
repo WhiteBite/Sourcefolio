@@ -18,7 +18,7 @@ from sourcefolio.application.project_fit import (
 )
 from sourcefolio.application.projection_ports import HumanNoteReader, ProjectionStore
 from sourcefolio.application.projection_types import GeneratedDocument
-from sourcefolio.application.registry_queue import RegistryQueueBuilder
+from sourcefolio.application.registry_queue import RegistryQueue, RegistryQueueBuilder
 
 _MAX_MATCHES = 20
 _MAX_MATCHES_PER_PROJECT = 3
@@ -91,6 +91,7 @@ class ContextBrief:
     ideas: tuple[ContextIdea, ...]
     stats: ContextStats
     candidates: tuple[ContextCandidate, ...] = ()
+    registry_snapshot_id: str | None = None
 
 
 def _profile(profiles: HumanNoteReader | None, project_id: str) -> str | None:
@@ -207,12 +208,12 @@ def _idea_count(ideas: HumanNoteReader | None) -> int:
 
 
 def _context_candidates(
-    registry: RegistryQueueBuilder | None,
+    registry: RegistryQueue | None,
 ) -> tuple[ContextCandidate, ...]:
     if registry is None:
         return ()
     selected: list[ContextCandidate] = []
-    for project in registry.build().projects:
+    for project in registry.projects:
         for taken, candidate in enumerate(project.candidates):
             if taken >= _MAX_REGISTRY_PER_PROJECT or len(selected) >= _MAX_REGISTRY_CANDIDATES:
                 break
@@ -273,6 +274,7 @@ class ContextBriefBuilder:
             ideas=_idea_count(self._ideas),
             decisions=len(all_decisions),
         )
+        queue = self._registry.build() if self._registry is not None else None
         return ContextBrief(
             generated_at=self._clock().isoformat(),
             projects=_context_projects(self._projects, self._profiles),
@@ -280,7 +282,8 @@ class ContextBriefBuilder:
             decisions=all_decisions[:_MAX_DECISIONS],
             ideas=_context_ideas(self._ideas),
             stats=stats,
-            candidates=_context_candidates(self._registry),
+            candidates=_context_candidates(queue),
+            registry_snapshot_id=queue.snapshot_id if queue is not None else None,
         )
 
     def to_json(self) -> str:
@@ -344,6 +347,8 @@ def render_markdown(
         lines.append("None.")
     if brief.candidates:
         lines.extend(["", f"## Registry candidates ({len(brief.candidates)})", ""])
+        if brief.registry_snapshot_id is not None:
+            lines.append(f"- Snapshot: `{brief.registry_snapshot_id}`")
         for candidate in brief.candidates:
             line = (
                 f"- [{escape(candidate.project_id, table=True)}] "

@@ -185,6 +185,7 @@ def registry_builder(
     routes: list[RegistryRoute],
     *,
     decisions: tuple[CandidateDecision, ...] = (),
+    build_snapshot: bool = True,
 ) -> RegistryQueueBuilder:
     derived = root / "derived"
     route_store = FileSystemRegistryRouteStore(derived)
@@ -199,7 +200,8 @@ def registry_builder(
         decisions=decisions,
         clock=lambda: NOW,
     )
-    reported.run(RegistryBuildQuery())
+    if build_snapshot:
+        reported.run(RegistryBuildQuery())
     return RegistryQueueBuilder(
         routes=route_store,
         snapshots=snapshot_store,
@@ -240,6 +242,7 @@ def test_empty_vault_yields_zero_counts(tmp_path: Path) -> None:
     assert brief.stats.collections == 0
     assert brief.stats.ideas == 0
     assert brief.stats.decisions == 0
+    assert brief.registry_snapshot_id is None
 
     payload = json.loads(builder(tmp_path, projects=()).to_json())
     assert payload["stats"] == {"sources": 0, "collections": 0, "ideas": 0, "decisions": 0}
@@ -296,6 +299,7 @@ def test_json_and_markdown_render(tmp_path: Path) -> None:
         "ideas",
         "stats",
         "candidates",
+        "registry_snapshot_id",
     }
 
     markdown = brief_builder.to_markdown()
@@ -434,8 +438,10 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
     assert [candidate.title for candidate in brief.candidates] == ["Adopted tool", "Inbox tool"]
     assert [candidate.status for candidate in brief.candidates] == ["accepted", "inbox"]
     assert [candidate.outcome for candidate in brief.candidates] == [None, None]
+    assert brief.registry_snapshot_id is not None
 
     payload = json.loads(brief_builder.to_json())
+    assert payload["registry_snapshot_id"] == brief.registry_snapshot_id
     assert payload["candidates"][0] == {
         "project_id": "alpha",
         "candidate_id": content_id("cand", {"project_id": "alpha", "key": "tool/accepted"}),
@@ -449,6 +455,7 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
 
     markdown = brief_builder.to_markdown()
     assert "## Registry candidates (2)" in markdown
+    assert f"- Snapshot: `{brief.registry_snapshot_id}`" in markdown
     assert "- [alpha] Adopted tool (tool, high, mentions 1, accepted)" in markdown
     assert "[[_generated/sourcefolio/registry/alpha|registry]]" in markdown
 
@@ -507,11 +514,14 @@ def test_registry_candidates_keep_project_order_without_global_resort(tmp_path: 
 
 
 def test_registry_without_snapshot_yields_no_candidates_and_no_section(tmp_path: Path) -> None:
-    registry = registry_builder(tmp_path, [])
+    registry = registry_builder(tmp_path, [], build_snapshot=False)
 
     brief_builder = builder(tmp_path, registry=registry)
     brief = brief_builder.build()
 
     assert brief.candidates == ()
+    assert brief.registry_snapshot_id is None
     assert "## Registry candidates" not in brief_builder.to_markdown()
+    assert "- Snapshot:" not in brief_builder.to_markdown()
     assert json.loads(brief_builder.to_json())["candidates"] == []
+    assert json.loads(brief_builder.to_json())["registry_snapshot_id"] is None
