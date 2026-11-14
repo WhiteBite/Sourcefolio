@@ -12,6 +12,8 @@ from sourcefolio.application.projection_ports import HumanNoteReader, HumanNoteS
 from sourcefolio.domain.common import ActorKind, Approval, Provenance
 from sourcefolio.domain.registry import CandidateDecision, CandidateKind, DecisionStatus
 
+_MAX_OUTCOME_CHARS = 2000
+
 
 @dataclass(frozen=True)
 class CandidateNoteResult:
@@ -68,6 +70,8 @@ class CandidateDecisionWriter:
             raise ValueError("candidate cannot be merged into itself")
         if outcome and status == DecisionStatus.INBOX:
             raise ValueError("outcome requires a decided status")
+        if outcome and len(outcome) > _MAX_OUTCOME_CHARS:
+            raise ValueError(f"outcome exceeds {_MAX_OUTCOME_CHARS} characters")
         updates: dict[str, object | None]
         if merge_into is not None:
             updates = {"merged_into": merge_into}

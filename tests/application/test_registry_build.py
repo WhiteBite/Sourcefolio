@@ -131,6 +131,8 @@ def make_decision(
     key: str = "owner/repo",
     title: str = "Example tool",
     status: DecisionStatus = DecisionStatus.INBOX,
+    outcome: str | None = None,
+    outcome_at: datetime | None = None,
 ) -> CandidateDecision:
     candidate_id = content_id("cand", {"project_id": project_id, "key": key})
     if status == DecisionStatus.INBOX:
@@ -153,6 +155,8 @@ def make_decision(
         title=title,
         status=status,
         decided_at=NOW,
+        outcome=outcome,
+        outcome_at=outcome_at,
         provenance=Provenance(actor_kind=ActorKind.USER, actor_id="user", method="candidate-note"),
         approval=Approval(approved_by="user", approved_at=NOW),
     )
@@ -544,3 +548,26 @@ def test_snapshot_id_is_unchanged_when_only_decision_metadata_changes() -> None:
     changed_report = changed_builder.run(RegistryBuildQuery())
 
     assert original_report.snapshot_id == changed_report.snapshot_id
+
+
+def test_snapshot_id_is_unchanged_when_only_decision_outcome_changes() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="stable mention"),))]
+    without_outcome, _ = make_builder(
+        routes,
+        decisions=[make_decision(status=DecisionStatus.ACCEPTED)],
+    )
+    with_outcome, _ = make_builder(
+        routes,
+        decisions=[
+            make_decision(
+                status=DecisionStatus.ACCEPTED,
+                outcome="shipped",
+                outcome_at=NOW,
+            )
+        ],
+    )
+
+    assert (
+        without_outcome.run(RegistryBuildQuery()).snapshot_id
+        == with_outcome.run(RegistryBuildQuery()).snapshot_id
+    )

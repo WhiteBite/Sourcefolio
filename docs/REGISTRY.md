@@ -164,7 +164,7 @@ sourcefolio registry-queue \
   --format markdown
 ```
 
-Строит очередь из последнего снапшота: `--project` (повторяется) сужает набор проектов, `--status` фильтрует по outcome (`inbox`/`accepted`/`rejected`/`deferred`), `--limit` ограничивает число кандидатов на проект. `--archive-dir` (по умолчанию `data/archive`) делает ссылки на source cards корректными: цитата ведёт на карточку последнего capture источника, а не на тот capture, из которого построен маршрут. `--format json` (по умолчанию) печатает очередь JSON'ом (`snapshot_id`, `generated_at`, проекты с кандидатами и упоминаниями), `markdown` — сгенерированные заметки. Без `--dry-run` пишет `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/`: `index.md` плюс `<slug>.md` на проект, не более 3 цитат на кандидата и ссылки на source cards. Без снапшота возвращает пустую очередь.
+Строит очередь из последнего снапшота: `--project` (повторяется) сужает набор проектов, `--status` фильтрует по статусу решения (`inbox`/`accepted`/`rejected`/`deferred`), `--limit` ограничивает число кандидатов на проект. `--archive-dir` (по умолчанию `data/archive`) делает ссылки на source cards корректными: цитата ведёт на карточку последнего capture источника, а не на тот capture, из которого построен маршрут. `--format json` (по умолчанию) печатает очередь JSON'ом (`snapshot_id`, `generated_at`, проекты с кандидатами и упоминаниями), `markdown` — сгенерированные заметки. Без `--dry-run` пишет `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/`: `index.md` плюс `<slug>.md` на проект, не более 3 цитат на кандидата и ссылки на source cards. Без снапшота возвращает пустую очередь.
 
 ### candidate-decide
 

@@ -207,6 +207,24 @@ def test_inbox_rejects_non_empty_outcome(tmp_path: Path) -> None:
     assert not (tmp_path / f"{CANDIDATE_ID}.md").exists()
 
 
+def test_overlong_outcome_raises_without_file(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="outcome exceeds 2000 characters"):
+        set_candidate(build_writer(tmp_path), outcome="x" * 2001)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_max_length_outcome_round_trips(tmp_path: Path) -> None:
+    outcome = "x" * 2000
+
+    set_candidate(build_writer(tmp_path), outcome=outcome)
+
+    decisions = list(build_reader(tmp_path).iter_decisions())
+
+    assert len(decisions) == 1
+    assert decisions[0].outcome == outcome
+
+
 def test_old_note_without_outcome_loads_as_none(tmp_path: Path) -> None:
     write_note(
         tmp_path,

@@ -415,6 +415,35 @@ def test_candidate_decide_rejects_outcome_for_inbox(tmp_path: Path, capsys, monk
     assert "outcome requires a decided status" in capsys.readouterr().err
 
 
+def test_candidate_decide_rejects_overlong_outcome(tmp_path: Path, capsys, monkeypatch) -> None:
+    prepare(tmp_path, monkeypatch)
+    assert main(extract_arguments(tmp_path)) == 0
+    capsys.readouterr()
+    assert main(build_arguments(tmp_path)) == 0
+    capsys.readouterr()
+    snapshot = FileSystemRegistrySnapshotStore(tmp_path / "derived").load_latest()
+    assert snapshot is not None
+    candidate_id = snapshot.candidates[0].candidate_id
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(
+            decide_arguments(
+                tmp_path,
+                candidate_id,
+                "--status",
+                "accepted",
+                "--approved-by",
+                "mitya",
+                "--outcome",
+                "x" * 2001,
+            )
+        )
+
+    assert excinfo.value.code == 2
+    assert "outcome exceeds 2000 characters" in capsys.readouterr().err
+    assert not (tmp_path / "vault" / "candidates").exists()
+
+
 def test_registry_extract_new_skips_routed_pair_without_model_call(
     tmp_path: Path, capsys, monkeypatch
 ) -> None:

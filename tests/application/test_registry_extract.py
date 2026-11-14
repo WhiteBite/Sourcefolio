@@ -657,15 +657,15 @@ def test_title_mention_uses_title_anchor(tmp_path: Path) -> None:
     assert anchor.comment_index is None
 
 
-def test_ocr_budget_keeps_whole_segments_only(tmp_path: Path) -> None:
+def test_ocr_budget_excludes_segment_that_alone_exceeds_budget(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one", desc=DESCRIPTION)
     first = "ext_" + "d" * 64
     second = "ext_" + "e" * 64
     extractions = FakeExtractions(
         {
             packet.capture_id: [
-                (first, "A" * 600),
-                (second, "B" * 600),
+                (first, "A" * 1100),
+                (second, "Useful budget tool"),
             ]
         }
     )
@@ -674,10 +674,10 @@ def test_ocr_budget_keeps_whole_segments_only(tmp_path: Path) -> None:
             "Alpha Tool": candidate(
                 [
                     {
-                        "name": "Second",
+                        "name": "Useful budget tool",
                         "kind": "tool",
                         "fit": "high",
-                        "quote": "B" * 600,
+                        "quote": "Useful budget tool",
                         "field": "ocr",
                         "comment_index": None,
                     }
