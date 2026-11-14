@@ -430,18 +430,20 @@ sourcefolio registry-extract \
   --limit 25
 ```
 
-`registry-extract` на каждую пару (источник, проект) создаёт маршрут `registry-route/v1` с вердиктом `candidate`/`irrelevant`/`insufficient_signal`. Каждое упоминание обязано нести дословную цитату (8–500 символов), символьный span и типизированный локатор (`description`/`title`/`comment`+`comment_index`/`ocr`+`extraction_id`/`caption`+`artifact_id`); упоминание без валидного якоря отбрасывается и считается в `dropped_anchors`. Конфигурация модели и кэш — как у `llm-enrich`; повтор с тем же `route_id` пропускается, `--refresh` перезапрашивает, `--dry-run` печатает первые два промпта в stderr и ничего не пишет.
+`registry-extract` на каждую пару (источник, проект) создаёт маршрут `registry-route/v1` с вердиктом `candidate`/`irrelevant`/`insufficient_signal`. Каждое упоминание обязано нести дословную цитату (8–500 символов), символьный span и типизированный локатор (`description`/`title`/`comment`+`comment_index`/`ocr`+`extraction_id`/`caption`+`artifact_id`); упоминание без валидного якоря отбрасывается и считается в `dropped_anchors`. Конфигурация модели и кэш — как у `llm-enrich`; повтор с тем же `route_id` пропускается, `--new` обрабатывает только пары без сохранённого маршрута, `--refresh` перезапрашивает уже маршрутизированные пары, `--dry-run` печатает первые два промпта в stderr и ничего не пишет.
 
 Собрать снапшот, отрендерить очередь и записать решение:
 
 ```bash
 sourcefolio registry-build \
   --projects data/projects.json \
+  --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault
 
 sourcefolio registry-queue \
   --projects data/projects.json \
+  --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault \
   --project sourcefolio \
@@ -453,11 +455,12 @@ sourcefolio candidate-decide \
   --status accepted \
   --approved-by Mind \
   --rationale "беру в пилот OCR" \
+  --outcome "пилот запущен" \
   --vault data/vault \
   --derived-dir data/derived
 ```
 
-`registry-build` дедуплицирует упоминания по детерминированным ключам (репозиторий — `repo:<host>/<owner>/<repo>`, остальное — slug имени) и пишет content-addressed append-only снапшот `registry-snapshot/v1` в `data/derived/registry/snapshots/` с атомарным указателем `latest.json`; повторный прогон не мутирует принятые записи, а исчезнувший accepted-кандидат выживает как `stale`. Ручное слияние двух ключей — через `candidate-decide --merge-into <candidate_id>`. `registry-queue` упорядочивает кандидатов только внутри проекта (status → fit → score → mention_count → свежесть) и пишет generated-заметки `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/`; межпроектного ранжирования нет. `candidate-decide` пишет human-заметку в `<vault>/candidates/<candidate_id>.md`: статус `inbox`/`accepted`/`rejected`/`deferred`, для любого кроме `inbox` обязателен `--approved-by` (auto-accept нет). После решения в заметке можно зафиксировать `outcome` — что реально произошло с кандидатом; результат показывается в очередях, заметках и browser-виде «Проекты». Те же решения доступны в browser-виде «Проекты» через `GET /api/registry` и `POST /api/candidate` (заголовок `X-Sourcefolio: 1`).
+`registry-build` дедуплицирует упоминания по детерминированным ключам (репозиторий — `repo:<host>/<owner>/<repo>`, остальное — slug имени) и пишет content-addressed append-only снапшот `registry-snapshot/v1` в `data/derived/registry/snapshots/` с атомарным указателем `latest.json`; повторный прогон не мутирует принятые записи, а исчезнувший accepted-кандидат выживает как `stale`. `--archive-dir` добавляет freshness-счётчики: `routes_ignored` (старые маршруты, проигнорированные в пользу нового на ту же пару источник+проект) и `unrouted_captures` (latest captures без маршрута хотя бы для одного проекта). Ручное слияние двух ключей — через `candidate-decide --merge-into <candidate_id>`. `registry-queue` упорядочивает кандидатов только внутри проекта (status → fit → score → mention_count → свежесть), пишет generated-заметки `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/` и через `--archive-dir` ссылается на source card последнего capture источника; межпроектного ранжирования нет. `candidate-decide` пишет human-заметку в `<vault>/candidates/<candidate_id>.md`: статус `inbox`/`accepted`/`rejected`/`deferred`, для любого кроме `inbox` обязателен `--approved-by` (auto-accept нет). `--outcome "<text>"` записывает результат и `outcome_at`, пустая строка очищает их, отсутствие флага сохраняет прежние значения; непустой результат вместе со `inbox` отклоняется. Результат показывается в очередях, заметках и browser-виде «Проекты». Те же решения доступны в browser-виде «Проекты» через `GET /api/registry` и `POST /api/candidate` (заголовок `X-Sourcefolio: 1`).
 
 ## Локальный браузер архива
 

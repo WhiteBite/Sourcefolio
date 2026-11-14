@@ -134,7 +134,7 @@ sourcefolio registry-extract \
   --limit 25
 ```
 
-Сканирует latest capture каждого источника (фильтр `--collection`, повторяется), берёт топ `--limit` по pre-rank и для каждого выбранного проекта (`--project`, повторяется; по умолчанию все из `--projects`) запрашивает OpenAI-compatible chat model. В промпт входят имя/описание/профиль проекта (`--profiles`), URL, description, пронумерованные комментарии, OCR (лимит `--max-ocr-kb`, по умолчанию 20) и caption (лимит `--max-caption-kb`, по умолчанию 20). Конфигурация модели резолвится как у `llm-enrich`: `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json`. Ответы кэшируются в `data/derived/registry-llm/` (ключ `capture_id__project_id__prompt_fingerprint`), до 3 попыток на запрос, не более 3 модельных упоминаний на элемент. Существующий маршрут с тем же `route_id` пропускается; `--refresh` игнорирует и кэш, и сохранённые маршруты. `--dry-run` ничего не пишет и печатает первые два промпта в stderr.
+Сканирует latest capture каждого источника (фильтр `--collection`, повторяется), берёт топ `--limit` по pre-rank и для каждого выбранного проекта (`--project`, повторяется; по умолчанию все из `--projects`) запрашивает OpenAI-compatible chat model. В промпт входят имя/описание/профиль проекта (`--profiles`), URL, description, пронумерованные комментарии, OCR (лимит `--max-ocr-kb`, по умолчанию 20) и caption (лимит `--max-caption-kb`, по умолчанию 20). Конфигурация модели резолвится как у `llm-enrich`: `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json`. Ответы кэшируются в `data/derived/registry-llm/` (ключ `capture_id__project_id__prompt_fingerprint`), до 3 попыток на запрос, не более 3 модельных упоминаний на элемент. Существующий маршрут с тем же `route_id` пропускается; `--refresh` игнорирует и кэш, и сохранённые маршруты. `--new` обрабатывает только пары (источник, capture, проект), для которых ещё нет сохранённого маршрута; уже маршрутизированные пары выводятся как skipped и не доходят до модели. Флаги ортогональны: `--new` сужает вход, `--refresh` остаётся способом переоценить уже маршрутизированные пары. `--dry-run` ничего не пишет и печатает первые два промпта в stderr.
 
 JSON-отчёт: `items_scanned`, `routes_processed`, `skipped_cached`, `failed`, `verdicts`, `mentions`, `dropped_anchors` и per-item `results` (status `processed`/`skipped`/`failed`, verdict, error). Exit code 1 при хотя бы одном failed.
 
@@ -143,17 +143,19 @@ JSON-отчёт: `items_scanned`, `routes_processed`, `skipped_cached`, `failed`
 ```bash
 sourcefolio registry-build \
   --projects data/projects.json \
+  --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault
 ```
 
-Читает все маршруты, человеческие решения и слияния из `<vault>/candidates/` и строит снапшот `registry-snapshot/v1`. Отчёт: `snapshot_id`, `snapshot_path`, `candidates`, `mentions`, per-project счётчики (`candidates`/`accepted`/`rejected`/`stale`), `merged`, `stale_accepted`, `dropped`. `--dry-run` считает отчёт и `snapshot_id`, не записывая файл; число различных кандидатов для калибровки видно именно здесь.
+Читает все маршруты, человеческие решения и слияния из `<vault>/candidates/` и строит снапшот `registry-snapshot/v1`. `--archive-dir` (по умолчанию `data/archive`) передаёт билдеру latest capture каждого источника; отсутствующий каталог не ошибка — freshness по архиву просто не считается. Отчёт: `snapshot_id`, `snapshot_path`, `candidates`, `mentions`, per-project счётчики (`candidates`/`accepted`/`rejected`/`stale`), `merged`, `stale_accepted`, `dropped`, а также `routes_ignored` (старые маршруты, проигнорированные в пользу нового маршрута того же источника и проекта) и `unrouted_captures` (latest captures без маршрута хотя бы для одного проекта). `--dry-run` считает отчёт и `snapshot_id`, не записывая файл; число различных кандидатов для калибровки видно именно здесь.
 
 ### registry-queue
 
 ```bash
 sourcefolio registry-queue \
   --projects data/projects.json \
+  --archive-dir data/archive \
   --derived-dir data/derived \
   --vault data/vault \
   --project sourcefolio \
@@ -162,7 +164,7 @@ sourcefolio registry-queue \
   --format markdown
 ```
 
-Строит очередь из последнего снапшота: `--project` (повторяется) сужает набор проектов, `--status` фильтрует по outcome (`inbox`/`accepted`/`rejected`/`deferred`), `--limit` ограничивает число кандидатов на проект. `--format json` (по умолчанию) печатает очередь JSON'ом (`snapshot_id`, `generated_at`, проекты с кандидатами и упоминаниями), `markdown` — сгенерированные заметки. Без `--dry-run` пишет `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/`: `index.md` плюс `<slug>.md` на проект, не более 3 цитат на кандидата и ссылки на source cards. Без снапшота возвращает пустую очередь.
+Строит очередь из последнего снапшота: `--project` (повторяется) сужает набор проектов, `--status` фильтрует по outcome (`inbox`/`accepted`/`rejected`/`deferred`), `--limit` ограничивает число кандидатов на проект. `--archive-dir` (по умолчанию `data/archive`) делает ссылки на source cards корректными: цитата ведёт на карточку последнего capture источника, а не на тот capture, из которого построен маршрут. `--format json` (по умолчанию) печатает очередь JSON'ом (`snapshot_id`, `generated_at`, проекты с кандидатами и упоминаниями), `markdown` — сгенерированные заметки. Без `--dry-run` пишет `registry-view/v1` в `<vault>/_generated/sourcefolio/registry/`: `index.md` плюс `<slug>.md` на проект, не более 3 цитат на кандидата и ссылки на source cards. Без снапшота возвращает пустую очередь.
 
 ### candidate-decide
 
@@ -172,11 +174,12 @@ sourcefolio candidate-decide \
   --status accepted \
   --approved-by Mind \
   --rationale "беру в пилот OCR" \
+  --outcome "пилот запущен" \
   --vault data/vault \
   --derived-dir data/derived
 ```
 
-Записывает человеческое решение: `--status` (`inbox` по умолчанию / `accepted` / `rejected` / `deferred`), `--rationale`, `--approved-by` (обязателен для статусов кроме `inbox`), `--merge-into <candidate_id>` — отметка ручного слияния. Identity (project, key, kind, title) берётся из последнего снапшота или из существующей заметки; неизвестный `--candidate-id` даёт ошибку и exit code 1. Заметка пишется в `<vault>/candidates/<candidate_id>.md`.
+Записывает человеческое решение: `--status` (`inbox` по умолчанию / `accepted` / `rejected` / `deferred`), `--rationale`, `--approved-by` (обязателен для статусов кроме `inbox`), `--merge-into <candidate_id>` — отметка ручного слияния. `--outcome "<text>"` фиксирует результат после решения: непустая строка записывает `outcome` и `outcome_at`, пустая строка очищает их, отсутствие флага сохраняет прежние значения; непустой `outcome` вместе со `--status inbox` отклоняется. Identity (project, key, kind, title) берётся из последнего снапшота или из существующей заметки; неизвестный `--candidate-id` даёт ошибку и exit code 1. Заметка пишется в `<vault>/candidates/<candidate_id>.md`.
 
 ### Браузерный вид «Проекты»
 
@@ -199,7 +202,7 @@ sourcefolio candidate-decide \
    - минимум 5 различных кандидатов — их число показывает `registry-build --dry-run`.
 4. Только если правило выполнено, снять `--limit` и расширить прогон на остальные коллекции и проекты.
 
-Если правило не выполнено, чинят вход, а не порог: уточняют профиль проекта (`--profiles`), меняют модель (`--model`), повторяют с `--refresh`. Реестр, построенный на шумном экстракторе, хоронит человеческое review под ложными кандидатами.
+Если правило не выполнено, чинят вход, а не порог: уточняют профиль проекта (`--profiles`), меняют модель (`--model`), повторяют с `--refresh`. Реестр, построенный на шумном экстракторе, хоронит человеческое review под ложными кандидатами. После итерации промпта или модели старые маршруты не нужно чистить руками: `registry-build` оставляет на каждую пару (источник, проект) только новый маршрут, а проигнорированные считает в `routes_ignored`.
 
 ## 10. Что намеренно не сделано
 

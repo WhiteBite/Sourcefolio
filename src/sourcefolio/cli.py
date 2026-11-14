@@ -1522,6 +1522,7 @@ def _registry_extract(args: argparse.Namespace) -> int:
             max_ocr_kb=args.max_ocr_kb,
             max_caption_kb=args.max_caption_kb,
             refresh=args.refresh,
+            new_only=args.new,
             dry_run=args.dry_run,
         )
     )
@@ -1564,12 +1565,22 @@ def _registry_build(args: argparse.Namespace) -> int:
     derived_root = Path(args.derived_dir).resolve()
     notes = FileSystemHumanNoteStore(Path(args.vault).resolve() / "candidates")
     reader = CandidateDecisionReader(notes=notes)
+    archive_root = Path(args.archive_dir).resolve()
+    latest_captures: Mapping[str, str] | None = None
+    if archive_root.is_dir():
+        latest_captures = {
+            source_id: packet.capture_id
+            for source_id, packet in latest_capture_per_source(
+                FileSystemSourcePacketRepository(archive_root).iter_packets()
+            ).items()
+        }
     report = RegistryBuilder(
         routes=FileSystemRegistryRouteStore(derived_root),
         snapshots=FileSystemRegistrySnapshotStore(derived_root),
         projects={project.id: project.name for project in projects},
         decisions=reader.iter_decisions(),
         merges=reader.merges(),
+        latest_captures=latest_captures,
     ).run(RegistryBuildQuery(dry_run=args.dry_run))
     output = {
         "snapshot_id": report.snapshot_id,
@@ -1582,6 +1593,8 @@ def _registry_build(args: argparse.Namespace) -> int:
         "stale_accepted": report.stale_accepted,
         "dropped": report.dropped,
         "dry_run": report.dry_run,
+        "routes_ignored": report.routes_ignored,
+        "unrouted_captures": list(report.unrouted_captures),
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
@@ -1594,6 +1607,7 @@ def _registry_queue(args: argparse.Namespace) -> int:
         projects_path=Path(args.projects),
         derived_root=derived_root,
         vault_root=vault_root,
+        archive_root=Path(args.archive_dir).resolve(),
     )
     queue = builder.build(
         project_ids=tuple(args.project or ()),
@@ -1651,6 +1665,7 @@ def _candidate_decide(args: argparse.Namespace) -> int:
         rationale=args.rationale or "",
         approved_by=args.approved_by,
         merge_into=args.merge_into,
+        outcome=args.outcome,
     )
     output = {
         "note": str(vault_root / "candidates" / result.note),
@@ -2489,6 +2504,11 @@ def _build_parser() -> argparse.ArgumentParser:
     registry_extract.add_argument(
         "--refresh", action="store_true", help="ignore the cache and re-query"
     )
+    registry_extract.add_argument(
+        "--new",
+        action="store_true",
+        help="process only source/capture/project pairs that have no stored route yet",
+    )
     registry_extract.add_argument("--dry-run", action="store_true", help="report without writing")
     registry_extract.add_argument("--base-url")
     registry_extract.add_argument("--api-key")
@@ -2501,6 +2521,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     registry_build.add_argument("--projects", default="data/projects.json")
     registry_build.add_argument("--profiles", default="data/vault/projects")
+    registry_build.add_argument("--archive-dir", default="data/archive")
     registry_build.add_argument("--derived-dir", default="data/derived")
     registry_build.add_argument("--vault", default="data/vault")
     registry_build.add_argument("--dry-run", action="store_true", help="report without writing")
@@ -2512,6 +2533,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     registry_queue.add_argument("--projects", default="data/projects.json")
     registry_queue.add_argument("--profiles", default="data/vault/projects")
+    registry_queue.add_argument("--archive-dir", default="data/archive")
     registry_queue.add_argument("--derived-dir", default="data/derived")
     registry_queue.add_argument("--vault", default="data/vault")
     registry_queue.add_argument(
@@ -2546,6 +2568,7 @@ def _build_parser() -> argparse.ArgumentParser:
     candidate_decide.add_argument("--rationale")
     candidate_decide.add_argument("--approved-by")
     candidate_decide.add_argument("--merge-into")
+    candidate_decide.add_argument("--outcome")
     candidate_decide.add_argument("--projects", default="data/projects.json")
     candidate_decide.add_argument("--derived-dir", default="data/derived")
     candidate_decide.add_argument("--vault", default="data/vault")
