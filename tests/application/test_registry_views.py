@@ -11,7 +11,7 @@ from sourcefolio.application.registry_queue import (
     QueueMention,
     RegistryQueue,
 )
-from sourcefolio.application.registry_views import RegistryViewProjection
+from sourcefolio.application.registry_views import RegistryViewProjection, project_slug_map
 from sourcefolio.domain.registry import CandidateKind, DecisionStatus, FitLevel
 
 
@@ -93,6 +93,24 @@ def test_render_yields_index_and_one_project_document() -> None:
         "midas-ai.md",
     ]
     assert RegistryViewProjection().render(queue) == documents
+
+
+def test_project_slug_map_matches_projection_file_names() -> None:
+    queue = make_queue(
+        ProjectQueue(project_id="midas", name="MidasAI", candidates=()),
+        ProjectQueue(project_id="first", name="Shared", candidates=()),
+        ProjectQueue(project_id="second", name="Shared", candidates=()),
+    )
+
+    documents = RegistryViewProjection().render(queue)
+    slugs = project_slug_map((project.project_id, project.name) for project in queue.projects)
+
+    assert slugs["midas"] == "midasai"
+    assert slugs["first"] == "shared-e3c4b39d"
+    assert slugs["second"] == "second"
+    assert {f"{slugs[project.project_id]}.md" for project in queue.projects} == {
+        document.path for document in documents[1:]
+    }
 
 
 def test_frontmatter_keys_and_schema_version() -> None:

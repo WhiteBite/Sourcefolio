@@ -19,6 +19,7 @@ from sourcefolio.application.project_fit import (
 from sourcefolio.application.projection_ports import HumanNoteReader, ProjectionStore
 from sourcefolio.application.projection_types import GeneratedDocument
 from sourcefolio.application.registry_queue import RegistryQueue, RegistryQueueBuilder
+from sourcefolio.application.registry_views import project_slug_map
 
 _MAX_MATCHES = 20
 _MAX_MATCHES_PER_PROJECT = 3
@@ -80,6 +81,7 @@ class ContextCandidate:
     mention_count: int
     status: str
     outcome: str | None = None
+    registry_slug: str | None = None
 
 
 @dataclass(frozen=True)
@@ -212,6 +214,7 @@ def _context_candidates(
 ) -> tuple[ContextCandidate, ...]:
     if registry is None:
         return ()
+    slugs = project_slug_map((project.project_id, project.name) for project in registry.projects)
     selected: list[ContextCandidate] = []
     for project in registry.projects:
         for taken, candidate in enumerate(project.candidates):
@@ -227,6 +230,7 @@ def _context_candidates(
                     mention_count=candidate.mention_count,
                     status=candidate.status,
                     outcome=candidate.outcome,
+                    registry_slug=slugs.get(project.project_id),
                 )
             )
         if len(selected) >= _MAX_REGISTRY_CANDIDATES:
@@ -360,7 +364,10 @@ def render_markdown(
             if candidate.outcome:
                 line += f" — outcome: {escape(candidate.outcome, table=True)}"
             if generated_prefix is not None:
-                target = f"{generated_prefix.strip('/')}/registry/{candidate.project_id}"
+                target = (
+                    f"{generated_prefix.strip('/')}/registry/"
+                    f"{candidate.registry_slug or candidate.project_id}"
+                )
                 line += f" — [[{target}|registry]]"
             lines.append(line)
     lines.extend(

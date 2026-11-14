@@ -33,18 +33,22 @@ def _accepted_count(candidates: Iterable[QueueCandidate]) -> int:
     return sum(1 for candidate in candidates if candidate.status == accepted)
 
 
-def _project_slugs(projects: Iterable[ProjectQueue]) -> dict[str, str]:
-    items = tuple(projects)
-    by_name = unique_slugs(project.name for project in items)
+def project_slug_map(pairs: Iterable[tuple[str, str]]) -> dict[str, str]:
+    items = tuple(sorted(pairs, key=lambda pair: pair[0]))
+    by_name = unique_slugs(name for _project_id, name in items)
     slugs: dict[str, str] = {}
     used: set[str] = set()
-    for project in items:
-        slug = by_name[project.name]
+    for project_id, name in items:
+        slug = by_name[name]
         if slug in used:
-            slug = project.project_id
+            slug = project_id
         used.add(slug)
-        slugs[project.project_id] = slug
+        slugs[project_id] = slug
     return slugs
+
+
+def _project_slugs(projects: Iterable[ProjectQueue]) -> dict[str, str]:
+    return project_slug_map((project.project_id, project.name) for project in projects)
 
 
 def _quote_lines(mention: QueueMention, generated_prefix: str, alias: str) -> list[str]:

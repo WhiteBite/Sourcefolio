@@ -186,17 +186,23 @@ def registry_builder(
     *,
     decisions: tuple[CandidateDecision, ...] = (),
     build_snapshot: bool = True,
+    projects: dict[str, str] | None = None,
 ) -> RegistryQueueBuilder:
     derived = root / "derived"
     route_store = FileSystemRegistryRouteStore(derived)
     for route in routes:
         route_store.save(route)
     snapshot_store = FileSystemRegistrySnapshotStore(derived)
-    projects = {"alpha": "Alpha", "beta": "Beta", "gamma": "Gamma", "delta": "Delta"}
+    project_names = projects or {
+        "alpha": "Alpha",
+        "beta": "Beta",
+        "gamma": "Gamma",
+        "delta": "Delta",
+    }
     reported = RegistryBuilder(
         routes=route_store,
         snapshots=snapshot_store,
-        projects=projects,
+        projects=project_names,
         decisions=decisions,
         clock=lambda: NOW,
     )
@@ -206,7 +212,7 @@ def registry_builder(
         routes=route_store,
         snapshots=snapshot_store,
         decisions=decisions,
-        projects=projects,
+        projects=project_names,
     )
 
 
@@ -451,6 +457,7 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
         "mention_count": 1,
         "status": "accepted",
         "outcome": None,
+        "registry_slug": "alpha",
     }
 
     markdown = brief_builder.to_markdown()
@@ -458,6 +465,22 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
     assert f"- Snapshot: `{brief.registry_snapshot_id}`" in markdown
     assert "- [alpha] Adopted tool (tool, high, mentions 1, accepted)" in markdown
     assert "[[_generated/sourcefolio/registry/alpha|registry]]" in markdown
+
+
+def test_registry_link_uses_project_name_slug(tmp_path: Path) -> None:
+    routes = [make_route(1, project_id="midas", key="tool/one", title="Tool")]
+    registry = registry_builder(
+        tmp_path,
+        routes,
+        projects={"midas": "MidasAI"},
+    )
+
+    brief_builder = builder(tmp_path, registry=registry)
+    brief = brief_builder.build()
+
+    assert brief.candidates[0].registry_slug == "midasai"
+    assert "[[_generated/sourcefolio/registry/midasai|registry]]" in brief_builder.to_markdown()
+    assert "[[_generated/sourcefolio/registry/midas|registry]]" not in brief_builder.to_markdown()
 
 
 def test_registry_candidates_respect_per_project_and_global_caps(tmp_path: Path) -> None:
