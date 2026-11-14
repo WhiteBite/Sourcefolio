@@ -176,7 +176,7 @@ def test_quotes_are_verbatim_and_link_to_source_card() -> None:
     content = RegistryViewProjection().render(queue)[1].content
 
     assert quote in content
-    assert "sourcefolio/source-cards/src_9/cap_9" in content
+    assert "_generated/sourcefolio/source-cards/src_9/cap_9" in content
     assert "Fourth quote is hidden" not in content
 
 
@@ -224,7 +224,7 @@ def test_quote_links_to_latest_card_capture() -> None:
 
     content = RegistryViewProjection().render(queue)[1].content
 
-    assert "sourcefolio/source-cards/src_9/cap_latest" in content
+    assert "_generated/sourcefolio/source-cards/src_9/cap_latest" in content
     assert "sourcefolio/source-cards/src_9/cap_9" not in content
 
 
