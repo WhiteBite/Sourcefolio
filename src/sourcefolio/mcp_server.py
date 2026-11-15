@@ -389,7 +389,6 @@ def registry_extract(
 @server.tool(annotations=_annotations("Build registry snapshot", read_only=False))
 def registry_build(
     projects: str = "data/projects.json",
-    profiles: str = "data/vault/projects",
     archive_dir: str = "data/archive",
     derived_dir: str = "data/derived",
     vault: str = "data/vault",
@@ -401,8 +400,6 @@ def registry_build(
         "registry-build",
         "--projects",
         projects,
-        "--profiles",
-        profiles,
         "--archive-dir",
         archive_dir,
         "--derived-dir",
@@ -414,6 +411,43 @@ def registry_build(
         arguments.append("--dry-run")
     if show_unrouted:
         arguments.append("--show-unrouted")
+    return _run(arguments)
+
+
+@server.tool(annotations=_annotations("Render registry queue", read_only=False))
+def registry_queue(
+    projects: str = "data/projects.json",
+    archive_dir: str = "data/archive",
+    derived_dir: str = "data/derived",
+    vault: str = "data/vault",
+    project: list[str] | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    format: str = "json",
+    dry_run: bool = False,
+) -> str:
+    """Render the per-project candidate queue and persist registry views."""
+    arguments = [
+        "registry-queue",
+        "--projects",
+        projects,
+        "--archive-dir",
+        archive_dir,
+        "--derived-dir",
+        derived_dir,
+        "--vault",
+        vault,
+        "--format",
+        format,
+    ]
+    for project_id in project or []:
+        arguments += ["--project", project_id]
+    if status is not None:
+        arguments += ["--status", status]
+    if limit is not None:
+        arguments += ["--limit", str(limit)]
+    if dry_run:
+        arguments.append("--dry-run")
     return _run(arguments)
 
 

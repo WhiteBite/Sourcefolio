@@ -295,7 +295,6 @@ def test_registry_build_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> N
 
     mcp_server.registry_build(
         projects="p.json",
-        profiles="profiles",
         archive_dir="arch",
         derived_dir="der",
         vault="v",
@@ -308,8 +307,6 @@ def test_registry_build_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> N
             "registry-build",
             "--projects",
             "p.json",
-            "--profiles",
-            "profiles",
             "--archive-dir",
             "arch",
             "--derived-dir",
@@ -333,14 +330,77 @@ def test_registry_build_tool_omits_dry_run(monkeypatch: pytest.MonkeyPatch) -> N
             "registry-build",
             "--projects",
             "data/projects.json",
-            "--profiles",
-            "data/vault/projects",
             "--archive-dir",
             "data/archive",
             "--derived-dir",
             "data/derived",
             "--vault",
             "data/vault",
+        ]
+    ]
+
+
+def test_registry_queue_tool_forwards_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.registry_queue(
+        projects="p.json",
+        archive_dir="arch",
+        derived_dir="der",
+        vault="v",
+        project=["midas", "mafiin"],
+        status="inbox",
+        limit=5,
+        format="markdown",
+        dry_run=True,
+    )
+
+    assert calls == [
+        [
+            "registry-queue",
+            "--projects",
+            "p.json",
+            "--archive-dir",
+            "arch",
+            "--derived-dir",
+            "der",
+            "--vault",
+            "v",
+            "--format",
+            "markdown",
+            "--project",
+            "midas",
+            "--project",
+            "mafiin",
+            "--status",
+            "inbox",
+            "--limit",
+            "5",
+            "--dry-run",
+        ]
+    ]
+
+
+def test_registry_queue_tool_omits_optional_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_cli(monkeypatch)
+    from sourcefolio import mcp_server
+
+    mcp_server.registry_queue()
+
+    assert calls == [
+        [
+            "registry-queue",
+            "--projects",
+            "data/projects.json",
+            "--archive-dir",
+            "data/archive",
+            "--derived-dir",
+            "data/derived",
+            "--vault",
+            "data/vault",
+            "--format",
+            "json",
         ]
     ]
 
@@ -436,7 +496,7 @@ def test_registry_tool_annotations() -> None:
 
     tools = {tool.name: tool for tool in asyncio.run(mcp_server.server.list_tools())}
 
-    for name in ("registry_extract", "registry_build", "candidate_decide"):
+    for name in ("registry_extract", "registry_build", "registry_queue", "candidate_decide"):
         annotations = tools[name].annotations
         assert annotations is not None
         assert annotations.read_only_hint is False

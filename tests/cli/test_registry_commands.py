@@ -140,8 +140,6 @@ def build_arguments(tmp_path: Path, *extra: str) -> list[str]:
         "registry-build",
         "--projects",
         str(tmp_path / "projects.json"),
-        "--profiles",
-        str(tmp_path / "profiles"),
         "--derived-dir",
         str(tmp_path / "derived"),
         "--vault",
@@ -155,8 +153,6 @@ def queue_arguments(tmp_path: Path, *extra: str) -> list[str]:
         "registry-queue",
         "--projects",
         str(tmp_path / "projects.json"),
-        "--profiles",
-        str(tmp_path / "profiles"),
         "--derived-dir",
         str(tmp_path / "derived"),
         "--vault",
@@ -546,3 +542,18 @@ def test_registry_extract_fails_when_route_fails(tmp_path: Path, capsys, monkeyp
     assert output["results"][0]["status"] == "failed"
     assert output["results"][0]["error"] == "boom"
     assert not list(FileSystemRegistryRouteStore(tmp_path / "derived").iter_all())
+
+
+def test_registry_extract_writes_immutable_report(tmp_path: Path, capsys, monkeypatch) -> None:
+    prepare(tmp_path, monkeypatch)
+    report_path = tmp_path / "reports" / "extract-001.json"
+
+    assert main(extract_arguments(tmp_path, "--report", str(report_path))) == 0
+
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert payload["items_scanned"] == 1
+    assert payload["dropped_anchors"] == 0
+    assert payload["verdicts"]["candidate"] == 1
+    assert [item["status"] for item in payload["results"]] == ["processed"]
+    output = json.loads(capsys.readouterr().out)
+    assert output["report_path"] == str(report_path)

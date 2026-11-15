@@ -115,7 +115,11 @@ from sourcefolio.application.project_fit import (
 )
 from sourcefolio.application.project_profiles import ProjectProfileScaffolder
 from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
-from sourcefolio.application.registry_extract import RegistryExtractor, RegistryExtractQuery
+from sourcefolio.application.registry_extract import (
+    RegistryExtractor,
+    RegistryExtractQuery,
+    report_to_dict,
+)
 from sourcefolio.application.registry_queue import RegistryQueueBuilder
 from sourcefolio.application.registry_views import RegistryViewProjection
 from sourcefolio.application.repo_catalog import RepoCatalogQuery, RepoCatalogRunner
@@ -1562,14 +1566,19 @@ def _registry_extract(args: argparse.Namespace) -> int:
             for item in report.results
         ],
     }
+    if args.report:
+        report_path = Path(args.report).resolve()
+        data = (
+            json.dumps(report_to_dict(report), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        write_immutable_bytes(report_path, data)
+        output["report_path"] = str(report_path)
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 1 if report.failed else 0
 
 
 def _registry_build(args: argparse.Namespace) -> int:
     projects = _load_projects(Path(args.projects))
-    if args.profiles:
-        projects = _with_profiles(projects, Path(args.profiles).resolve())
     derived_root = Path(args.derived_dir).resolve()
     notes = FileSystemHumanNoteStore(Path(args.vault).resolve() / "candidates")
     reader = CandidateDecisionReader(notes=notes)
@@ -1744,6 +1753,7 @@ def _refresh(args: argparse.Namespace) -> int:
                     max_caption_kb=20,
                     new=True,
                     refresh=args.refresh,
+                    report=None,
                     dry_run=args.dry_run,
                 ),
             )
@@ -1754,7 +1764,6 @@ def _refresh(args: argparse.Namespace) -> int:
             _registry_build,
             argparse.Namespace(
                 projects=args.projects,
-                profiles=args.profiles,
                 archive_dir=args.archive_dir,
                 derived_dir=args.derived_dir,
                 vault=args.vault,
@@ -2599,6 +2608,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="process only source/capture/project pairs that have no stored route yet",
     )
+    registry_extract.add_argument(
+        "--report",
+        help="write an immutable JSON report; use a new path per run",
+    )
     registry_extract.add_argument("--dry-run", action="store_true", help="report without writing")
     registry_extract.add_argument("--base-url")
     registry_extract.add_argument("--api-key")
@@ -2610,7 +2623,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="aggregate extracted routes into a candidate snapshot",
     )
     registry_build.add_argument("--projects", default="data/projects.json")
-    registry_build.add_argument("--profiles", default="data/vault/projects")
     registry_build.add_argument("--archive-dir", default="data/archive")
     registry_build.add_argument("--derived-dir", default="data/derived")
     registry_build.add_argument("--vault", default="data/vault")
@@ -2627,7 +2639,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="render the candidate queue for projects and persist registry views",
     )
     registry_queue.add_argument("--projects", default="data/projects.json")
-    registry_queue.add_argument("--profiles", default="data/vault/projects")
     registry_queue.add_argument("--archive-dir", default="data/archive")
     registry_queue.add_argument("--derived-dir", default="data/derived")
     registry_queue.add_argument("--vault", default="data/vault")
