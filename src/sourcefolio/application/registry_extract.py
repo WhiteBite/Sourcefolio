@@ -12,8 +12,8 @@ from pydantic import JsonValue
 from sourcefolio.application.entity_extraction import iter_repositories
 from sourcefolio.application.extraction_ports import ExtractionRepository
 from sourcefolio.application.latest_captures import latest_capture_per_source
-from sourcefolio.application.llm_enrich import extract_json_object
 from sourcefolio.application.llm_ports import ChatClient, LlmCacheStore
+from sourcefolio.application.llm_text import extract_json_object
 from sourcefolio.application.ports import ArtifactStore, SourcePacketRepository
 from sourcefolio.application.project_fit import Project
 from sourcefolio.application.registry_ports import RegistryRouteStore

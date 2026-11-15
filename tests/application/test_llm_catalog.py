@@ -19,7 +19,7 @@ from sourcefolio.application.llm_catalog import (
     _cache_key,
     normalize_title,
 )
-from sourcefolio.application.llm_enrich import _build_user_prompt
+from sourcefolio.application.llm_text import build_source_prompt
 from sourcefolio.domain.common import ActorKind, Provenance
 from sourcefolio.domain.source import (
     ArtifactRole,
@@ -202,7 +202,7 @@ def test_llm_catalog_treats_corrupt_cache_as_miss(tmp_path: Path) -> None:
     packet = add_packet(tmp_path, "one", desc="matrix")
     cache_root = tmp_path / "derived" / "llm-catalog"
     cache_root.mkdir(parents=True)
-    key = _cache_key(packet, _build_user_prompt(packet))
+    key = _cache_key(packet, build_source_prompt(packet))
     (cache_root / f"{key}.json").write_text("{not json", encoding="utf-8")
 
     client = FakeCatalogClient({"matrix": MATRIX})

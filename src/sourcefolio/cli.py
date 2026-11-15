@@ -93,7 +93,6 @@ from sourcefolio.application.frontmatter import note_body
 from sourcefolio.application.knowledge_graph import KnowledgeGraphProjection
 from sourcefolio.application.latest_captures import latest_capture_per_source
 from sourcefolio.application.llm_catalog import LlmCatalogQuery, LlmCatalogRunner
-from sourcefolio.application.llm_enrich import LlmEnrichQuery, LlmEnrichRunner
 from sourcefolio.application.note import NoteSetter, NoteWriter
 from sourcefolio.application.obsidian_views import ObsidianOverviewProjection
 from sourcefolio.application.ocr_backlog import OcrBacklogQuery, OcrBacklogRunner
@@ -1044,7 +1043,7 @@ def _build_serve_server(args: argparse.Namespace) -> UiHttpServer:
         packets=latest_capture_per_source(packets_repository.iter_packets()),
         packets_repository=packets_repository,
         registry=builder,
-        outcomes=CandidateDecisionWriter(
+        decision_writer=CandidateDecisionWriter(
             notes=FileSystemHumanNoteStore(vault_root / "candidates"),
             clock=lambda: datetime.now(UTC),
         ),
@@ -1235,65 +1234,6 @@ def _scaffold_ideas(args: argparse.Namespace) -> int:
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
-
-
-def _llm_enrich(args: argparse.Namespace) -> int:
-    config = resolve_llm_config(
-        base_url=args.base_url,
-        api_key=args.api_key,
-        model=args.model,
-    )
-    archive_root = Path(args.archive_dir).resolve()
-    derived_root = Path(args.derived_dir).resolve()
-    vault_root = Path(args.vault).resolve()
-    generated_root = vault_root / "_generated" / "sourcefolio"
-    report = LlmEnrichRunner(
-        packets=FileSystemSourcePacketRepository(archive_root),
-        client=OpenAIChatClient(
-            OpenAIChatConfig(
-                base_url=config.base_url,
-                api_key=config.api_key,
-                model=config.model,
-            )
-        ),
-        cache=FileSystemLlmCache(derived_root),
-        model=config.model,
-        generated_prefix=generated_root.relative_to(vault_root).as_posix(),
-    ).run(
-        LlmEnrichQuery(
-            collection=args.collection,
-            limit=args.limit,
-            refresh=args.refresh,
-            dry_run=args.dry_run,
-        )
-    )
-    note_path: str | None = None
-    if report.note is not None:
-        FileSystemProjectionStore(generated_root).merge_namespace(
-            LlmEnrichRunner.NAMESPACE,
-            [report.note],
-        )
-        note_path = str(generated_root / LlmEnrichRunner.NAMESPACE / report.note.path)
-    output = {
-        "collection": report.collection,
-        "model": report.model,
-        "processed": report.processed,
-        "skipped_cached": report.skipped_cached,
-        "failed": report.failed,
-        "dry_run": report.dry_run,
-        "note_path": note_path,
-        "results": [
-            {
-                "source_id": item.source_id,
-                "capture_id": item.capture_id,
-                "status": item.status,
-                "error": item.error,
-            }
-            for item in report.results
-        ],
-    }
-    print(json.dumps(output, ensure_ascii=False, indent=2))
-    return 1 if report.failed else 0
 
 
 def _llm_catalog(args: argparse.Namespace) -> int:
@@ -2486,22 +2426,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default="json",
     )
     context.set_defaults(handler=_context)
-
-    llm_enrich = subcommands.add_parser(
-        "llm-enrich",
-        help="enrich a collection's latest captures with an OpenAI-compatible chat model",
-    )
-    llm_enrich.add_argument("--collection", required=True)
-    llm_enrich.add_argument("--archive-dir", default="data/archive")
-    llm_enrich.add_argument("--derived-dir", default="data/derived")
-    llm_enrich.add_argument("--vault", default="data/vault")
-    llm_enrich.add_argument("--limit", type=int, help="process at most N captures")
-    llm_enrich.add_argument("--refresh", action="store_true", help="ignore the cache and re-query")
-    llm_enrich.add_argument("--dry-run", action="store_true", help="report without writing")
-    llm_enrich.add_argument("--base-url")
-    llm_enrich.add_argument("--api-key")
-    llm_enrich.add_argument("--model")
-    llm_enrich.set_defaults(handler=_llm_enrich)
 
     llm_catalog = subcommands.add_parser(
         "llm-catalog",

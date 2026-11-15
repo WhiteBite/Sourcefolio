@@ -13,8 +13,8 @@ from pydantic import JsonValue
 
 from sourcefolio.application.extraction_ports import ExtractionRepository
 from sourcefolio.application.latest_captures import latest_capture_per_source
-from sourcefolio.application.llm_enrich import extract_json_object
 from sourcefolio.application.llm_ports import ChatClient, LlmCacheStore
+from sourcefolio.application.llm_text import extract_json_object
 from sourcefolio.application.markdown import (
     card_link_ids,
     escape,

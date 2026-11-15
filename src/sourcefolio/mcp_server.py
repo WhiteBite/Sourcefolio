@@ -168,46 +168,6 @@ def scaffold_ideas(archive_dir: str = "data/archive", vault: str = "data/vault")
     return _run(["scaffold-ideas", "--archive-dir", archive_dir, "--vault", vault])
 
 
-@server.tool(annotations=_annotations("Enrich with LLM", read_only=False, open_world=True))
-def llm_enrich(
-    collection: str,
-    archive_dir: str = "data/archive",
-    derived_dir: str = "data/derived",
-    vault: str = "data/vault",
-    limit: int | None = None,
-    refresh: bool = False,
-    dry_run: bool = False,
-    base_url: str | None = None,
-    api_key: str | None = None,
-    model: str | None = None,
-) -> str:
-    """Enrich a collection's latest captures with an OpenAI-compatible chat model."""
-    arguments = [
-        "llm-enrich",
-        "--collection",
-        collection,
-        "--archive-dir",
-        archive_dir,
-        "--derived-dir",
-        derived_dir,
-        "--vault",
-        vault,
-    ]
-    if limit is not None:
-        arguments += ["--limit", str(limit)]
-    if refresh:
-        arguments.append("--refresh")
-    if dry_run:
-        arguments.append("--dry-run")
-    if base_url is not None:
-        arguments += ["--base-url", base_url]
-    if api_key is not None:
-        arguments += ["--api-key", api_key]
-    if model is not None:
-        arguments += ["--model", model]
-    return _run(arguments)
-
-
 @server.tool(annotations=_annotations("Build LLM catalog", read_only=False, open_world=True))
 def llm_catalog(
     collection: str,

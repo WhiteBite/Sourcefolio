@@ -48,7 +48,7 @@ class _Context:
         notes: NoteWriter,
         packets: Mapping[str, SourcePacket],
         registry: RegistryQueueBuilder | None = None,
-        outcomes: CandidateDecisionWriter | None = None,
+        decision_writer: CandidateDecisionWriter | None = None,
         packets_repository: SourcePacketRepository | None = None,
         min_refresh_interval: float = 2.0,
         clock: Callable[[], float] = time.monotonic,
@@ -58,7 +58,7 @@ class _Context:
         self.notes = notes
         self.packets = dict(packets)
         self.registry = registry
-        self.outcomes = outcomes
+        self.decision_writer = decision_writer
         self.packets_repository = packets_repository
         self.media_types = {
             artifact.artifact_id: artifact.media_type
@@ -155,7 +155,7 @@ class _Handler(BaseHTTPRequestHandler):
                 self._update_note(payload)
             return
         if path == "/api/candidate":
-            if self._context.registry is None or self._context.outcomes is None:
+            if self._context.registry is None or self._context.decision_writer is None:
                 self._send_json(
                     HTTPStatus.NOT_FOUND,
                     {"error": "registry not configured"},
@@ -214,8 +214,8 @@ class _Handler(BaseHTTPRequestHandler):
         return None
 
     def _update_candidate(self, payload: dict[str, object]) -> None:
-        outcomes = self._context.outcomes
-        if outcomes is None:
+        writer = self._context.decision_writer
+        if writer is None:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "registry not configured"})
             return
         candidate_id = payload.get("candidate_id")
@@ -253,7 +253,7 @@ class _Handler(BaseHTTPRequestHandler):
         project_id, candidate = found
         try:
             with self._context.decision_lock:
-                result = outcomes.set(
+                result = writer.set(
                     candidate_id=candidate.candidate_id,
                     project_id=project_id,
                     key=candidate.key,
@@ -414,7 +414,7 @@ class UiHttpServer:
         notes: NoteWriter,
         packets: Mapping[str, SourcePacket],
         registry: RegistryQueueBuilder | None = None,
-        outcomes: CandidateDecisionWriter | None = None,
+        decision_writer: CandidateDecisionWriter | None = None,
         packets_repository: SourcePacketRepository | None = None,
         host: str = "127.0.0.1",
         port: int = 8765,
@@ -427,7 +427,7 @@ class UiHttpServer:
             notes=notes,
             packets=packets,
             registry=registry,
-            outcomes=outcomes,
+            decision_writer=decision_writer,
             packets_repository=packets_repository,
             min_refresh_interval=min_refresh_interval,
             clock=clock,

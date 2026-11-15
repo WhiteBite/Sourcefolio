@@ -9,8 +9,8 @@ from typing import Literal
 from pydantic import JsonValue
 
 from sourcefolio.application.latest_captures import latest_capture_per_source
-from sourcefolio.application.llm_enrich import _build_user_prompt, extract_json_object
 from sourcefolio.application.llm_ports import ChatClient, LlmCacheStore
+from sourcefolio.application.llm_text import build_source_prompt, extract_json_object
 from sourcefolio.application.markdown import card_link, escape, generated_frontmatter
 from sourcefolio.application.ports import SourcePacketRepository
 from sourcefolio.application.projection_types import GeneratedDocument
@@ -272,7 +272,7 @@ class LlmCatalogRunner:
         entries: list[tuple[SourcePacket, LlmCatalogEntry]] = []
         failures: list[tuple[SourcePacket, str]] = []
         for packet in selected:
-            user_prompt = _build_user_prompt(packet)
+            user_prompt = build_source_prompt(packet)
             key = _cache_key(packet, user_prompt)
             cached = None
             if not query.refresh:
