@@ -557,3 +557,13 @@ def test_registry_extract_writes_immutable_report(tmp_path: Path, capsys, monkey
     assert [item["status"] for item in payload["results"]] == ["processed"]
     output = json.loads(capsys.readouterr().out)
     assert output["report_path"] == str(report_path)
+
+
+def test_registry_extract_dry_run_writes_no_report(tmp_path: Path, capsys, monkeypatch) -> None:
+    prepare(tmp_path, monkeypatch)
+    report_path = tmp_path / "reports" / "dry-run.json"
+
+    assert main(extract_arguments(tmp_path, "--dry-run", "--report", str(report_path))) == 0
+
+    assert not report_path.exists()
+    assert "report_path" not in json.loads(capsys.readouterr().out)

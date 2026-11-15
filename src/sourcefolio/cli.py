@@ -1506,7 +1506,7 @@ def _registry_extract(args: argparse.Namespace) -> int:
             for item in report.results
         ],
     }
-    if args.report:
+    if args.report and not args.dry_run:
         report_path = Path(args.report).resolve()
         data = (
             json.dumps(report_to_dict(report), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
