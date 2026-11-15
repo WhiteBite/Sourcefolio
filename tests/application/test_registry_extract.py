@@ -21,6 +21,7 @@ from sourcefolio.application.project_fit import Project
 from sourcefolio.application.registry_extract import (
     RegistryExtractor,
     RegistryExtractQuery,
+    report_to_dict,
 )
 from sourcefolio.domain.common import ActorKind, Provenance
 from sourcefolio.domain.registry import (
@@ -62,7 +63,7 @@ class AdvancingClock:
 class FakeChatClient:
     def __init__(
         self,
-        responses: dict[str, dict[str, object]] | None = None,
+        responses: dict[str, object] | None = None,
         *,
         fail_on: str | None = None,
     ) -> None:
@@ -241,7 +242,10 @@ def test_paraphrased_quote_is_dropped_and_downgrades_to_insufficient(tmp_path: P
     )
 
     assert report.dropped_anchors == 1
+    assert report.failed == 0
+    assert report.verdicts["candidate"] == 0
     assert report.verdicts["insufficient_signal"] == 1
+    assert len(stored_routes(tmp_path)) == 1
     route = stored_routes(tmp_path)[0]
     assert route.verdict == RouteVerdict.INSUFFICIENT_SIGNAL
     assert route.reason == "no verbatim anchor"
@@ -263,7 +267,10 @@ def test_packet_without_text_gets_deterministic_route_and_no_client_call(tmp_pat
     )
 
     assert client.calls == 0
+    assert report.failed == 0
     assert report.routes_processed == 1
+    assert report.verdicts["insufficient_signal"] == 1
+    assert len(stored_routes(tmp_path)) == 1
     route = stored_routes(tmp_path)[0]
     assert route.verdict == RouteVerdict.INSUFFICIENT_SIGNAL
     assert route.reason == "not enough text"
@@ -273,20 +280,64 @@ def test_packet_without_text_gets_deterministic_route_and_no_client_call(tmp_pat
     assert not (tmp_path / "derived" / "registry-extract").exists()
 
 
-def test_invalid_verdict_is_coerced_to_insufficient_signal(tmp_path: Path) -> None:
+def test_model_response_without_verdict_fails_item(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    client = FakeChatClient({"Alpha Tool": {}})
+
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert report.failed == 1
+    assert report.routes_processed == 0
+    assert report.verdicts["insufficient_signal"] == 0
+    item = report.results[0]
+    assert item.status == "failed"
+    assert item.verdict is None
+    assert item.error is not None
+    assert "missing verdict" in item.error
+    assert stored_routes(tmp_path) == []
+    assert not (tmp_path / "derived" / "registry-extract").exists()
+
+
+def test_json_list_response_fails_item(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    client = FakeChatClient({"Alpha Tool": []})
+
+    report = extractor(tmp_path, client).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    assert report.failed == 1
+    assert report.routes_processed == 0
+    item = report.results[0]
+    assert item.status == "failed"
+    assert item.verdict is None
+    assert item.error is not None
+    assert "no JSON object" in item.error
+    assert stored_routes(tmp_path) == []
+    assert not (tmp_path / "derived" / "registry-extract").exists()
+
+
+def test_invalid_verdict_fails_item_instead_of_insufficient_signal(tmp_path: Path) -> None:
     add_packet(tmp_path, "one", desc=DESCRIPTION)
     client = FakeChatClient(
-        {"Alpha Tool": {"verdict": "maybe", "reason": "unclear", "mentions": []}}
+        {"Alpha Tool": {"verdict": "nonsense", "reason": "unclear", "mentions": []}}
     )
 
     report = extractor(tmp_path, client).run(
         RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
     )
 
-    assert report.verdicts["insufficient_signal"] == 1
-    route = stored_routes(tmp_path)[0]
-    assert route.verdict == RouteVerdict.INSUFFICIENT_SIGNAL
-    assert route.reason == "invalid model response"
+    assert report.failed == 1
+    assert report.verdicts["insufficient_signal"] == 0
+    item = report.results[0]
+    assert item.status == "failed"
+    assert item.verdict is None
+    assert item.error is not None
+    assert "unrecognized verdict" in item.error
+    assert stored_routes(tmp_path) == []
+    assert not (tmp_path / "derived" / "registry-extract").exists()
 
 
 def test_cache_hit_skips_client(tmp_path: Path) -> None:
@@ -876,3 +927,57 @@ def test_ocr_budget_excludes_segment_that_alone_exceeds_budget(tmp_path: Path) -
 
     assert report.dropped_anchors == 1
     assert report.mentions == 0
+
+
+def test_report_to_dict_matches_cli_shape_and_is_json_serializable(tmp_path: Path) -> None:
+    add_packet(tmp_path, "one", desc=DESCRIPTION)
+    response = candidate(
+        [
+            {
+                "name": "Alpha Tool",
+                "kind": "tool",
+                "fit": "high",
+                "quote": "Alpha Tool",
+                "field": "description",
+                "comment_index": None,
+            }
+        ]
+    )
+    report = extractor(tmp_path, FakeChatClient({"Alpha Tool": response})).run(
+        RegistryExtractQuery(projects=SINGLE, collections=("Нейронки",))
+    )
+
+    data = report_to_dict(report)
+    json.dumps(data)
+
+    assert set(data) == {
+        "projects",
+        "model",
+        "items_scanned",
+        "routes_processed",
+        "skipped_cached",
+        "failed",
+        "verdicts",
+        "mentions",
+        "dropped_anchors",
+        "dry_run",
+        "results",
+    }
+    assert data["projects"] == ["sourcefolio"]
+    assert data["model"] == "test-model"
+    assert data["dropped_anchors"] == 0
+    assert data["verdicts"] == {"candidate": 1, "irrelevant": 0, "insufficient_signal": 0}
+    assert data["mentions"] == 1
+    results = data["results"]
+    assert isinstance(results, list) and len(results) == 1
+    item = results[0]
+    assert set(item) == {
+        "source_id",
+        "capture_id",
+        "project_id",
+        "status",
+        "verdict",
+        "error",
+    }
+    assert item["status"] == "processed"
+    assert item["verdict"] == RouteVerdict.CANDIDATE.value

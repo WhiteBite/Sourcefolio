@@ -63,6 +63,11 @@ _MIN_SIGNAL_CHARS = 40
 _MAX_KEY = 200
 _DRY_RUN_PREVIEWS = 2
 _FIT_RANK: dict[FitLevel, int] = {FitLevel.HIGH: 3, FitLevel.MEDIUM: 2, FitLevel.LOW: 1}
+_MAX_ERROR_VALUE = 50
+
+
+class _InvalidModelResponse(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -205,11 +210,13 @@ def _field(value: object) -> AnchorField | None:
 def _verdict(payload: Mapping[str, JsonValue]) -> tuple[RouteVerdict, str]:
     raw = payload.get("verdict")
     if not isinstance(raw, str):
-        return RouteVerdict.INSUFFICIENT_SIGNAL, "invalid model response"
+        raise _InvalidModelResponse("invalid model response: missing verdict")
     try:
         verdict = RouteVerdict(raw)
     except ValueError:
-        return RouteVerdict.INSUFFICIENT_SIGNAL, "invalid model response"
+        raise _InvalidModelResponse(
+            f"invalid model response: unrecognized verdict {raw.strip()[:_MAX_ERROR_VALUE]!r}"
+        ) from None
     reason = _as_str(payload.get("reason"))
     if verdict == RouteVerdict.INSUFFICIENT_SIGNAL and not reason:
         reason = "insufficient signal"
@@ -581,7 +588,10 @@ class RegistryExtractor:
         model_payload, error = self._complete(user_prompt)
         if model_payload is None:
             return _Outcome(item=_item(packet, project.id, "failed", None, error=error))
-        verdict, reason, mentions, dropped = _interpret(model_payload, texts, packet)
+        try:
+            verdict, reason, mentions, dropped = _interpret(model_payload, texts, packet)
+        except _InvalidModelResponse as exc:
+            return _Outcome(item=_item(packet, project.id, "failed", None, error=str(exc)))
         route = self._route(
             packet=packet,
             project_id=project.id,
@@ -615,7 +625,10 @@ class RegistryExtractor:
         pre_rank: int,
         query: RegistryExtractQuery,
     ) -> _Outcome:
-        verdict, reason, mentions, dropped = _interpret(payload, texts, packet)
+        try:
+            verdict, reason, mentions, dropped = _interpret(payload, texts, packet)
+        except _InvalidModelResponse as exc:
+            return _Outcome(item=_item(packet, project_id, "failed", None, error=str(exc)))
         route = self._route(
             packet=packet,
             project_id=project_id,
@@ -827,3 +840,29 @@ def _item(
         verdict=None if verdict is None else verdict.value,
         error=error,
     )
+
+
+def report_to_dict(report: RegistryExtractReport) -> dict[str, object]:
+    return {
+        "projects": list(report.projects),
+        "model": report.model,
+        "items_scanned": report.items_scanned,
+        "routes_processed": report.routes_processed,
+        "skipped_cached": report.skipped_cached,
+        "failed": report.failed,
+        "verdicts": dict(report.verdicts),
+        "mentions": report.mentions,
+        "dropped_anchors": report.dropped_anchors,
+        "dry_run": report.dry_run,
+        "results": [
+            {
+                "source_id": item.source_id,
+                "capture_id": item.capture_id,
+                "project_id": item.project_id,
+                "status": item.status,
+                "verdict": item.verdict,
+                "error": item.error,
+            }
+            for item in report.results
+        ],
+    }
