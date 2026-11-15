@@ -462,6 +462,7 @@ def test_ui_view_embeds_registry_queue(tmp_path: Path) -> None:
         "status",
         "outcome",
         "outcome_at",
+        "stale",
         "mentions",
     }
     assert candidate["title"] == "Alpha Tool"
@@ -560,5 +561,6 @@ def test_ui_view_projects_view_keeps_archive_and_registry_payload(tmp_path: Path
         "status",
         "outcome",
         "outcome_at",
+        "stale",
         "mentions",
     }

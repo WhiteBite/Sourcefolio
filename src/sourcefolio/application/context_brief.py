@@ -82,6 +82,7 @@ class ContextCandidate:
     status: str
     outcome: str | None = None
     registry_slug: str | None = None
+    stale: bool = False
 
 
 @dataclass(frozen=True)
@@ -231,6 +232,7 @@ def _context_candidates(
                     status=candidate.status,
                     outcome=candidate.outcome,
                     registry_slug=slugs.get(project.project_id),
+                    stale=candidate.stale,
                 )
             )
         if len(selected) >= _MAX_REGISTRY_CANDIDATES:
@@ -362,7 +364,9 @@ def render_markdown(
                 f"{escape(candidate.status, table=True)})"
             )
             if candidate.outcome:
-                line += f" — outcome: {escape(candidate.outcome, table=True)}"
+                line += f" - outcome: {escape(candidate.outcome, table=True)}"
+            if candidate.stale:
+                line += " - stale"
             if generated_prefix is not None:
                 target = (
                     f"{generated_prefix.strip('/')}/registry/"

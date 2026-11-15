@@ -62,7 +62,7 @@ class RegistryBuildReport:
     mentions: int
     projects: dict[str, dict[str, int]]
     merged: int
-    stale_accepted: int
+    stale_decided: int
     dropped: int
     dry_run: bool
     routes_ignored: int = 0
@@ -173,7 +173,7 @@ class RegistryBuilder:
         }
         stale: list[Candidate] = []
         for candidate_id, decision in decisions_by_id.items():
-            if decision.status != DecisionStatus.ACCEPTED or candidate_id in built_ids:
+            if decision.status == DecisionStatus.INBOX or candidate_id in built_ids:
                 continue
             stale.append(
                 Candidate(
@@ -242,19 +242,21 @@ class RegistryBuilder:
         )
 
         snapshot_path: str | None = None
+        latest_path: str | None = None
         if not query.dry_run:
             self._snapshots.save(snapshot)
             snapshot_path = f"snapshots/{snapshot_id}.json"
+            latest_path = "latest.json"
 
         return RegistryBuildReport(
             snapshot_id=snapshot_id,
             snapshot_path=snapshot_path,
-            latest_path=None,
+            latest_path=latest_path,
             candidates=len(ordered),
             mentions=sum(candidate.mention_count for candidate in ordered),
             projects=report_projects,
             merged=sum(len(candidate.merged_from) for candidate in ordered),
-            stale_accepted=len(stale),
+            stale_decided=len(stale),
             dropped=dropped,
             dry_run=query.dry_run,
             routes_ignored=routes_ignored,

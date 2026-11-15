@@ -458,6 +458,7 @@ def test_registry_candidates_are_accepted_first_and_rendered(tmp_path: Path) -> 
         "status": "accepted",
         "outcome": None,
         "registry_slug": "alpha",
+        "stale": False,
     }
 
     markdown = brief_builder.to_markdown()

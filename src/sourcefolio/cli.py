@@ -1592,7 +1592,7 @@ def _registry_build(args: argparse.Namespace) -> int:
         "mentions": report.mentions,
         "projects": report.projects,
         "merged": report.merged,
-        "stale_accepted": report.stale_accepted,
+        "stale_decided": report.stale_decided,
         "dropped": report.dropped,
         "dry_run": report.dry_run,
         "routes_ignored": report.routes_ignored,

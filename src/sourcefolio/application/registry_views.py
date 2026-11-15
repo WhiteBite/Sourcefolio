@@ -76,6 +76,8 @@ def _candidate_lines(candidate: QueueCandidate, generated_prefix: str) -> list[s
     ]
     if candidate.outcome:
         lines.insert(-1, f"- Outcome: {candidate.outcome}")
+    if candidate.stale:
+        lines.insert(-1, "- Stale: yes")
     for mention in candidate.mentions[:_MAX_QUOTES]:
         alias = mention.title or candidate.title
         lines.extend(_quote_lines(mention, generated_prefix, alias))

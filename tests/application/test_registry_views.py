@@ -45,6 +45,7 @@ def make_candidate(
     mention_count: int = 1,
     status: str = DecisionStatus.INBOX.value,
     outcome: str | None = None,
+    stale: bool = False,
     mentions: tuple[QueueMention, ...] | None = None,
 ) -> QueueCandidate:
     resolved = (make_mention(),) if mentions is None else mentions
@@ -59,6 +60,7 @@ def make_candidate(
         score=1,
         status=status,
         outcome=outcome,
+        stale=stale,
         mentions=resolved,
     )
 
@@ -210,6 +212,23 @@ def test_recorded_outcome_is_rendered() -> None:
 
     assert "Status: **accepted**" in content
     assert "Outcome: shipped in pilot" in content
+
+
+def test_stale_candidate_is_marked() -> None:
+    queue = make_queue(
+        ProjectQueue(
+            project_id="alpha",
+            name="Alpha",
+            candidates=(
+                make_candidate(status=DecisionStatus.REJECTED.value, stale=True),
+                make_candidate(candidate_id="cand_2", title="Live tool"),
+            ),
+        )
+    )
+
+    content = RegistryViewProjection().render(queue)[1].content
+
+    assert content.count("- Stale: yes") == 1
 
 
 def test_quote_links_to_latest_card_capture() -> None:

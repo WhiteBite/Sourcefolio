@@ -50,6 +50,7 @@ class QueueCandidate:
     status: str
     outcome: str | None = None
     outcome_at: str | None = None
+    stale: bool = False
     mentions: tuple[QueueMention, ...] = ()
 
 
@@ -158,6 +159,7 @@ class RegistryQueueBuilder:
                     if decision is not None and decision.outcome_at is not None
                     else None
                 ),
+                stale=candidate.stale,
                 mentions=mentions,
             )
             grouped.setdefault(candidate.project_id, []).append(

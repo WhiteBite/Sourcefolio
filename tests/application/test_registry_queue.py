@@ -635,3 +635,16 @@ def test_score_is_max_pre_rank_across_mentions() -> None:
         "first join quote",
         "second join quote",
     ]
+
+
+def test_stale_candidate_is_flagged_in_the_queue() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="live mention text"),))]
+    decisions = (make_decision(key="gone/tool", title="Gone tool", status=DecisionStatus.REJECTED),)
+    snapshot = build_snapshot(routes, decisions=decisions)
+
+    queue = make_queue_builder(snapshot, routes, decisions=decisions).build()
+
+    by_key = {candidate.key: candidate for candidate in queue.projects[0].candidates}
+    assert by_key["gone/tool"].stale is True
+    assert by_key["gone/tool"].status == DecisionStatus.REJECTED.value
+    assert by_key["owner/repo"].stale is False

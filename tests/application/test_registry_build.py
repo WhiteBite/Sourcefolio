@@ -264,7 +264,7 @@ def test_accepted_candidate_without_mentions_survives_as_stale() -> None:
 
     report = builder.run(RegistryBuildQuery())
 
-    assert report.stale_accepted == 1
+    assert report.stale_decided == 1
     snapshot = store.saved[0]
     stale = next(item for item in snapshot.candidates if item.candidate_id == retired_id)
     assert stale.stale is True
@@ -272,6 +272,51 @@ def test_accepted_candidate_without_mentions_survives_as_stale() -> None:
     assert stale.first_capture_at is None
     assert stale.last_capture_at is None
     assert report.projects["sourcefolio"]["stale"] == 1
+
+
+def test_rejected_and_deferred_candidates_survive_as_stale() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="current mention text"),))]
+    rejected_id = content_id("cand", {"project_id": "sourcefolio", "key": "retired/rejected"})
+    deferred_id = content_id("cand", {"project_id": "sourcefolio", "key": "retired/deferred"})
+    decisions = [
+        make_decision(
+            key="retired/rejected", title="Rejected tool", status=DecisionStatus.REJECTED
+        ),
+        make_decision(
+            key="retired/deferred", title="Deferred tool", status=DecisionStatus.DEFERRED
+        ),
+    ]
+    builder, store = make_builder(routes, decisions=decisions)
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.stale_decided == 2
+    stale_ids = {
+        candidate.candidate_id for candidate in store.saved[0].candidates if candidate.stale
+    }
+    assert stale_ids == {rejected_id, deferred_id}
+
+
+def test_inbox_decision_without_mentions_creates_no_candidate() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="current mention text"),))]
+    inbox_id = content_id("cand", {"project_id": "sourcefolio", "key": "retired/inbox"})
+    decisions = [make_decision(key="retired/inbox", title="Inbox tool")]
+    builder, store = make_builder(routes, decisions=decisions)
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.stale_decided == 0
+    assert inbox_id not in {candidate.candidate_id for candidate in store.saved[0].candidates}
+
+
+def test_latest_path_points_at_the_pointer_file() -> None:
+    routes = [make_route(index=1, mentions=(make_mention(quote="current mention text"),))]
+    builder, _ = make_builder(routes)
+
+    report = builder.run(RegistryBuildQuery())
+
+    assert report.latest_path == "latest.json"
+    assert report.snapshot_path == f"snapshots/{report.snapshot_id}.json"
 
 
 def test_same_key_in_two_projects_stays_separate() -> None:
@@ -454,7 +499,7 @@ def test_accepted_candidate_only_in_ignored_route_survives_as_stale() -> None:
     report = builder.run(RegistryBuildQuery())
 
     assert report.routes_ignored == 1
-    assert report.stale_accepted == 1
+    assert report.stale_decided == 1
     stale = next(
         candidate for candidate in store.saved[0].candidates if candidate.key == "retired/tool"
     )

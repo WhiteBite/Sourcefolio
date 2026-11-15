@@ -218,6 +218,7 @@ def registry_view(queue: RegistryQueue) -> dict[str, object]:
                         "status": candidate.status,
                         "outcome": candidate.outcome,
                         "outcome_at": candidate.outcome_at,
+                        "stale": candidate.stale,
                         "mentions": [
                             {
                                 "source_id": mention.source_id,
@@ -1356,6 +1357,9 @@ main.wrap[hidden] { display: none; }
     meta.appendChild(el('span', 'pfit ' + cand.fit, 'фит: ' + fitLabel(cand.fit)));
     meta.appendChild(el('span', 'pcount', cand.mention_count + ' упом.'));
     meta.appendChild(el('span', 'obadge ' + cand.status, candidateStatusLabel(cand.status)));
+    if (cand.stale) {
+      meta.appendChild(el('span', 'tag', 'устарел'));
+    }
     body.appendChild(meta);
     if (cand.mentions.length) {
       body.appendChild(el('p', 'pquote', cand.mentions[0].quote));
@@ -1789,6 +1793,9 @@ main.wrap[hidden] { display: none; }
     meta.appendChild(el('span', 'pfit ' + cand.fit, 'фит: ' + fitLabel(cand.fit)));
     var badge = el('span', 'obadge ' + cand.status, candidateStatusLabel(cand.status));
     meta.appendChild(badge);
+    if (cand.stale) {
+      meta.appendChild(el('span', 'tag', 'устарел'));
+    }
     info.appendChild(meta);
     if (cand.outcome) {
       info.appendChild(el('p', 'save-note', 'результат: ' + cand.outcome));
