@@ -28,7 +28,7 @@
 - Отдельный `gallery-dl` slideshow resolver и `tiktok-slides`: только photo tasks, ordered images, slide/total limits, inventory/completeness checks и честный partial при непроверяемом числе слайдов. На одном live public photo post получено 3 ordered images и complete packet; это ещё не representative пользовательский corpus.
 - Read-only `capture-report` из существующего SQLite: status/kind counts, attempts/retries, finished-attempt p50/p95, stale running candidates и recent partial/failed errors без миграции схемы.
 - `collection-capture/v1` path: Tampermonkey userscript собирает коллекции из залогиненной веб-сессии (full/incremental, optional top-20 comments), `import-collections` архивирует metadata-only packets с resumable bounded workers. Это отдельный discovery-путь, не заменяющий официальный export.
-- `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-obsidian` → `project-fit` (при `--fit`) с одним combined JSON; переиспользует существующие handlers, без daemon — расписание ручное.
+- `refresh`: последовательный прогон `import-collections` (при `--capture`) → `project-fit` (при `--fit`) → `registry-extract` (при `--registry`) → `registry-build` → `project-obsidian` → `context` → `render-ui` с одним combined JSON; переиспользует существующие handlers, без daemon — расписание ручное.
 
 **Осталось проверить на реальных данных**
 
@@ -75,7 +75,7 @@
 - `evidence-pack-verify` + `evidence-pack-integrity/v1`: source/artifact/extraction reference и provenance checks, optional byte hashes, structured issues.
 - `search-evaluation/v1` и `search-evaluate`: hit rate, MRR, recall, precision@k и per-query ranking для записанных judged questions.
 - Per-collection indexes (`collection-index/v1`) с извлечением repositories (GitHub/GitLab) и hashtags; triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
-- `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
+- `llm-catalog`: per-collection `llm-catalog/v1` — дедуплицированный каталог произведений через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
 - MCP-сервер `sourcefolio-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 - `project-fit`: сопоставление latest captures с проектами через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 - Generated `entities/` (repo nodes) и `graph/` (Mermaid knowledge graph) как rebuildable views.

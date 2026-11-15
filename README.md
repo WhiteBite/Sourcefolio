@@ -2,7 +2,7 @@
 
 Рабочее название локальной системы, которая превращает сохранённые TikTok-видео, слайдшоу и другие источники не в очередную базу саммари, а в **архив доказательств, личный контекст и историю решений**.
 
-> Реализованы evidence-ядро, resumable ingestion, `yt-dlp` video path, отдельный `gallery-dl` slideshow resolver, archive audit, operational capture report, bounded OCR backlog + saved reports, OCR quality evaluation, generated Obsidian cards/overview, lexical search + evaluation, retrieval-only evidence packs + integrity verification и versioned OCR records. Добавлены TikTok-collections pipeline (userscript → `import-collections` → collection indexes, triage dashboards и human `ideas/`), per-collection LLM digest (`llm-enrich`) и MCP-сервер. Дополнительно выполнены live public surrogate ingest (1 video + 1 slideshow) и real Tesseract на 6 synthetic golden slides. Это не заменяет пилот личного export и human-reviewed качество. ASR/keyframes и wiki-compilers остаются следующими этапами.
+> Реализованы evidence-ядро, resumable ingestion, `yt-dlp` video path, отдельный `gallery-dl` slideshow resolver, archive audit, operational capture report, bounded OCR backlog + saved reports, OCR quality evaluation, generated Obsidian cards/overview, lexical search + evaluation, retrieval-only evidence packs + integrity verification и versioned OCR records. Добавлены TikTok-collections pipeline (userscript → `import-collections` → collection indexes, triage dashboards и human `ideas/`), per-collection LLM-каталог (`llm-catalog`), реестр кандидатов и MCP-сервер. Дополнительно выполнены live public surrogate ingest (1 video + 1 slideshow) и real Tesseract на 6 synthetic golden slides. Это не заменяет пилот личного export и human-reviewed качество. ASR/keyframes и wiki-compilers остаются следующими этапами.
 
 ## Главная идея
 
@@ -42,7 +42,7 @@
 23. `import-collections`: архивирует `collection-capture/v1` metadata-only packets с resumable bounded workers; повтор идемпотентен.
 24. `project-obsidian` collection indexes: per-collection `collection-index/v1` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags.
 25. Triage dashboards (`triage-dashboard/v1`, `inbox`/`keep`/`drop`/`done`) на Dataview и human `ideas/` scaffolding без перезаписи.
-26. `llm-enrich`: per-collection `llm-digest/v1` через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
+26. `llm-catalog`: per-collection `llm-catalog/v1` — дедуплицированный каталог произведений через OpenAI-compatible chat model, cache и явная пометка `agent_inference`.
 27. MCP-сервер `sourcefolio-mcp`: CLI как MCP tools для search, evidence packs, collections, Obsidian projection и operational reports.
 28. `project-fit`: сопоставление latest captures с проектами пользователя через chat model, накопительный индекс совпадений и per-project briefs `project-fit/v1`.
 29. Knowledge-base surfaces: human `ideas/`/`projects/`/`decisions/`, generated `entities/` (repo nodes), `graph/` (Mermaid), `decisions/` index и `projects/` briefs; команды `scaffold-projects`, `decision-new`, `decision-search`, `context` и `project-fit --profiles`.
@@ -258,10 +258,10 @@ sourcefolio scaffold-ideas \
 
 `project-obsidian` дополнительно строит per-collection indexes в `<vault>/_generated/sourcefolio/collections/`: для каждой коллекции `<slug>.md` со списком видео и извлечёнными repositories (GitHub/GitLab) и hashtags, плюс `index.md`. Triage dashboards лежат в `.../dashboards/` (`inbox`, `keep`, `drop`, `done`) и используют Dataview-запросы над `ideas/`, поэтому **нужен плагин Obsidian Dataview**. `--scaffold-ideas` создаёт отсутствующие human notes в `<vault>/ideas/<source_id>.md` (frontmatter `status: inbox`) и не перезаписывает существующие; `scaffold-ideas` делает то же без пересборки generated views. `project-obsidian` также пересобирает `entities/`, `graph/` и `decisions/` (см. раздел «База знаний: human и generated зоны»).
 
-Per-collection LLM digest:
+Каталог произведений коллекции:
 
 ```bash
-sourcefolio llm-enrich \
+sourcefolio llm-catalog \
   --collection Нейронки \
   --archive-dir data/archive \
   --derived-dir data/derived \
@@ -269,7 +269,7 @@ sourcefolio llm-enrich \
   --limit 20
 ```
 
-`llm-enrich` прогоняет latest captures коллекции через OpenAI-compatible chat model и пишет `llm-digest/v1` в `<vault>/_generated/sourcefolio/llm/<slug>.md`. Digest помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`. Конфигурация резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults. Ответы кэшируются в `data/derived/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет.
+`llm-catalog` прогоняет latest captures коллекции через OpenAI-compatible chat model и строит дедуплицированный каталог произведений (фильмы, сериалы, аниме), о которых эти видео: note `llm-catalog/v1` в `<vault>/_generated/sourcefolio/llm-catalog/<slug>.md`. Каталог помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`. Конфигурация резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults. Ответы кэшируются в `data/derived/llm-catalog/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет. Заметки пишутся через `merge_namespace`: прогон одной коллекции не удаляет заметки других коллекций. Обратная сторона: заметки переименованных или удалённых коллекций не подчищаются автоматически — generated-зона machine-owned, поэтому удалить их вручную безопасно.
 
 Каталог репозиториев коллекции:
 
@@ -281,7 +281,7 @@ sourcefolio repo-catalog \
   --vault data/vault
 ```
 
-`repo-catalog` извлекает ссылки на репозитории из latest captures коллекции (desc + комментарии), дедуплицирует по нормализованному `owner/repo` и обогащает GitHub-репозитории через REST API (endpoint `GET /repos/{owner}/{repo}` на `api.github.com`): stars, language, license, archived, last push, topics. Результат — note `repo-catalog/v1` в `<vault>/_generated/sourcefolio/repos/<slug>.md` с `provenance: external_observation`: таблица репозиториев плюс число видео и wikilinks на упомянувшие их source cards. GitLab-ссылки подсчитываются, но не обогащаются (v1 — только GitHub). Токен берётся из `--token` или env `GITHUB_TOKEN`; без токена лимит API — 60 запросов/час, а 403/429/404 изолируются как ошибка отдельного репозитория, прогон продолжается. Метаданные кэшируются в `data/derived/repos/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет и не запрашивает.
+`repo-catalog` извлекает ссылки на репозитории из latest captures коллекции (desc + комментарии), дедуплицирует по нормализованному `owner/repo` и обогащает GitHub-репозитории через REST API (endpoint `GET /repos/{owner}/{repo}` на `api.github.com`): stars, language, license, archived, last push, topics. Результат — note `repo-catalog/v1` в `<vault>/_generated/sourcefolio/repos/<slug>.md` с `provenance: external_observation`: таблица репозиториев плюс число видео и wikilinks на упомянувшие их source cards. GitLab-ссылки подсчитываются, но не обогащаются (v1 — только GitHub). Токен берётся из `--token` или env `GITHUB_TOKEN`; без токена лимит API — 60 запросов/час, а 403/429/404 изолируются как ошибка отдельного репозитория, прогон продолжается. Метаданные кэшируются в `data/derived/repos/`; `--refresh` игнорирует кэш, `--dry-run` ничего не пишет и не запрашивает. Заметки `repos/` тоже пишутся через `merge_namespace`: прогон одной коллекции не удаляет заметки других.
 
 Сопоставление сохранённого с проектами:
 
@@ -296,7 +296,7 @@ sourcefolio project-fit \
 
 `project-fit` прогоняет latest captures коллекции через OpenAI-compatible chat model и сопоставляет каждый элемент с проектами из `--projects` (JSON `{"projects": [{"id", "name", "description"}]}`). Результат — per-project briefs `project-fit/v1` в `<vault>/_generated/sourcefolio/projects/<slug>.md` плюс `projects/index.md` со списком проектов и числом глобально нерелевантных элементов. Каждый brief помечен `provenance: agent_inference` и warning-callout: это machine inference, не `creator_claim`.
 
-`--collection` можно повторять; без него сканируется latest capture каждого источника в архиве (это может быть много). Совпадения накапливаются в `<derived-dir>/project-fit/index.json`: повторный запуск с другой коллекцией не затирает прежние briefs, а пересобирает все заметки из индекса. `--refresh` перезапрашивает модель и перезаписывает записи обработанных элементов; без него ответы берутся из кэша. `--max-ocr-kb` (по умолчанию 20) ограничивает объединяемый OCR-текст на элемент. `--dry-run` печатает план и первые промпты в stderr, ничего не записывая. Конфигурация модели резолвится так же, как у `llm-enrich`.
+`--collection` можно повторять; без него сканируется latest capture каждого источника в архиве (это может быть много). Совпадения накапливаются в `<derived-dir>/project-fit/index.json`: повторный запуск с другой коллекцией не затирает прежние briefs, а пересобирает все заметки из индекса. `--refresh` перезапрашивает модель и перезаписывает записи обработанных элементов; без него ответы берутся из кэша. `--max-ocr-kb` (по умолчанию 20) ограничивает объединяемый OCR-текст на элемент. `--dry-run` печатает план и первые промпты в stderr, ничего не записывая. Конфигурация модели резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json` (ключи `base_url`/`api_key`/`model`), затем встроенные defaults.
 
 ## База знаний: human и generated зоны
 
@@ -310,9 +310,9 @@ Human-зона:
 
 Generated-зона `<vault>/_generated/sourcefolio/`:
 
-- `source-cards/`, `overview/`, `collections/`, `dashboards/`, `llm/`, `repos/`: как описано выше.
+- `source-cards/`, `overview/`, `collections/`, `dashboards/`, `llm-catalog/`, `repos/`: как описано выше.
 - `entities/`: по одной заметке на GitHub-репозиторий (`<owner>__<repo>.md`, `type: repo`, `provenance: external_observation`). Метаданные берутся из кэша `repo-catalog`, плюс число упомянувших источников и связанные проекты.
-- `graph/index.md`: knowledge graph на Mermaid (`type: graph`) с проектами, идеями, коллекциями и репозиториями. Строится из всех последних захватов (project→collection→idea→repo), а не только из совпадений `project-fit`; рёбра project→idea упорядочены по релевантности и ограничены; frontmatter сообщает `idea_shown` / `idea_total` / `idea_truncated`. Рендерится без плагинов.
+- `graph/index.md`: knowledge graph на Mermaid (`type: graph`) с проектами, идеями, коллекциями, репозиториями и кандидатами реестра. Строится из всех последних захватов (project→collection→idea→repo), а не только из совпадений `project-fit`; рёбра project→idea упорядочены по релевантности и ограничены. На проект добавляется до 8 узлов кандидатов с рёбрами project→candidate; подписи узлов несут статус решения, frontmatter сообщает `idea_shown` / `idea_total` / `idea_truncated` и `candidate_count` / `candidate_total` / `candidate_truncated`, а секция Links содержит блок `### Candidates` со ссылками на registry-заметку проекта. Рендерится без плагинов.
 - `decisions/index.md`: индекс human-решений (`decision-index/v1`) со ссылками на заметки в `decisions/`.
 - `projects/`: per-project briefs `project-fit/v1` и `index.md`.
 
@@ -373,7 +373,7 @@ sourcefolio ask "какие подходы к RAG описаны в сохран
   --excerpt-limit 3
 ```
 
-`--project <id>` подмешивает имя, описание и профиль проекта в промпт и помечает заметку, но не меняет ranking retrieval. Каждый запуск пишет новую immutable заметку `answer/v1` в `<vault>/_generated/sourcefolio/answers/<UTC-stamp>-<slug>.md` (microsecond-stamped имя, `provenance: agent_inference`, warning-callout). Заметка пишется через `write_immutable_bytes`, а не через `replace_namespace`, поэтому `project-obsidian` её никогда не затирает. В заметке и в JSON-выводе есть copy-pasteable stub `sourcefolio decision-new ...`; human-решение командой не создаётся автоматически. `status: degraded` (модель недоступна) возвращает exit code 1 и оставляет retrieval excerpts.
+`--project <id>` подмешивает имя, описание и профиль проекта в промпт и помечает заметку, но не меняет ranking retrieval. Дополнительно `ask` подмешивает в промпт собственные решения пользователя из реестра: решённые кандидаты (любой статус кроме `inbox`) с их статусом и результатом, не более 20 строк. Это фоновый контекст, а не evidence: ranking retrieval не меняется, citations по-прежнему берутся только из найденных excerpts, а `search` и `evidence-pack` остаются чисто retrieval-поверхностями. Контекст решений входит в отпечаток промпта, поэтому при изменении решений кэшированные ответы инвалидируются. Каждый запуск пишет новую immutable заметку `answer/v1` в `<vault>/_generated/sourcefolio/answers/<UTC-stamp>-<slug>.md` (microsecond-stamped имя, `provenance: agent_inference`, warning-callout). Заметка пишется через `write_immutable_bytes`, а не через `replace_namespace`, поэтому `project-obsidian` её никогда не затирает. В заметке и в JSON-выводе есть copy-pasteable stub `sourcefolio decision-new ...`; human-решение командой не создаётся автоматически. `status: degraded` (модель недоступна) возвращает exit code 1 и оставляет retrieval excerpts.
 
 `profile-draft` черновик human-профиля проекта из его собственного репозитория (README + `pyproject.toml`/`package.json`: name/description/dependency names/keywords). Один проект:
 
@@ -423,7 +423,7 @@ Daemon/watcher нет: расписание ручное — запускайт�
 
 ## Реестр кандидатов
 
-Реестр превращает сохранённые captures в per-project очередь разработок, которые можно пустить в дело. Единица учёта — кандидат (инструмент, библиотека, репозиторий, техника, паттерн, модель, датасет, тема), а не видео. Полный контракт и калибровка — в [docs/REGISTRY.md](docs/REGISTRY.md).
+Реестр превращает сохранённые captures в per-project очередь разработок, которые можно пустить в дело. Единица учёта — кандидат (инструмент, библиотека, репозиторий, техника, паттерн, модель, датасет, тема), а не видео. Полный контракт и калибровка — в [docs/REGISTRY.md](docs/REGISTRY.md). `registry-extract` и `registry-build` требуют файл `--projects`; свежий клон начинает с шаблона `examples/projects.json` — скопируйте его в `data/projects.json` и заполните своими проектами, иначе команда упадёт с `projects file not found`.
 
 Извлечь заякоренные упоминания из latest captures для проектов:
 
@@ -438,7 +438,7 @@ sourcefolio registry-extract \
   --limit 25
 ```
 
-`registry-extract` на каждую пару (источник, проект) создаёт маршрут `registry-route/v1` с вердиктом `candidate`/`irrelevant`/`insufficient_signal`. Каждое упоминание обязано нести дословную цитату (8–500 символов), символьный span и типизированный локатор (`description`/`title`/`comment`+`comment_index`/`ocr`+`extraction_id`/`caption`+`artifact_id`); упоминание без валидного якоря отбрасывается и считается в `dropped_anchors`. Конфигурация модели и кэш — как у `llm-enrich`; повтор с тем же `route_id` пропускается, `--new` обрабатывает только пары без сохранённого маршрута для текущей модели, `--refresh` игнорирует только кэш ответов модели и заново запрашивает пары без сохранённого маршрута для текущих модели и промпта, `--dry-run` печатает первые два промпта в stderr и ничего не пишет.
+`registry-extract` на каждую пару (источник, проект) создаёт маршрут `registry-route/v1` с вердиктом `candidate`/`irrelevant`/`insufficient_signal`. Каждое упоминание обязано нести дословную цитату (8–500 символов), символьный span и типизированный локатор (`description`/`title`/`comment`+`comment_index`/`ocr`+`extraction_id`/`caption`+`artifact_id`); упоминание без валидного якоря отбрасывается и считается в `dropped_anchors`. Ошибки модели не маскируются: ответ без `verdict` или с нераспознанным `verdict` делает элемент `failed` — он считается в `failed`, не получает ни маршрута, ни записи кэша, а команда завершается с exit code 1; `insufficient_signal` означает только то, что исходный текст не позволяет судить. Конфигурация модели резолвится по приоритету: флаги `--base-url`/`--api-key`/`--model`, затем env `EV_LLM_BASE_URL`/`EV_LLM_API_KEY`/`EV_LLM_MODEL`, затем `data/llm.json`; ответы кэшируются в `data/derived/registry-llm/`. Повтор с тем же `route_id` пропускается, `--new` обрабатывает только пары без сохранённого маршрута для текущей модели — смена модели подхватывается, а слоты `--limit` достаются действительно новым парам, `--refresh` игнорирует только кэш ответов модели и заново запрашивает пары без сохранённого маршрута для текущих модели и промпта, `--dry-run` печатает первые два промпта в stderr и ничего не пишет. `--report <path>` дополнительно пишет immutable JSON-отчёт с теми же полями, что и stdout (в консольный вывод добавляется `report_path`); отчёт не перезаписывается, поэтому для каждого запуска указывайте новый путь.
 
 Собрать снапшот, отрендерить очередь и записать решение:
 
@@ -494,7 +494,7 @@ python -m pip install -e ".[mcp]"
 sourcefolio-mcp
 ```
 
-Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `registry_extract`, `registry_build`, `candidate_decide`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`, `ask`, `profile_draft`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`. Инструменты помечены read/write (`read_only_hint`, `destructive_hint`, `open_world_hint`); `decision_new` требует непустой `title`; список проектов передаётся параметром `project_ids`. Запускать сервер можно и консольным скриптом `sourcefolio-mcp`, и через `python -m sourcefolio.mcp_server`.
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_catalog`, `repo_catalog`, `project_fit`, `registry_extract`, `registry_build`, `registry_queue`, `candidate_decide`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`, `ask`, `profile_draft` — всего 22 инструмента. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`. Инструменты помечены read/write (`read_only_hint`, `destructive_hint`, `open_world_hint`); `decision_new` требует непустой `title`; список проектов передаётся параметром `project_ids`. Запускать сервер можно и консольным скриптом `sourcefolio-mcp`, и через `python -m sourcefolio.mcp_server`.
 
 Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
 
@@ -553,7 +553,7 @@ tests/             # домен, вертикальный срез, CLI и archi
 
 ## Статус / Status
 
-Ядро evidence, resumable ingestion, OCR-пайплайн, лексический поиск и его оценка, evidence packs с проверкой целостности, TikTok-collections pipeline, Obsidian-проекция, LLM-digest и MCP-сервер реализованы и покрыты тестами. Открытые этапы — пилот на реальном export, human-reviewed OCR golden set и ASR/keyframes — перечислены в [дорожной карте](docs/ROADMAP.md).
+Ядро evidence, resumable ingestion, OCR-пайплайн, лексический поиск и его оценка, evidence packs с проверкой целостности, TikTok-collections pipeline, Obsidian-проекция, LLM-каталоги коллекций, реестр кандидатов и MCP-сервер реализованы и покрыты тестами. Открытые этапы — пилот на реальном export, human-reviewed OCR golden set и ASR/keyframes — перечислены в [дорожной карте](docs/ROADMAP.md).
 
 ## Документы
 
@@ -571,4 +571,4 @@ tests/             # домен, вертикальный срез, CLI и archi
 
 ## Следующий шаг
 
-Нужен пилот на реальном export пользователя и representative личном backlog, включая недоступные элементы и interrupted live resume. Public surrogate video/photo уже проверен, но не закрывает collection coverage и failure mix. TikTok-collections pipeline и LLM digest работают на synthetic/локальных данных; остаётся прогнать их на реальном личном export и collections и оценить качество digest и triage. Real Tesseract на known-text synthetic slides проверил OCR/resume/evaluation/integrity; остаётся разметить human-reviewed реальный OCR golden set и 10 реальных judged questions. ASR/keyframes подключаются через тот же derived contract после отдельных resource/quality gates. До измеренных результатов не добавляем GraphRAG и не запускаем два wiki-compiler в одном vault.
+Нужен пилот на реальном export пользователя и representative личном backlog, включая недоступные элементы и interrupted live resume. Public surrogate video/photo уже проверен, но не закрывает collection coverage и failure mix. TikTok-collections pipeline и LLM-каталоги работают на synthetic/локальных данных; остаётся прогнать их на реальном личном export и collections и оценить качество каталогов и triage. Real Tesseract на known-text synthetic slides проверил OCR/resume/evaluation/integrity; остаётся разметить human-reviewed реальный OCR golden set и 10 реальных judged questions. ASR/keyframes подключаются через тот же derived contract после отдельных resource/quality gates. До измеренных результатов не добавляем GraphRAG и не запускаем два wiki-compiler в одном vault.
