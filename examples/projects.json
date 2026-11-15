@@ -1,0 +1,10 @@
+{
+  "projects": [
+    {
+      "id": "example-project",
+      "name": "Example project",
+      "description": "What this project is, which stack it uses, and what kind of saved items are relevant to it.",
+      "repo_path": ""
+    }
+  ]
+}
