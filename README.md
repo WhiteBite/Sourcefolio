@@ -494,7 +494,7 @@ python -m pip install -e ".[mcp]"
 sourcefolio-mcp
 ```
 
-Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`. Инструменты помечены read/write (`read_only_hint`, `destructive_hint`, `open_world_hint`); `decision_new` требует непустой `title`; список проектов передаётся параметром `project_ids`.
+Сервер отдаёт CLI как MCP tools: `search`, `evidence_pack`, `import_collections`, `fetch_slides`, `project_obsidian`, `scaffold_ideas`, `llm_enrich`, `llm_catalog`, `repo_catalog`, `project_fit`, `registry_extract`, `registry_build`, `candidate_decide`, `archive_audit`, `capture_report`, `schema`, `context`, `scaffold_projects`, `decision_new`, `decision_search`, `ask`, `profile_draft`. Каждый tool принимает те же параметры, что и соответствующая команда, и возвращает её stdout или `error (exit N)`. Инструменты помечены read/write (`read_only_hint`, `destructive_hint`, `open_world_hint`); `decision_new` требует непустой `title`; список проектов передаётся параметром `project_ids`. Запускать сервер можно и консольным скриптом `sourcefolio-mcp`, и через `python -m sourcefolio.mcp_server`.
 
 Пример регистрации в `opencode.json` (локальный сервер, machine-specific путь к venv; файл gitignored):
 

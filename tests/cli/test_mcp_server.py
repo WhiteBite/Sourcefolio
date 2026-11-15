@@ -1,8 +1,31 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+
+def test_module_starts_a_server_when_run_as_a_program() -> None:
+    pytest.importorskip("mcp")
+
+    process = subprocess.Popen(
+        [sys.executable, "-m", "sourcefolio.mcp_server"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    exit_code: int | None
+    try:
+        exit_code = process.wait(timeout=3.0)
+    except subprocess.TimeoutExpired:
+        exit_code = None
+    finally:
+        process.kill()
+        process.wait(timeout=10)
+
+    assert exit_code is None
 
 
 def test_schema_tool_returns_json() -> None:

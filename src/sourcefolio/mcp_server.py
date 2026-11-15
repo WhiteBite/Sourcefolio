@@ -633,3 +633,7 @@ def profile_draft(
 
 def main() -> None:
     server.run()
+
+
+if __name__ == "__main__":
+    main()
