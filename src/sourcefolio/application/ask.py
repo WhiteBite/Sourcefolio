@@ -103,10 +103,17 @@ def _build_user_prompt(
     query: str,
     sources: tuple[EvidencePackSource, ...],
     project_context: str | None,
+    registry_context: str | None = None,
 ) -> str:
     lines = [f"Question: {query}"]
     if project_context:
         lines.append(f"Project context: {project_context}")
+    if registry_context:
+        lines.append(
+            "Registry background (the user's own prior decisions; context only, "
+            "not a citable source):"
+        )
+        lines.append(registry_context)
     lines.append("Excerpts:")
     for source in sources:
         result = source.result
@@ -142,6 +149,7 @@ class AskRunner:
         clock: Callable[[], datetime] | None = None,
         sleep: Callable[[float], None] | None = None,
         retry_backoff_seconds: float = 0.5,
+        registry_context: Callable[[], str] | None = None,
     ) -> None:
         self._pack_builder = pack_builder
         self._client = client
@@ -151,6 +159,7 @@ class AskRunner:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._sleep = sleep or time.sleep
         self._retry_backoff = retry_backoff_seconds
+        self._registry_context = registry_context
 
     def run(self, query: AskQuery, *, project_context: str | None = None) -> AskReport:
         pack = self._pack_builder.build(
@@ -180,7 +189,9 @@ class AskRunner:
                 citations=citations,
                 limitations=limitations,
             )
-        user_prompt = _build_user_prompt(query.query, pack.sources, project_context)
+        user_prompt = _build_user_prompt(
+            query.query, pack.sources, project_context, self._resolve_registry_context()
+        )
         key = _cache_key(self._model, user_prompt)
         cached = self._load_cache(key)
         if cached is not None:
@@ -234,6 +245,16 @@ class AskRunner:
             return self._cache.load(key)
         except Exception:
             return None
+
+    def _resolve_registry_context(self) -> str | None:
+        provider = self._registry_context
+        if provider is None:
+            return None
+        try:
+            text = provider().strip()
+        except Exception:
+            return None
+        return text or None
 
     def _report(
         self,

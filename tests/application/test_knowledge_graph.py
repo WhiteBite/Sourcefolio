@@ -10,7 +10,9 @@ from pydantic import JsonValue
 from sourcefolio.application.knowledge_graph import KnowledgeGraphProjection
 from sourcefolio.application.markdown import mermaid_id
 from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.registry_queue import ProjectQueue, QueueCandidate, RegistryQueue
 from sourcefolio.domain.common import ActorKind, Provenance
+from sourcefolio.domain.registry import CandidateKind, FitLevel
 from sourcefolio.domain.source import (
     ArtifactRef,
     ArtifactRole,
@@ -110,12 +112,14 @@ def _index_for_fits(pairs: list[tuple[SourcePacket, str, str]]) -> dict[str, Jso
 def _render(
     packets: Iterable[SourcePacket],
     index: Mapping[str, JsonValue] | None,
+    registry: object | None = None,
 ) -> str:
     store = FakeStore()
     count = KnowledgeGraphProjection(
         packets=FakePackets(packets),
         store=store,
         project_fit_index=FakeIndex(index),
+        registry=registry,
         clock=lambda: NOW,
     ).rebuild()
     assert count == 1
@@ -265,3 +269,107 @@ def test_knowledge_graph_frontmatter_reports_counts() -> None:
     assert properties["collection_count"] == 1
     assert properties["repo_count"] == 1
     assert properties["edge_count"] == 3
+
+
+class FakeRegistry:
+    def __init__(self, queue: RegistryQueue) -> None:
+        self._queue = queue
+
+    def build(self, **_kwargs: object) -> RegistryQueue:
+        return self._queue
+
+
+def _candidate(candidate_id: str, title: str, status: str = "inbox") -> QueueCandidate:
+    return QueueCandidate(
+        candidate_id=candidate_id,
+        title=title,
+        kind=CandidateKind.TOOL,
+        key="owner/repo",
+        fit=FitLevel.HIGH,
+        mention_count=1,
+        source_count=1,
+        score=1,
+        status=status,
+    )
+
+
+def _registry(*candidates: QueueCandidate) -> FakeRegistry:
+    return FakeRegistry(
+        RegistryQueue(
+            snapshot_id="snap_1",
+            generated_at=None,
+            projects=(ProjectQueue(project_id="midas", name="MidasAI", candidates=candidates),),
+        )
+    )
+
+
+def test_knowledge_graph_renders_registry_candidates() -> None:
+    packet = _packet("1", collections=("Нейронки",), desc="idea text", title="Idea")
+
+    content = _render(
+        [packet],
+        _index_for([(packet, "midas")]),
+        registry=_registry(_candidate("cand_1", "Graphify", status="accepted")),
+    )
+
+    node = mermaid_id("candidate", "cand_1")
+    assert f'{node}["Graphify - accepted"]' in content
+    assert f"{mermaid_id('project', 'midas')} --> {node}" in content
+    assert "### Candidates" in content
+    assert "[[_generated/sourcefolio/registry/midasai|registry]]" in content
+
+
+def test_knowledge_graph_without_registry_reports_no_candidates() -> None:
+    packet = _packet("1", collections=("Нейронки",), desc="idea text", title="Idea")
+
+    content = _render([packet], _index_for([(packet, "midas")]))
+
+    properties = yaml.safe_load(content.split("---", 2)[1])
+    assert properties["candidate_count"] == 0
+    assert properties["candidate_total"] == 0
+    assert properties["candidate_truncated"] is False
+    assert "### Candidates" in content
+
+
+def test_knowledge_graph_caps_candidates_per_project() -> None:
+    packet = _packet("1", collections=("Нейронки",), desc="idea text", title="Idea")
+    candidates = tuple(_candidate(f"cand_{index}", f"Tool {index}") for index in range(9))
+
+    content = _render([packet], _index_for([(packet, "midas")]), registry=_registry(*candidates))
+
+    properties = yaml.safe_load(content.split("---", 2)[1])
+    assert properties["candidate_total"] == 9
+    assert properties["candidate_count"] == 8
+    assert properties["candidate_truncated"] is True
+    assert mermaid_id("candidate", "cand_8") not in content
+
+
+def test_knowledge_graph_candidate_render_is_deterministic() -> None:
+    packet = _packet("1", collections=("Нейронки",), desc="idea text", title="Idea")
+    registry = _registry(_candidate("cand_1", "Graphify", status="accepted"))
+
+    first = _render([packet], _index_for([(packet, "midas")]), registry=registry)
+    second = _render([packet], _index_for([(packet, "midas")]), registry=registry)
+
+    assert first == second
+
+
+def test_knowledge_graph_candidate_project_without_fits_is_rendered() -> None:
+    packet = _packet("1", collections=("Нейронки",), desc="idea text", title="Idea")
+
+    content = _render([packet], None, registry=_registry(_candidate("cand_1", "Graphify")))
+
+    node = mermaid_id("candidate", "cand_1")
+    assert f"{mermaid_id('project', 'midas')} --> {node}" in content
+
+
+def test_knowledge_graph_escapes_hostile_candidate_titles() -> None:
+    packet = _packet("1", collections=("Нейронки",), desc="idea text", title="Idea")
+    hostile = _candidate("cand_1", 'bad "title" [x]\nsecond line')
+
+    content = _render([packet], _index_for([(packet, "midas")]), registry=_registry(hostile))
+
+    assert content.count("```") == 2
+    fence = content.split("```mermaid", 1)[1].split("```", 1)[0]
+    assert "bad title x second line - inbox" in fence
+    assert not any(line.strip() == "second line" for line in fence.splitlines())

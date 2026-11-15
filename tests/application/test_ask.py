@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -34,11 +35,13 @@ NOW = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 class FakeChatClient:
     def __init__(self, answer: str = "grounded answer", *, fail: bool = False) -> None:
         self.calls = 0
+        self.prompts: list[str] = []
         self._answer = answer
         self._fail = fail
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         self.calls += 1
+        self.prompts.append(user_prompt)
         if self._fail:
             raise RuntimeError("boom")
         return self._answer
@@ -75,7 +78,11 @@ def add_packet(root: Path, external_id: str, *, desc: str = "trading bot idea") 
     )
 
 
-def runner(root: Path, client: ChatClient | None) -> AskRunner:
+def runner(
+    root: Path,
+    client: ChatClient | None,
+    registry_context: Callable[[], str] | None = None,
+) -> AskRunner:
     archive = root / "archive"
     artifacts = FileSystemArtifactStore(archive)
     return AskRunner(
@@ -90,6 +97,7 @@ def runner(root: Path, client: ChatClient | None) -> AskRunner:
         model="test-model",
         clock=lambda: NOW,
         sleep=lambda _: None,
+        registry_context=registry_context,
     )
 
 
@@ -209,3 +217,61 @@ def test_ask_to_dict_shape(tmp_path: Path) -> None:
     assert isinstance(payload["citations"][0], dict)
     assert payload["citations"][0]["rank"] == 1
     assert isinstance(payload["limitations"], list)
+
+
+def test_registry_context_reaches_the_prompt(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("answer")
+
+    report = runner(tmp_path, client, registry_context=lambda: "accepted: Graphify").run(
+        AskQuery(query="trading bot")
+    )
+
+    assert report.status == "ok"
+    assert "Registry background" in client.prompts[0]
+    assert "accepted: Graphify" in client.prompts[0]
+
+
+def test_registry_context_is_part_of_the_cache_key(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("answer")
+
+    runner(tmp_path, client, registry_context=lambda: "first").run(AskQuery(query="trading bot"))
+    runner(tmp_path, client, registry_context=lambda: "first").run(AskQuery(query="trading bot"))
+    runner(tmp_path, client, registry_context=lambda: "second").run(AskQuery(query="trading bot"))
+
+    assert client.calls == 2
+
+
+def test_registry_context_provider_failure_does_not_break_the_answer(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("answer")
+
+    def broken() -> str:
+        raise RuntimeError("registry unavailable")
+
+    report = runner(tmp_path, client, registry_context=broken).run(AskQuery(query="trading bot"))
+
+    assert report.status == "ok"
+    assert "Registry background" not in client.prompts[0]
+
+
+def test_blank_registry_context_is_omitted(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("answer")
+
+    runner(tmp_path, client, registry_context=lambda: "   ").run(AskQuery(query="trading bot"))
+
+    assert "Registry background" not in client.prompts[0]
+
+
+def test_prompt_is_unchanged_without_registry_context(tmp_path: Path) -> None:
+    add_packet(tmp_path / "archive", "one")
+    client = FakeChatClient("answer")
+
+    runner(tmp_path, client).run(AskQuery(query="trading bot"))
+
+    prompt = client.prompts[0]
+    assert prompt.startswith("Question: trading bot")
+    assert "Excerpts:" in prompt
+    assert "Registry background" not in prompt

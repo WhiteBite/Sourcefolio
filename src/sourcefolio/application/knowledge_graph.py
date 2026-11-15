@@ -27,12 +27,27 @@ from sourcefolio.application.project_fit import (
 )
 from sourcefolio.application.projection_ports import ProjectionStore
 from sourcefolio.application.projection_types import GeneratedDocument
+from sourcefolio.application.registry_queue import QueueCandidate, RegistryQueueBuilder
+from sourcefolio.application.registry_views import project_slug_map
 from sourcefolio.application.repo_catalog import parse_repo_ref
 from sourcefolio.application.saved_index import saved_texts
 from sourcefolio.application.slugs import slugify
 from sourcefolio.domain.source import SourcePacket
 
 _MAX_IDEAS_PER_PROJECT = 8
+_MAX_CANDIDATES_PER_PROJECT = 8
+
+
+@dataclass(frozen=True)
+class _CandidateNode:
+    project_id: str
+    slug: str
+    candidate_id: str
+    node: str
+    title: str
+    label: str
+    kind: str
+    status: str
 
 
 @dataclass(frozen=True)
@@ -44,6 +59,9 @@ class _Graph:
     edges: tuple[tuple[str, str, str], ...]
     idea_shown: int
     idea_truncated: bool
+    candidates: tuple[_CandidateNode, ...] = ()
+    candidate_total: int = 0
+    candidate_truncated: bool = False
 
 
 def _packet_title(packet: SourcePacket) -> str:
@@ -66,6 +84,7 @@ def _repo_label(url: str) -> str:
 def _build_graph(
     entries: Mapping[str, ProjectFitIndexEntry],
     packets: Mapping[str, SourcePacket],
+    candidate_groups: tuple[tuple[str, str, tuple[QueueCandidate, ...]], ...] = (),
 ) -> _Graph:
     projects: dict[str, str] = {}
     ideas: dict[str, tuple[str, str, str, str]] = {}
@@ -122,6 +141,33 @@ def _build_graph(
             shown.add(entry.source_id)
             edges.add((project_node, "-->", ideas[entry.source_id][2]))
 
+    candidate_nodes: list[_CandidateNode] = []
+    candidate_total = 0
+    candidate_truncated = False
+    for project_id, slug, candidates in candidate_groups:
+        candidate_total += len(candidates)
+        selected_candidates = candidates[:_MAX_CANDIDATES_PER_PROJECT]
+        if len(candidates) > len(selected_candidates):
+            candidate_truncated = True
+        if not selected_candidates:
+            continue
+        project_node = projects.setdefault(project_id, mermaid_id("project", project_id))
+        for candidate in selected_candidates:
+            node = mermaid_id("candidate", candidate.candidate_id)
+            candidate_nodes.append(
+                _CandidateNode(
+                    project_id=project_id,
+                    slug=slug,
+                    candidate_id=candidate.candidate_id,
+                    node=node,
+                    title=candidate.title,
+                    label=f"{candidate.title} - {candidate.status}",
+                    kind=candidate.kind.value,
+                    status=candidate.status,
+                )
+            )
+            edges.add((project_node, "-->", node))
+
     return _Graph(
         projects=tuple((key, projects[key]) for key in sorted(projects)),
         ideas=tuple(ideas[key] for key in sorted(ideas)),
@@ -130,6 +176,9 @@ def _build_graph(
         edges=tuple(sorted(edges)),
         idea_shown=len(shown),
         idea_truncated=truncated,
+        candidates=tuple(candidate_nodes),
+        candidate_total=candidate_total,
+        candidate_truncated=candidate_truncated,
     )
 
 
@@ -145,6 +194,9 @@ def _render(graph: _Graph, *, generated_prefix: str, generated_at: datetime) -> 
             "idea_truncated": graph.idea_truncated,
             "collection_count": len(graph.collections),
             "repo_count": len(graph.repos),
+            "candidate_count": len(graph.candidates),
+            "candidate_total": graph.candidate_total,
+            "candidate_truncated": graph.candidate_truncated,
             "edge_count": len(graph.edges),
             "generated_at": generated_at.isoformat(),
         },
@@ -172,6 +224,10 @@ def _render(graph: _Graph, *, generated_prefix: str, generated_at: datetime) -> 
     lines.extend(f'    {node}["{mermaid_label(label)}"]' for _, _, node, label in graph.ideas)
     lines.extend(f'    {node}["{mermaid_label(name)}"]' for name, node in graph.collections)
     lines.extend(f'    {node}["{mermaid_label(label)}"]' for _, node, label in graph.repos)
+    lines.extend(
+        f'    {candidate.node}["{mermaid_label(candidate.label)}"]'
+        for candidate in graph.candidates
+    )
     lines.extend(f"    {source} {arrow} {target}" for source, arrow, target in graph.edges)
     lines.extend(["```", "", "## Links", ""])
 
@@ -209,6 +265,18 @@ def _render(graph: _Graph, *, generated_prefix: str, generated_at: datetime) -> 
         lines.append("None.")
     lines.append("")
 
+    lines.extend(["### Candidates", ""])
+    if graph.candidates:
+        lines.extend(
+            f"- {escape(candidate.title)} ({escape(candidate.kind)}, "
+            f"{escape(candidate.status)}) — "
+            f"[[{generated_prefix}/registry/{candidate.slug}|registry]]"
+            for candidate in graph.candidates
+        )
+    else:
+        lines.append("None.")
+    lines.append("")
+
     return GeneratedDocument(path="index.md", content="\n".join(lines))
 
 
@@ -221,22 +289,38 @@ class KnowledgeGraphProjection:
         packets: SourcePacketRepository,
         store: ProjectionStore,
         project_fit_index: ProjectFitIndexStore,
+        registry: RegistryQueueBuilder | None = None,
         generated_prefix: str = "_generated/sourcefolio",
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._packets = packets
         self._store = store
         self._project_fit_index = project_fit_index
+        self._registry = registry
         self._generated_prefix = generated_prefix.strip("/")
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def rebuild(self) -> int:
         entries = parse_index(self._project_fit_index.load())
         packets = latest_capture_per_source(self._packets.iter_packets())
-        graph = _build_graph(entries, packets)
+        graph = _build_graph(entries, packets, self._candidate_groups())
         document = _render(
             graph,
             generated_prefix=self._generated_prefix,
             generated_at=self._clock(),
         )
         return self._store.replace_namespace(self.NAMESPACE, [document])
+
+    def _candidate_groups(self) -> tuple[tuple[str, str, tuple[QueueCandidate, ...]], ...]:
+        if self._registry is None:
+            return ()
+        queue = self._registry.build()
+        slugs = project_slug_map((project.project_id, project.name) for project in queue.projects)
+        return tuple(
+            (
+                project.project_id,
+                slugs.get(project.project_id, project.project_id),
+                project.candidates,
+            )
+            for project in queue.projects
+        )

@@ -928,6 +928,12 @@ def _project_obsidian(args: argparse.Namespace) -> int:
         packets=packets,
         store=store,
         project_fit_index=project_fit_index,
+        registry=_registry_queue_builder(
+            projects_path=projects_path,
+            derived_root=derived_root,
+            vault_root=vault_root,
+            archive_root=archive_root,
+        ),
         generated_prefix=generated_prefix,
     ).rebuild()
     decision_documents = DecisionIndexProjection(
@@ -1851,6 +1857,9 @@ def _evidence_pack(args: argparse.Namespace) -> int:
     return 0
 
 
+_MAX_ASK_REGISTRY_LINES = 20
+
+
 def _ask(args: argparse.Namespace) -> int:
     archive_root = Path(args.archive_dir).resolve()
     derived_root = Path(args.derived_dir).resolve()
@@ -1890,11 +1899,35 @@ def _ask(args: argparse.Namespace) -> int:
             )
         except ValueError as exc:
             llm_error = str(exc)
+    registry_builder = _registry_queue_builder(
+        projects_path=Path(args.projects),
+        derived_root=derived_root,
+        vault_root=vault_root,
+        archive_root=archive_root,
+    )
+
+    def registry_context() -> str:
+        queue = registry_builder.build(project_ids=(args.project,) if args.project else ())
+        decided = [
+            (project.project_id, candidate)
+            for project in queue.projects
+            for candidate in project.candidates
+            if candidate.status != DecisionStatus.INBOX.value
+        ]
+        lines: list[str] = []
+        for project_id, candidate in decided[:_MAX_ASK_REGISTRY_LINES]:
+            line = f"- [{project_id}] {candidate.title}: {candidate.status}"
+            if candidate.outcome:
+                line += f" - {candidate.outcome}"
+            lines.append(line)
+        return "\n".join(lines)
+
     runner = AskRunner(
         pack_builder=builder,
         client=client,
         cache=FileSystemLlmCache(derived_root, namespace=AskRunner.CACHE_NAMESPACE),
         model=model,
+        registry_context=registry_context,
     )
     query = AskQuery(
         query=args.query,
