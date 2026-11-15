@@ -5,7 +5,8 @@ import os
 import re
 import sys
 import threading
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Iterator, Mapping
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
@@ -49,6 +50,8 @@ class _Context:
         registry: RegistryQueueBuilder | None = None,
         outcomes: CandidateDecisionWriter | None = None,
         packets_repository: SourcePacketRepository | None = None,
+        min_refresh_interval: float = 2.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.projection = projection
         self.artifacts = artifacts
@@ -62,20 +65,34 @@ class _Context:
             for packet in packets.values()
             for artifact in packet.artifacts
         }
+        self._min_refresh_interval = min_refresh_interval
+        self._clock = clock
+        self._last_refresh: float | None = None
+        self._throttle_lock = threading.Lock()
         self.render_lock = threading.Lock()
         self.note_lock = threading.Lock()
         self.decision_lock = threading.Lock()
 
-    def refresh_packets(self) -> None:
+    def refresh_packets(self, *, force: bool = False) -> None:
         repository = self.packets_repository
         if repository is None:
             return
-        packets = latest_capture_per_source(repository.iter_packets())
-        media_types = {
-            artifact.artifact_id: artifact.media_type
-            for packet in packets.values()
-            for artifact in packet.artifacts
-        }
+        with self._throttle_lock:
+            now = self._clock()
+            last = self._last_refresh
+            throttled = not force and last is not None and now - last < self._min_refresh_interval
+            if throttled:
+                return
+            self._last_refresh = now
+        media_types: dict[str, str] = {}
+
+        def tracked() -> Iterator[SourcePacket]:
+            for packet in repository.iter_packets():
+                for artifact in packet.artifacts:
+                    media_types[artifact.artifact_id] = artifact.media_type
+                yield packet
+
+        packets = latest_capture_per_source(tracked())
         with self.render_lock:
             self.packets = dict(packets)
             self.media_types = media_types
@@ -248,7 +265,7 @@ class _Handler(BaseHTTPRequestHandler):
                     outcome=raw_outcome,
                 )
         except ValueError as error:
-            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
         self._send_json(
             HTTPStatus.OK,
@@ -256,7 +273,6 @@ class _Handler(BaseHTTPRequestHandler):
         )
 
     def _update_note(self, payload: dict[str, object]) -> None:
-        self._context.refresh_packets()
         source_id = payload.get("source_id")
         if not isinstance(source_id, str) or not source_id:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "source_id is required"})
@@ -282,6 +298,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         packet = self._context.packets.get(source_id)
         if packet is None:
+            self._context.refresh_packets(force=True)
+            packet = self._context.packets.get(source_id)
+        if packet is None:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown source_id"})
             return
         if status is None and not texts and not raw_clear:
@@ -297,7 +316,7 @@ class _Handler(BaseHTTPRequestHandler):
                     clear=tuple(cast(list[str], raw_clear)),
                 )
         except ValueError as error:
-            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
         response: dict[str, object] = {
             "note": result.note,
@@ -314,7 +333,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
         media_type = self._context.media_types.get(artifact_id)
         if media_type is None:
-            self._context.refresh_packets()
+            self._context.refresh_packets(force=True)
             media_type = self._context.media_types.get(artifact_id)
         if media_type is None:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "unknown artifact"})
@@ -399,6 +418,8 @@ class UiHttpServer:
         packets_repository: SourcePacketRepository | None = None,
         host: str = "127.0.0.1",
         port: int = 8765,
+        min_refresh_interval: float = 2.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._context = _Context(
             projection=projection,
@@ -408,6 +429,8 @@ class UiHttpServer:
             registry=registry,
             outcomes=outcomes,
             packets_repository=packets_repository,
+            min_refresh_interval=min_refresh_interval,
+            clock=clock,
         )
         self._server = _UiHttpServer((host, port), self._context)
 

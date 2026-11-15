@@ -4,9 +4,10 @@ import argparse
 import json
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -24,6 +25,7 @@ from sourcefolio.adapters.filesystem.projections import FileSystemProjectionStor
 from sourcefolio.application.archive_capture import ArchiveCapture
 from sourcefolio.application.commands import ArchiveCaptureCommand, ArtifactPayload
 from sourcefolio.application.note import NoteWriter
+from sourcefolio.application.ports import SourcePacketRepository
 from sourcefolio.application.registry_build import RegistryBuilder, RegistryBuildQuery
 from sourcefolio.application.ui_serve import UiHttpServer
 from sourcefolio.application.ui_view import UiViewProjection
@@ -43,6 +45,7 @@ from sourcefolio.domain.source import (
     CaptureStatus,
     SourceIdentity,
     SourceKind,
+    SourcePacket,
 )
 
 MANIFEST = Path(__file__).parents[2] / "examples" / "manual-capture" / "manifest.json"
@@ -148,6 +151,85 @@ def add_packet(root: Path, external_id: str, title: str) -> str:
         )
     )
     return result.packet.source_id
+
+
+def add_capture(
+    root: Path,
+    external_id: str,
+    *,
+    captured_at: datetime,
+    data: bytes,
+    media_type: str,
+    role: ArtifactRole,
+) -> SourcePacket:
+    return (
+        ArchiveCapture(
+            artifacts=FileSystemArtifactStore(root),
+            packets=FileSystemSourcePacketRepository(root),
+        )
+        .handle(
+            ArchiveCaptureCommand(
+                source=SourceIdentity(
+                    platform="tiktok",
+                    kind=SourceKind.VIDEO,
+                    external_id=external_id,
+                    canonical_url=f"https://www.tiktok.com/@x/video/{external_id}",
+                ),
+                captured_at=captured_at,
+                collector=Provenance(
+                    actor_kind=ActorKind.TOOL,
+                    actor_id="yt-dlp",
+                    method="download",
+                    version="2026.1",
+                ),
+                status=CaptureStatus.COMPLETE,
+                artifacts=(
+                    ArtifactPayload(role=role, media_type=media_type, stream=BytesIO(data)),
+                ),
+            )
+        )
+        .packet
+    )
+
+
+class CountingPackets:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def save(self, packet: SourcePacket) -> bool:
+        raise AssertionError("save is not expected")
+
+    def get(self, source_id: str, capture_id: str) -> SourcePacket | None:
+        return None
+
+    def iter_packets(self) -> Iterator[SourcePacket]:
+        self.calls += 1
+        return iter(())
+
+
+def build_server(
+    archive: Path,
+    vault: Path,
+    *,
+    packets: dict[str, SourcePacket] | None = None,
+    packets_repository: SourcePacketRepository | None = None,
+    min_refresh_interval: float = 2.0,
+    clock: Callable[[], float] = time.monotonic,
+) -> UiHttpServer:
+    return UiHttpServer(
+        projection=UiViewProjection(
+            packets=FileSystemSourcePacketRepository(archive),
+            artifacts=FileSystemArtifactStore(archive),
+            store=FileSystemProjectionStore(vault / "_generated" / "sourcefolio"),
+        ),
+        artifacts=FileSystemArtifactStore(archive),
+        notes=NoteWriter(notes=FileSystemHumanNoteStore(vault / "ideas")),
+        packets=packets or {},
+        packets_repository=packets_repository,
+        min_refresh_interval=min_refresh_interval,
+        clock=clock,
+        port=0,
+    )
 
 
 @pytest.fixture()
@@ -491,7 +573,7 @@ def test_candidate_api_writes_outcome(served_registry: tuple[str, Path, str]) ->
 
 
 def test_candidate_api_rejects_outcome_for_inbox(served_registry: tuple[str, Path, str]) -> None:
-    url, _, candidate_id = served_registry
+    url, vault, candidate_id = served_registry
 
     status, body = _post(
         url,
@@ -506,6 +588,27 @@ def test_candidate_api_rejects_outcome_for_inbox(served_registry: tuple[str, Pat
 
     assert status == 400
     assert body == {"error": "invalid outcome"}
+    assert not (vault / "candidates").exists()
+
+
+def test_candidate_api_rejects_overlong_outcome(served_registry: tuple[str, Path, str]) -> None:
+    url, vault, candidate_id = served_registry
+
+    status, body = _post(
+        url,
+        {
+            "candidate_id": candidate_id,
+            "status": "accepted",
+            "approved_by": "mitya",
+            "outcome": "x" * 2001,
+        },
+        {"X-Sourcefolio": "1"},
+        "api/candidate",
+    )
+
+    assert status == 400
+    assert body == {"error": "outcome exceeds 2000 characters"}
+    assert not (vault / "candidates").exists()
 
 
 def test_late_packet_becomes_visible(tmp_path: Path) -> None:
@@ -534,6 +637,99 @@ def test_late_packet_becomes_visible(tmp_path: Path) -> None:
             {"X-Sourcefolio": "1"},
         )
         assert status == 200
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+
+
+def test_superseded_capture_artifact_is_served(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    vault = tmp_path / "vault"
+    older = add_capture(
+        archive,
+        "superseded-1",
+        captured_at=datetime(2026, 11, 1, tzinfo=UTC),
+        data=b"\x89PNG-old",
+        media_type="image/png",
+        role=ArtifactRole.ORIGINAL_IMAGE,
+    )
+    newer = add_capture(
+        archive,
+        "superseded-1",
+        captured_at=NOW,
+        data=b"\xff\xd8\xff-new",
+        media_type="image/jpeg",
+        role=ArtifactRole.ORIGINAL_IMAGE,
+    )
+    assert older.source_id == newer.source_id
+    assert older.capture_id != newer.capture_id
+    old_artifact = older.artifacts[0].artifact_id
+    assert old_artifact not in {artifact.artifact_id for artifact in newer.artifacts}
+    args = argparse.Namespace(
+        archive_dir=str(archive),
+        derived_dir=str(tmp_path / "derived"),
+        vault=str(vault),
+        host="127.0.0.1",
+        port=0,
+    )
+    server = _build_serve_server(args)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, headers, body = _request(server.url + f"artifacts/{old_artifact}")
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+    assert status == 200
+    assert headers["Content-Type"] == "image/png"
+    assert body == b"\x89PNG-old"
+
+
+def test_page_refresh_is_throttled(tmp_path: Path) -> None:
+    repository = CountingPackets()
+    now = [100.0]
+    server = build_server(
+        tmp_path / "archive",
+        tmp_path / "vault",
+        packets_repository=repository,
+        min_refresh_interval=10.0,
+        clock=lambda: now[0],
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert _request(server.url)[0] == 200
+        assert _request(server.url)[0] == 200
+        assert repository.calls == 1
+        now[0] += 10.0
+        assert _request(server.url)[0] == 200
+        assert repository.calls == 2
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+
+
+def test_late_source_note_refreshes_despite_throttle(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    server = build_server(
+        archive,
+        tmp_path / "vault",
+        packets_repository=FileSystemSourcePacketRepository(archive),
+        min_refresh_interval=3600.0,
+        clock=lambda: 0.0,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert _request(server.url)[0] == 200
+        source_id = add_packet(archive, "late-2", "Поздний ролик 2")
+        status, body = _post(
+            server.url,
+            {"source_id": source_id, "status": "keep"},
+            {"X-Sourcefolio": "1"},
+        )
+        assert status == 200
+        assert body["note"] == f"{source_id}.md"
     finally:
         server.shutdown()
         thread.join(timeout=10)
