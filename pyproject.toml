@@ -24,7 +24,7 @@ slides = [
   "gallery-dl",
 ]
 mcp = [
-  "mcp>=2",
+  "mcp>=2.3.0",
 ]
 dev = [
   "mypy>=2.4.1,<3",
